@@ -17,6 +17,11 @@ add_library(Inferno
         src/Inferno/LayerStack.cpp
         src/Inferno/Window.h
         src/Inferno/Window.cpp
+        #Renderer
+        src/Inferno/Renderer/RenderingContext.h
+        src/Inferno/Renderer/RenderingContext.cpp
+        src/Inferno/Renderer/Shader.h
+        src/Inferno/Renderer/Shader.cpp
         # EVENTS
         src/Inferno/Events/Event.h
         src/Inferno/Events/ApplicationEvent.h

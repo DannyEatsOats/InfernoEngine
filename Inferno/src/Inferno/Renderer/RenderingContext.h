@@ -41,6 +41,14 @@ private:
   void CreateLogicalDevice();
   void CreateSwapChain();
   void CleanUpSwapChain();
+  void CreateImageViews();
+  void CreateRenderPass();
+  void CreateGraphicsPipeline();
+  void CreateFramebuffers();
+  void CreateCommandPool();
+  void CreateCommandBuffer();
+
+  void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
   QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
   SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device);
@@ -48,7 +56,7 @@ private:
       const std::vector<VkSurfaceFormatKHR> &availableFormats);
   VkPresentModeKHR ChooseSwapPresentMode(
       const std::vector<VkPresentModeKHR> &availablePresentationModes);
-    VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
+  VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities);
   bool IsDeviceSuitable(VkPhysicalDevice device);
   bool CheckDeviceExtensionSupport(VkPhysicalDevice device);
 
@@ -65,5 +73,18 @@ private:
   VkQueue m_PresentQueue = VK_NULL_HANDLE;
 
   VkSwapchainKHR m_Swapchain = VK_NULL_HANDLE;
+  std::vector<VkImage> m_SwapChainImages;
+  VkFormat m_SwapChainImageFormat;
+  VkExtent2D m_SwapChainExtent;
+  std::vector<VkImageView> m_SwapChainImageViews;
+  std::vector<VkFramebuffer> m_SwapChainFrameBuffers;
+
+  // TEMP
+  VkRenderPass m_RenderPass;
+  VkPipelineLayout m_PipelineLayout;
+  VkPipeline m_GraphicsPipeline;
+
+  VkCommandPool m_CommandPool;
+  VkCommandBuffer m_CommandBuffer;
 };
 } // namespace Inferno

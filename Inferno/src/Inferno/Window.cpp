@@ -51,8 +51,8 @@ namespace Inferno {
             return;
         }
 
-        //m_Context = new RenderingContext(m_Window);
-        //m_Context->Init();
+        m_Context = new RenderingContext(m_Window);
+        m_Context->Init();
 
         glfwSetWindowUserPointer(m_Window, &m_Data);
         SetVSync(true);

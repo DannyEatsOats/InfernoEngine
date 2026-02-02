@@ -45,9 +45,11 @@ private:
   void CreateRenderPass();
   void CreateGraphicsPipeline();
   void CreateFramebuffers();
+
+  // Temp
   void CreateCommandPool();
   void CreateCommandBuffer();
-
+  void CreateSyncObjects();
   void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
   QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
@@ -86,5 +88,9 @@ private:
 
   VkCommandPool m_CommandPool;
   VkCommandBuffer m_CommandBuffer;
+
+  VkSemaphore m_ImageAvailableSemaphore;
+  VkSemaphore m_RenderFinishedSemaphore;
+  VkFence m_InFlightFence;
 };
 } // namespace Inferno

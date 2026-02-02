@@ -41,6 +41,7 @@ void Application::Run() {
     }
     // TODO Gui end
     // TODO window stuff
+    m_Window->OnUpdate();
   }
 }
 

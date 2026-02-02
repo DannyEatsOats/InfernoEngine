@@ -22,9 +22,11 @@ target_compile_definitions(Game
             $<$<CONFIG:Debug>:INFERNO_DEBUG> $<$<CONFIG:Release>:INFERNO_RELEASE>
         )
 
-add_custom_command(
-        TARGET Game POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_CURRENT_SOURCE_DIR}/assets
-        $<TARGET_FILE_DIR:Game>/assets
+add_custom_target(CopyAssets ALL
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    ${CMAKE_CURRENT_SOURCE_DIR}/assets
+    $<TARGET_FILE_DIR:Game>/assets
+    COMMENT "Copying assets..."
 )
+add_dependencies(Game CopyAssets)
+

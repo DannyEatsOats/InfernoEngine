@@ -48,7 +48,7 @@ private:
 
   // Temp
   void CreateCommandPool();
-  void CreateCommandBuffer();
+  void CreateCommandBuffers();
   void CreateSyncObjects();
   void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
@@ -87,10 +87,12 @@ private:
   VkPipeline m_GraphicsPipeline;
 
   VkCommandPool m_CommandPool;
-  VkCommandBuffer m_CommandBuffer;
+    std::vector<VkCommandBuffer> m_CommandBuffers;
 
-  VkSemaphore m_ImageAvailableSemaphore;
-  VkSemaphore m_RenderFinishedSemaphore;
-  VkFence m_InFlightFence;
+    std::vector<VkSemaphore> m_ImageAvailableSemaphores;
+    std::vector<VkSemaphore> m_RenderFinishedSemaphores;
+    std::vector<VkFence> m_InFlightFences;
+
+  static constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 };
 } // namespace Inferno

@@ -613,12 +613,13 @@ void RenderingContext::CreateCommandPool() {
   }
 }
 
-void RenderingContext::CreateCommandBuffer() {
+void RenderingContext::CreateCommandBuffers() {
+    m_CommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
   VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
       .commandPool = m_CommandPool,
       .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-      .commandBufferCount = 1,
+      .commandBufferCount = static_cast<uint32_t>(m_CommandBuffers.size()),
   };
 
   if (vkAllocateCommandBuffers(m_Device, &commandBufferAllocateInfo,

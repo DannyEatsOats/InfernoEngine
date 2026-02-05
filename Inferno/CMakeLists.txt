@@ -20,6 +20,8 @@ add_library(Inferno
         #Renderer
         src/Inferno/Renderer/RenderingContext.h
         src/Inferno/Renderer/RenderingContext.cpp
+        src/Inferno/Renderer/Renderer.h
+        src/Inferno/Renderer/Renderer.cpp
         src/Inferno/Renderer/Shader.h
         src/Inferno/Renderer/Shader.cpp
         # EVENTS

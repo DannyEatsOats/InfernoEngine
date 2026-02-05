@@ -3,6 +3,7 @@
 #include "Events/Event.h"
 #include "GLFW/glfw3.h"
 #include "Renderer/RenderingContext.h"
+#include <memory>
 
 namespace Inferno {
     struct WindowProperties {
@@ -44,7 +45,7 @@ namespace Inferno {
 
     private:
         GLFWwindow *m_Window;
-        RenderingContext* m_Context;
+    std::shared_ptr<RenderingContext> m_Context;
 
         struct WindowData {
             std::string Title;

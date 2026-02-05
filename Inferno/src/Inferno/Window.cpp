@@ -1,4 +1,5 @@
 #include "Window.h"
+#include "Inferno/Renderer/RenderingContext.h"
 
 //#include "imgui_impl_glfw.h"
 #define GLFW_INCLUDE_VULKAN
@@ -51,7 +52,7 @@ namespace Inferno {
             return;
         }
 
-        m_Context = new RenderingContext(m_Window);
+        m_Context = RenderingContext::CreateContext(m_Window);
         m_Context->Init();
 
         glfwSetWindowUserPointer(m_Window, &m_Data);
@@ -131,8 +132,6 @@ namespace Inferno {
 
     void Window::OnUpdate() {
         glfwPollEvents();
-        m_Context->DrawFrame();
-
     }
 
     unsigned int Window::GetWidth() const {

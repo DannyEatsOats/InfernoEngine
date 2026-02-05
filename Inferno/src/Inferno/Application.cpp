@@ -5,6 +5,7 @@
 #include "Inferno/Events/ApplicationEvent.h"
 #include "Inferno/Events/Event.h"
 #include "Inferno/LayerStack.h"
+#include "Inferno/Renderer/RenderingContext.h"
 #include "Inferno/Window.h"
 #include "Log.h"
 #include <memory>
@@ -19,10 +20,14 @@ void Application::StartUp() {
   m_Window = std::unique_ptr<Window>(Window::Create());
   m_Window->SetEventCallback([this](Event &event) { this->OnEvent(event); });
   // TODO Init subsystems
+  m_Renderer = std::make_unique<Renderer>();
+  m_Renderer->Init();
 }
 
 void Application::ShutDown() {
   INFERNO_LOG_INFO("Shutting Down Engine...");
+  m_Renderer->ShutDown();
+  RenderingContext::GetContext()->ShutDown();
   m_Running = false;
 }
 
@@ -41,6 +46,7 @@ void Application::Run() {
     }
     // TODO Gui end
     // TODO window stuff
+    m_Renderer->DrawFrame();
     m_Window->OnUpdate();
   }
 }

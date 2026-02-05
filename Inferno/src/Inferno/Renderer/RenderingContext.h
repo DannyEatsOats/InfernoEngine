@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <optional>
 #include <vector>
 #include <vulkan/vulkan.h>
@@ -29,10 +30,12 @@ public:
   ~RenderingContext();
 
   void Init();
-  void Delete();
+  void ShutDown();
 
-  void DrawFrame();
   void OnResize(uint32_t width, uint32_t height);
+
+  static std::shared_ptr<RenderingContext> &CreateContext(GLFWwindow *window);
+  static std::shared_ptr<RenderingContext> &GetContext();
 
 private:
   void CreateInstance();
@@ -42,15 +45,6 @@ private:
   void CreateSwapChain();
   void CleanUpSwapChain();
   void CreateImageViews();
-  void CreateRenderPass();
-  void CreateGraphicsPipeline();
-  void CreateFramebuffers();
-
-  // Temp
-  void CreateCommandPool();
-  void CreateCommandBuffers();
-  void CreateSyncObjects();
-  void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
   QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
   SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device);
@@ -79,20 +73,9 @@ private:
   VkFormat m_SwapChainImageFormat;
   VkExtent2D m_SwapChainExtent;
   std::vector<VkImageView> m_SwapChainImageViews;
-  std::vector<VkFramebuffer> m_SwapChainFrameBuffers;
 
-  // TEMP
-  VkRenderPass m_RenderPass;
-  VkPipelineLayout m_PipelineLayout;
-  VkPipeline m_GraphicsPipeline;
+  static std::shared_ptr<RenderingContext> s_Context;
 
-  VkCommandPool m_CommandPool;
-    std::vector<VkCommandBuffer> m_CommandBuffers;
-
-    std::vector<VkSemaphore> m_ImageAvailableSemaphores;
-    std::vector<VkSemaphore> m_RenderFinishedSemaphores;
-    std::vector<VkFence> m_InFlightFences;
-
-  static constexpr int MAX_FRAMES_IN_FLIGHT = 2;
+  friend class Renderer;
 };
 } // namespace Inferno

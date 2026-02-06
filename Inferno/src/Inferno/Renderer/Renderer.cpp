@@ -17,35 +17,35 @@ void Renderer::Init() {
 }
 
 void Renderer::ShutDown() {
-  if (m_Context->m_Device != VK_NULL_HANDLE) {
-    vkDeviceWaitIdle(m_Context->m_Device);
+  if (m_Context->GetDevice() != VK_NULL_HANDLE) {
+    vkDeviceWaitIdle(m_Context->GetDevice());
   }
 
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-    vkDestroySemaphore(m_Context->m_Device, m_RenderFinishedSemaphores[i],
+    vkDestroySemaphore(m_Context->GetDevice(), m_RenderFinishedSemaphores[i],
                        nullptr);
-    vkDestroySemaphore(m_Context->m_Device, m_ImageAvailableSemaphores[i],
+    vkDestroySemaphore(m_Context->GetDevice(), m_ImageAvailableSemaphores[i],
                        nullptr);
-    vkDestroyFence(m_Context->m_Device, m_InFlightFences[i], nullptr);
+    vkDestroyFence(m_Context->GetDevice(), m_InFlightFences[i], nullptr);
   }
-  vkDestroyCommandPool(m_Context->m_Device, m_CommandPool, nullptr);
+  vkDestroyCommandPool(m_Context->GetDevice(), m_CommandPool, nullptr);
 
   for (auto framebuffer : m_SwapChainFrameBuffers) {
-    vkDestroyFramebuffer(m_Context->m_Device, framebuffer, nullptr);
+    vkDestroyFramebuffer(m_Context->GetDevice(), framebuffer, nullptr);
   }
 
-  vkDestroyPipeline(m_Context->m_Device, m_GraphicsPipeline, nullptr);
-  vkDestroyPipelineLayout(m_Context->m_Device, m_PipelineLayout, nullptr);
-  vkDestroyRenderPass(m_Context->m_Device, m_RenderPass, nullptr);
+  vkDestroyPipeline(m_Context->GetDevice(), m_GraphicsPipeline, nullptr);
+  vkDestroyPipelineLayout(m_Context->GetDevice(), m_PipelineLayout, nullptr);
+  vkDestroyRenderPass(m_Context->GetDevice(), m_RenderPass, nullptr);
 }
 
 void Renderer::DrawFrame() {
-  vkWaitForFences(m_Context->m_Device, 1, &m_InFlightFences[m_CurrentFrame],
+  vkWaitForFences(m_Context->GetDevice(), 1, &m_InFlightFences[m_CurrentFrame],
                   VK_TRUE, UINT64_MAX);
-  vkResetFences(m_Context->m_Device, 1, &m_InFlightFences[m_CurrentFrame]);
+  vkResetFences(m_Context->GetDevice(), 1, &m_InFlightFences[m_CurrentFrame]);
 
   uint32_t imageIndex;
-  vkAcquireNextImageKHR(m_Context->m_Device, m_Context->m_Swapchain, UINT64_MAX,
+  vkAcquireNextImageKHR(m_Context->GetDevice(), m_Context->GetSwapChain(), UINT64_MAX,
                         m_ImageAvailableSemaphores[m_CurrentFrame],
                         VK_NULL_HANDLE, &imageIndex);
 
@@ -70,12 +70,12 @@ void Renderer::DrawFrame() {
       .pSignalSemaphores = signalSemaphores,
   };
 
-  if (vkQueueSubmit(m_Context->m_GrapicsQueue, 1, &submitInfo,
+  if (vkQueueSubmit(m_Context->GetGraphicsQueue(), 1, &submitInfo,
                     m_InFlightFences[m_CurrentFrame]) != VK_SUCCESS) {
     throw std::runtime_error("Failed to Submit Draw Command Buffer");
   }
 
-  VkSwapchainKHR swapChains[] = {m_Context->m_Swapchain};
+  VkSwapchainKHR swapChains[] = {m_Context->GetSwapChain()};
 
   VkPresentInfoKHR presentInfo = {
       .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
@@ -87,15 +87,15 @@ void Renderer::DrawFrame() {
       .pResults = nullptr,
   };
 
-  vkQueuePresentKHR(m_Context->m_PresentQueue, &presentInfo);
-  vkQueueWaitIdle(m_Context->m_PresentQueue);
+  vkQueuePresentKHR(m_Context->GetPresentQueue(), &presentInfo);
+  vkQueueWaitIdle(m_Context->GetPresentQueue());
 
   m_CurrentFrame = (m_CurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
 void Renderer::CreateRenderPass() {
   VkAttachmentDescription colorAttachment = {
-      .format = m_Context->m_SwapChainImageFormat,
+      .format = m_Context->GetSwapChainImgFormat(),
       .samples = VK_SAMPLE_COUNT_1_BIT,
       .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
       .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -135,7 +135,7 @@ void Renderer::CreateRenderPass() {
       .pDependencies = &dependency,
   };
 
-  if (vkCreateRenderPass(m_Context->m_Device, &renderPassCreateInfo, nullptr,
+  if (vkCreateRenderPass(m_Context->GetDevice(), &renderPassCreateInfo, nullptr,
                          &m_RenderPass) != VK_SUCCESS) {
     throw std::runtime_error("Failed to create render pass");
   }
@@ -143,7 +143,7 @@ void Renderer::CreateRenderPass() {
 
 void Renderer::CreateGraphicsPipeline() {
   // PIPELINE SHADER STAGE
-  auto shader = Shader::Create("shader", &m_Context->m_Device, "assets/shaders/vert.spv",
+  auto shader = Shader::Create("shader", &m_Context->GetDevice(), "assets/shaders/vert.spv",
                                "assets/shaders/frag.spv");
 
   VkPipelineShaderStageCreateInfo vertShaderStageInfo = {
@@ -183,15 +183,15 @@ void Renderer::CreateGraphicsPipeline() {
   VkViewport viewport = {
       .x = 0.0f,
       .y = 0.0f,
-      .width = static_cast<float>(m_Context->m_SwapChainExtent.width),
-      .height = static_cast<float>(m_Context->m_SwapChainExtent.height),
+      .width = static_cast<float>(m_Context->GetSwapChainExtent().width),
+      .height = static_cast<float>(m_Context->GetSwapChainExtent().height),
       .minDepth = 0.0f,
       .maxDepth = 1.0f,
   };
 
   VkRect2D scissor = {
       .offset = {0, 0},
-      .extent = m_Context->m_SwapChainExtent,
+      .extent = m_Context->GetSwapChainExtent(),
   };
 
   VkPipelineViewportStateCreateInfo viewportStateCreateInfo = {
@@ -260,7 +260,7 @@ void Renderer::CreateGraphicsPipeline() {
       .pPushConstantRanges = nullptr,
   };
 
-  if (vkCreatePipelineLayout(m_Context->m_Device, &pipelineLayoutCreateInfo, nullptr,
+  if (vkCreatePipelineLayout(m_Context->GetDevice(), &pipelineLayoutCreateInfo, nullptr,
                              &m_PipelineLayout) != VK_SUCCESS) {
     throw std::runtime_error("Failed to create pipeline layout");
   }
@@ -294,7 +294,7 @@ void Renderer::CreateGraphicsPipeline() {
       .basePipelineIndex = -1,
   };
 
-  if (vkCreateGraphicsPipelines(m_Context->m_Device, VK_NULL_HANDLE, 1,
+  if (vkCreateGraphicsPipelines(m_Context->GetDevice(), VK_NULL_HANDLE, 1,
                                 &pipelineCreateInfo, nullptr,
                                 &m_GraphicsPipeline) != VK_SUCCESS) {
     throw std::runtime_error("Failed to Create Graphics Pipeline");
@@ -302,22 +302,22 @@ void Renderer::CreateGraphicsPipeline() {
 }
 
 void Renderer::CreateFramebuffers() {
-  m_SwapChainFrameBuffers.resize(m_Context->m_SwapChainImageViews.size());
+  m_SwapChainFrameBuffers.resize(m_Context->GetSwapChainImageViews().size());
 
-  for (size_t i = 0; i < m_Context->m_SwapChainImageViews.size(); ++i) {
-    VkImageView attachments[] = {m_Context->m_SwapChainImageViews[i]};
+  for (size_t i = 0; i < m_Context->GetSwapChainImageViews().size(); ++i) {
+    VkImageView attachments[] = {m_Context->GetSwapChainImageViews()[i]};
 
     VkFramebufferCreateInfo frameBufferCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
         .renderPass = m_RenderPass,
         .attachmentCount = 1,
         .pAttachments = attachments,
-        .width = m_Context->m_SwapChainExtent.width,
-        .height = m_Context->m_SwapChainExtent.height,
+        .width = m_Context->GetSwapChainExtent().width,
+        .height = m_Context->GetSwapChainExtent().height,
         .layers = 1,
     };
 
-    if (vkCreateFramebuffer(m_Context->m_Device, &frameBufferCreateInfo, nullptr,
+    if (vkCreateFramebuffer(m_Context->GetDevice(), &frameBufferCreateInfo, nullptr,
                             &m_SwapChainFrameBuffers[i]) != VK_SUCCESS) {
       throw std::runtime_error("Failed to create Framebuffer!");
     }
@@ -325,7 +325,7 @@ void Renderer::CreateFramebuffers() {
 }
 
 void Renderer::CreateCommandPool() {
-  QueueFamilyIndices queueFamilyIndices = m_Context->FindQueueFamilies(m_Context->m_PhysicalDevice);
+  QueueFamilyIndices queueFamilyIndices = m_Context->FindQueueFamilies(m_Context->GetPhysicalDevice());
 
   VkCommandPoolCreateInfo poolCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -333,7 +333,7 @@ void Renderer::CreateCommandPool() {
       .queueFamilyIndex = queueFamilyIndices.graphicsFamily.value(),
   };
 
-  if (vkCreateCommandPool(m_Context->m_Device, &poolCreateInfo, nullptr, &m_CommandPool) !=
+  if (vkCreateCommandPool(m_Context->GetDevice(), &poolCreateInfo, nullptr, &m_CommandPool) !=
       VK_SUCCESS) {
     throw std::runtime_error("Failed to create command pool!");
   }
@@ -349,7 +349,7 @@ void Renderer::CreateCommandBuffers() {
       .commandBufferCount = static_cast<uint32_t>(m_CommandBuffers.size()),
   };
 
-  if (vkAllocateCommandBuffers(m_Context->m_Device, &commandBufferAllocateInfo,
+  if (vkAllocateCommandBuffers(m_Context->GetDevice(), &commandBufferAllocateInfo,
                                m_CommandBuffers.data()) != VK_SUCCESS) {
     throw std::runtime_error("Failed to Allocate Command Buffers");
   }
@@ -370,11 +370,11 @@ void Renderer::CreateSyncObjects() {
   };
 
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-    if (vkCreateSemaphore(m_Context->m_Device, &semaphoreCreateInfo, nullptr,
+    if (vkCreateSemaphore(m_Context->GetDevice(), &semaphoreCreateInfo, nullptr,
                           &m_ImageAvailableSemaphores[i]) != VK_SUCCESS ||
-        vkCreateSemaphore(m_Context->m_Device, &semaphoreCreateInfo, nullptr,
+        vkCreateSemaphore(m_Context->GetDevice(), &semaphoreCreateInfo, nullptr,
                           &m_RenderFinishedSemaphores[i]) != VK_SUCCESS ||
-        vkCreateFence(m_Context->m_Device, &fenceCreateInfo, nullptr,
+        vkCreateFence(m_Context->GetDevice(), &fenceCreateInfo, nullptr,
                       &m_InFlightFences[i]) != VK_SUCCESS) {
       throw std::runtime_error("Failed to Create Semaphores");
     }
@@ -401,7 +401,7 @@ void Renderer::RecordCommandBuffer(VkCommandBuffer commandBuffer,
   };
 
   renderPassBeginInfo.renderArea.offset = {0, 0};
-  renderPassBeginInfo.renderArea.extent = m_Context->m_SwapChainExtent;
+  renderPassBeginInfo.renderArea.extent = m_Context->GetSwapChainExtent();
 
   VkClearValue clearColor = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
   renderPassBeginInfo.clearValueCount = 1;
@@ -415,8 +415,8 @@ void Renderer::RecordCommandBuffer(VkCommandBuffer commandBuffer,
   VkViewport viewport = {
       .x = 0.0f,
       .y = 0.0f,
-      .width = static_cast<float>(m_Context->m_SwapChainExtent.width),
-      .height = static_cast<float>(m_Context->m_SwapChainExtent.height),
+      .width = static_cast<float>(m_Context->GetSwapChainExtent().width),
+      .height = static_cast<float>(m_Context->GetSwapChainExtent().height),
       .minDepth = 0.0f,
       .maxDepth = 1.0f,
   };
@@ -425,7 +425,7 @@ void Renderer::RecordCommandBuffer(VkCommandBuffer commandBuffer,
 
   VkRect2D scissor = {
       .offset = {0, 0},
-      .extent = m_Context->m_SwapChainExtent,
+      .extent = m_Context->GetSwapChainExtent(),
   };
 
   vkCmdSetScissor(commandBuffer, 0, 1, &scissor);

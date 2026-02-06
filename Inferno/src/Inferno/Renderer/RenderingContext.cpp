@@ -268,13 +268,13 @@ void RenderingContext::CreateSwapChain() {
   createInfo.clipped = VK_TRUE;
   createInfo.oldSwapchain = VK_NULL_HANDLE;
 
-  if (vkCreateSwapchainKHR(m_Device, &createInfo, nullptr, &m_Swapchain)) {
+  if (vkCreateSwapchainKHR(m_Device, &createInfo, nullptr, &m_SwapChain)) {
     throw std::runtime_error("Failed to Create SwapChain");
   }
 
-  vkGetSwapchainImagesKHR(m_Device, m_Swapchain, &imageCount, nullptr);
+  vkGetSwapchainImagesKHR(m_Device, m_SwapChain, &imageCount, nullptr);
   m_SwapChainImages.resize(imageCount);
-  vkGetSwapchainImagesKHR(m_Device, m_Swapchain, &imageCount,
+  vkGetSwapchainImagesKHR(m_Device, m_SwapChain, &imageCount,
                           m_SwapChainImages.data());
 
   m_SwapChainImageFormat = surfaceFormat.format;
@@ -282,7 +282,7 @@ void RenderingContext::CreateSwapChain() {
 }
 
 void RenderingContext::CleanUpSwapChain() {
-  vkDestroySwapchainKHR(m_Device, m_Swapchain, nullptr);
+  vkDestroySwapchainKHR(m_Device, m_SwapChain, nullptr);
 }
 
 void RenderingContext::CreateImageViews() {

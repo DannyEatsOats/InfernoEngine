@@ -34,6 +34,19 @@ public:
 
   void OnResize(uint32_t width, uint32_t height);
 
+  const VkPhysicalDevice &GetPhysicalDevice() const { return m_PhysicalDevice; }
+  const VkDevice &GetDevice() const { return m_Device; }
+  const VkSwapchainKHR &GetSwapChain() const { return m_SwapChain; }
+  const VkFormat &GetSwapChainImgFormat() const {
+    return m_SwapChainImageFormat;
+  }
+  const VkExtent2D &GetSwapChainExtent() const { return m_SwapChainExtent; }
+  const std::vector<VkImageView> &GetSwapChainImageViews() const {
+    return m_SwapChainImageViews;
+  }
+  const VkQueue &GetGraphicsQueue() const { return m_GrapicsQueue; }
+  const VkQueue &GetPresentQueue() const { return m_PresentQueue; }
+
   static std::shared_ptr<RenderingContext> &CreateContext(GLFWwindow *window);
   static std::shared_ptr<RenderingContext> &GetContext();
 
@@ -68,7 +81,7 @@ private:
   VkQueue m_GrapicsQueue = VK_NULL_HANDLE;
   VkQueue m_PresentQueue = VK_NULL_HANDLE;
 
-  VkSwapchainKHR m_Swapchain = VK_NULL_HANDLE;
+  VkSwapchainKHR m_SwapChain = VK_NULL_HANDLE;
   std::vector<VkImage> m_SwapChainImages;
   VkFormat m_SwapChainImageFormat;
   VkExtent2D m_SwapChainExtent;

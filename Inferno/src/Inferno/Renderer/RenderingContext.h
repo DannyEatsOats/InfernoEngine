@@ -58,6 +58,7 @@ private:
   void CreateSwapChain();
   void CleanUpSwapChain();
   void CreateImageViews();
+  void RecreateSwapChain();
 
   QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
   SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device);

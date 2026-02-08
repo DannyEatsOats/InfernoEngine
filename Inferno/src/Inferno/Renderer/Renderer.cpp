@@ -1,13 +1,27 @@
 #include <pch.h>
+#include <stdexcept>
+#include <vulkan/vulkan_core.h>
 
+#include "Inferno/Renderer/Buffer.h"
 #include "Inferno/Renderer/RenderingContext.h"
 #include "Renderer.h"
 
 #include "Shader.h"
 
 namespace Inferno {
+const std::vector<Vertex> vertices = {{{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+                                      {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+                                      {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}};
+
 void Renderer::Init() {
   m_Context = RenderingContext::GetContext();
+  m_VertexBuffer = VertexBuffer::Create(m_Context.get(), vertices.data(),
+                                        sizeof(Vertex) * vertices.size());
+  m_VertexBuffer->SetLayout({
+      {"inPosition", ShaderDataType::Float2},
+      {"inColor", ShaderDataType::Float3},
+  });
+
   CreateRenderPass();
   CreateGraphicsPipeline();
   CreateFramebuffers();
@@ -20,6 +34,8 @@ void Renderer::ShutDown() {
   if (m_Context->GetDevice() != VK_NULL_HANDLE) {
     vkDeviceWaitIdle(m_Context->GetDevice());
   }
+
+  m_VertexBuffer->Destroy();
 
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
     vkDestroySemaphore(m_Context->GetDevice(), m_RenderFinishedSemaphores[i],
@@ -42,12 +58,20 @@ void Renderer::ShutDown() {
 void Renderer::DrawFrame() {
   vkWaitForFences(m_Context->GetDevice(), 1, &m_InFlightFences[m_CurrentFrame],
                   VK_TRUE, UINT64_MAX);
-  vkResetFences(m_Context->GetDevice(), 1, &m_InFlightFences[m_CurrentFrame]);
 
   uint32_t imageIndex;
-  vkAcquireNextImageKHR(m_Context->GetDevice(), m_Context->GetSwapChain(), UINT64_MAX,
-                        m_ImageAvailableSemaphores[m_CurrentFrame],
-                        VK_NULL_HANDLE, &imageIndex);
+  VkResult result = vkAcquireNextImageKHR(
+      m_Context->GetDevice(), m_Context->GetSwapChain(), UINT64_MAX,
+      m_ImageAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &imageIndex);
+
+  if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+    RecreateSwapChain();
+    return;
+  } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+    throw std::runtime_error("Failed to acquire swapchain image");
+  }
+
+  vkResetFences(m_Context->GetDevice(), 1, &m_InFlightFences[m_CurrentFrame]);
 
   // maybe this could be moved to record command buffer
   vkResetCommandBuffer(m_CommandBuffers[m_CurrentFrame], 0);
@@ -87,10 +111,23 @@ void Renderer::DrawFrame() {
       .pResults = nullptr,
   };
 
-  vkQueuePresentKHR(m_Context->GetPresentQueue(), &presentInfo);
+  result = vkQueuePresentKHR(m_Context->GetPresentQueue(), &presentInfo);
+  if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR ||
+      m_FrameBufferResized) {
+    m_FrameBufferResized = false;
+    RecreateSwapChain();
+    return;
+  } else if (result != VK_SUCCESS) {
+    throw std::runtime_error("Failed to Present Swap Chain Image");
+  }
+
   vkQueueWaitIdle(m_Context->GetPresentQueue());
 
   m_CurrentFrame = (m_CurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+}
+
+void Renderer::OnWindowResize(uint32_t width, uint32_t height) {
+  m_FrameBufferResized = true;
 }
 
 void Renderer::CreateRenderPass() {
@@ -143,8 +180,9 @@ void Renderer::CreateRenderPass() {
 
 void Renderer::CreateGraphicsPipeline() {
   // PIPELINE SHADER STAGE
-  auto shader = Shader::Create("shader", &m_Context->GetDevice(), "assets/shaders/vert.spv",
-                               "assets/shaders/frag.spv");
+  auto shader =
+      Shader::Create("shader", &m_Context->GetDevice(),
+                     "assets/shaders/vert.spv", "assets/shaders/frag.spv");
 
   VkPipelineShaderStageCreateInfo vertShaderStageInfo = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -164,12 +202,15 @@ void Renderer::CreateGraphicsPipeline() {
                                                     fragShaderStageInfo};
 
   // PIPELINE VERTEX INPUT STATE
+  auto bindingDescription = m_VertexBuffer.GetBindingDescription();
+  auto attributeDescriptions = m_VertexBuffer.GetAttributeDescriptions();
   VkPipelineVertexInputStateCreateInfo vertexInputStateCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-      .vertexBindingDescriptionCount = 0,
-      .pVertexBindingDescriptions = nullptr,
-      .vertexAttributeDescriptionCount = 0,
-      .pVertexAttributeDescriptions = nullptr,
+      .vertexBindingDescriptionCount = 1,
+      .pVertexBindingDescriptions = &bindingDescription,
+      .vertexAttributeDescriptionCount =
+          static_cast<uint32_t>(attributeDescriptions.size()),
+      .pVertexAttributeDescriptions = attributeDescriptions.data(),
   };
 
   // PIPELINE INPUT ASSEMBLY
@@ -179,27 +220,14 @@ void Renderer::CreateGraphicsPipeline() {
       .primitiveRestartEnable = VK_FALSE,
   };
 
-  // PIPELINE VIEWPORT
-  VkViewport viewport = {
-      .x = 0.0f,
-      .y = 0.0f,
-      .width = static_cast<float>(m_Context->GetSwapChainExtent().width),
-      .height = static_cast<float>(m_Context->GetSwapChainExtent().height),
-      .minDepth = 0.0f,
-      .maxDepth = 1.0f,
-  };
-
-  VkRect2D scissor = {
-      .offset = {0, 0},
-      .extent = m_Context->GetSwapChainExtent(),
-  };
-
+  // Viewport and Scissor are nullptr because they are recreated every command
+  // buffer record
   VkPipelineViewportStateCreateInfo viewportStateCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
       .viewportCount = 1,
-      .pViewports = &viewport,
+      .pViewports = nullptr,
       .scissorCount = 1,
-      .pScissors = &scissor,
+      .pScissors = nullptr,
   };
 
   // Rasterizer
@@ -260,8 +288,8 @@ void Renderer::CreateGraphicsPipeline() {
       .pPushConstantRanges = nullptr,
   };
 
-  if (vkCreatePipelineLayout(m_Context->GetDevice(), &pipelineLayoutCreateInfo, nullptr,
-                             &m_PipelineLayout) != VK_SUCCESS) {
+  if (vkCreatePipelineLayout(m_Context->GetDevice(), &pipelineLayoutCreateInfo,
+                             nullptr, &m_PipelineLayout) != VK_SUCCESS) {
     throw std::runtime_error("Failed to create pipeline layout");
   }
 
@@ -317,7 +345,8 @@ void Renderer::CreateFramebuffers() {
         .layers = 1,
     };
 
-    if (vkCreateFramebuffer(m_Context->GetDevice(), &frameBufferCreateInfo, nullptr,
+    if (vkCreateFramebuffer(m_Context->GetDevice(), &frameBufferCreateInfo,
+                            nullptr,
                             &m_SwapChainFrameBuffers[i]) != VK_SUCCESS) {
       throw std::runtime_error("Failed to create Framebuffer!");
     }
@@ -325,7 +354,8 @@ void Renderer::CreateFramebuffers() {
 }
 
 void Renderer::CreateCommandPool() {
-  QueueFamilyIndices queueFamilyIndices = m_Context->FindQueueFamilies(m_Context->GetPhysicalDevice());
+  QueueFamilyIndices queueFamilyIndices =
+      m_Context->FindQueueFamilies(m_Context->GetPhysicalDevice());
 
   VkCommandPoolCreateInfo poolCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -333,8 +363,8 @@ void Renderer::CreateCommandPool() {
       .queueFamilyIndex = queueFamilyIndices.graphicsFamily.value(),
   };
 
-  if (vkCreateCommandPool(m_Context->GetDevice(), &poolCreateInfo, nullptr, &m_CommandPool) !=
-      VK_SUCCESS) {
+  if (vkCreateCommandPool(m_Context->GetDevice(), &poolCreateInfo, nullptr,
+                          &m_CommandPool) != VK_SUCCESS) {
     throw std::runtime_error("Failed to create command pool!");
   }
 }
@@ -349,7 +379,8 @@ void Renderer::CreateCommandBuffers() {
       .commandBufferCount = static_cast<uint32_t>(m_CommandBuffers.size()),
   };
 
-  if (vkAllocateCommandBuffers(m_Context->GetDevice(), &commandBufferAllocateInfo,
+  if (vkAllocateCommandBuffers(m_Context->GetDevice(),
+                               &commandBufferAllocateInfo,
                                m_CommandBuffers.data()) != VK_SUCCESS) {
     throw std::runtime_error("Failed to Allocate Command Buffers");
   }
@@ -382,7 +413,7 @@ void Renderer::CreateSyncObjects() {
 }
 
 void Renderer::RecordCommandBuffer(VkCommandBuffer commandBuffer,
-                                           uint32_t imageIndex) {
+                                   uint32_t imageIndex) {
   VkCommandBufferBeginInfo commandBufferBeginInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
       .flags = 0,
@@ -433,5 +464,16 @@ void Renderer::RecordCommandBuffer(VkCommandBuffer commandBuffer,
   vkCmdDraw(commandBuffer, 3, 1, 0, 0);
   vkCmdEndRenderPass(commandBuffer);
   vkEndCommandBuffer(commandBuffer);
+}
+
+void Renderer::RecreateSwapChain() {
+  vkDeviceWaitIdle(m_Context->GetDevice());
+
+  for (auto framebuffer : m_SwapChainFrameBuffers) {
+    vkDestroyFramebuffer(m_Context->GetDevice(), framebuffer, nullptr);
+  }
+
+  m_Context->RecreateSwapChain();
+  CreateFramebuffers();
 }
 } // namespace Inferno

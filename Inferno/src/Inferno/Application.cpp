@@ -43,10 +43,11 @@ void Application::Run() {
       }
 
       // TODO GUI Layer Stuff
+      m_Renderer->DrawFrame();
     }
     // TODO Gui end
     // TODO window stuff
-    m_Renderer->DrawFrame();
+
     m_Window->OnUpdate();
   }
 }
@@ -87,7 +88,7 @@ bool Application::OnWindowResize(WindowResizeEvent &event) {
     return false;
   }
   m_Minimized = false;
-  // Renderer::OnWindowResize(event.GetWidth(), event.GetHeight());
+  m_Renderer->OnWindowResize(event.GetWidth(), event.GetHeight());
 
   return false;
 }

@@ -59,7 +59,7 @@ RenderingContext::CreateContext(GLFWwindow *window) {
   return s_Context;
 }
 
-std::shared_ptr<RenderingContext>& RenderingContext::GetContext() {
+std::shared_ptr<RenderingContext> &RenderingContext::GetContext() {
   if (!s_Context)
     throw std::runtime_error("Rendering Context is NullPtr");
   return s_Context;
@@ -83,10 +83,6 @@ void RenderingContext::Init() {
 void RenderingContext::ShutDown() {
   if (m_Device != VK_NULL_HANDLE) {
     vkDeviceWaitIdle(m_Device);
-  }
-
-  for (auto imageView : m_SwapChainImageViews) {
-    vkDestroyImageView(m_Device, imageView, nullptr);
   }
 
   CleanUpSwapChain();
@@ -268,6 +264,9 @@ void RenderingContext::CreateSwapChain() {
   createInfo.clipped = VK_TRUE;
   createInfo.oldSwapchain = VK_NULL_HANDLE;
 
+  INFERNO_LOG_ERROR("Width {}, Height {}", createInfo.imageExtent.width,
+                    createInfo.imageExtent.height);
+
   if (vkCreateSwapchainKHR(m_Device, &createInfo, nullptr, &m_SwapChain)) {
     throw std::runtime_error("Failed to Create SwapChain");
   }
@@ -282,6 +281,10 @@ void RenderingContext::CreateSwapChain() {
 }
 
 void RenderingContext::CleanUpSwapChain() {
+  for (auto imageView : m_SwapChainImageViews) {
+    vkDestroyImageView(m_Device, imageView, nullptr);
+  }
+
   vkDestroySwapchainKHR(m_Device, m_SwapChain, nullptr);
 }
 
@@ -311,6 +314,12 @@ void RenderingContext::CreateImageViews() {
       throw std::runtime_error("Failed to create image views");
     }
   }
+}
+
+void RenderingContext::RecreateSwapChain() {
+  CleanUpSwapChain();
+  CreateSwapChain();
+  CreateImageViews();
 }
 
 QueueFamilyIndices
@@ -423,6 +432,9 @@ VkExtent2D RenderingContext::ChooseSwapExtent(
     actualExtent.height =
         std::clamp(actualExtent.height, capabilities.minImageExtent.height,
                    capabilities.maxImageExtent.height);
+    INFERNO_LOG_INFO("Surface extent: {} x {}",
+                     capabilities.currentExtent.width,
+                     capabilities.currentExtent.height);
 
     return actualExtent;
   }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -46,6 +47,9 @@ public:
   }
   const VkQueue &GetGraphicsQueue() const { return m_GrapicsQueue; }
   const VkQueue &GetPresentQueue() const { return m_PresentQueue; }
+
+  uint32_t FindMemoryType(uint32_t typeFilter,
+                          VkMemoryPropertyFlags properties) const;
 
   static std::shared_ptr<RenderingContext> &CreateContext(GLFWwindow *window);
   static std::shared_ptr<RenderingContext> &GetContext();

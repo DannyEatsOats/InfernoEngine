@@ -137,9 +137,9 @@ public:
   ~VertexBuffer();
 
   void SetData(const void *data, unsigned int size);
-
-  void Bind(VkCommandBuffer commandBuffer);
   void Destroy() const;
+
+  const VkBuffer &GetBuffer() const { return m_Buffer; }
 
   const inline BufferLayout &GetLayout() { return m_Layout; }
   void inline SetLayout(const BufferLayout &layout) { m_Layout = layout; }

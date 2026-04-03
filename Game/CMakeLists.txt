@@ -1,13 +1,13 @@
 cmake_minimum_required(VERSION 3.31)
 project(Game)
 
-add_executable(Game 
+add_executable(Game
     src/main.cpp
 )
 
 target_include_directories(Game
     PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src 
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
 target_link_libraries(Game PRIVATE Inferno)
@@ -18,15 +18,29 @@ set_target_properties(Game
         RUNTIME_OUTPUT_DIRECTORY ${OUTPUT_DIR}/${CMAKE_BUILD_TYPE}/Game)
 
 target_compile_definitions(Game
-        PRIVATE 
+        PRIVATE
             $<$<CONFIG:Debug>:INFERNO_DEBUG> $<$<CONFIG:Release>:INFERNO_RELEASE>
         )
 
-add_custom_target(CopyAssets ALL
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-    ${CMAKE_CURRENT_SOURCE_DIR}/assets
-    $<TARGET_FILE_DIR:Game>/assets
-    COMMENT "Copying assets..."
-)
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+
+    add_custom_target(CopyAssets ALL
+        COMMAND ${CMAKE_COMMAND} -E create_symlink
+        ${CMAKE_CURRENT_SOURCE_DIR}/assets
+        $<TARGET_FILE_DIR:Game>/assets
+        COMMENT "Symlinking assets (Debug mode)..."
+    )
+
+else()
+
+    add_custom_target(CopyAssets ALL
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/assets
+        $<TARGET_FILE_DIR:Game>/assets
+        COMMENT "Copying assets (Release mode)..."
+    )
+
+endif()
+
 add_dependencies(Game CopyAssets)
 

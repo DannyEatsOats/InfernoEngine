@@ -9,9 +9,9 @@
 #include "Shader.h"
 
 namespace Inferno {
-const std::vector<Vertex> vertices = {{{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-                                      {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-                                      {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}};
+const std::vector<Vertex> vertices = {{{0.0f, -0.5f}, {0.7f, 0.2f, 0.2f}},
+                                      {{0.5f, 0.5f}, {0.2f, 0.7f, 0.2f}},
+                                      {{-0.5f, 0.5f}, {0.2f, 0.2f, 0.7f}}};
 
 void Renderer::Init() {
   m_Context = RenderingContext::GetContext();
@@ -21,6 +21,8 @@ void Renderer::Init() {
       {"inPosition", ShaderDataType::Float2},
       {"inColor", ShaderDataType::Float3},
   });
+
+  m_VertexBuffer->SetData(vertices.data(), sizeof(Vertex) * vertices.size());
 
   CreateRenderPass();
   CreateGraphicsPipeline();
@@ -202,8 +204,8 @@ void Renderer::CreateGraphicsPipeline() {
                                                     fragShaderStageInfo};
 
   // PIPELINE VERTEX INPUT STATE
-  auto bindingDescription = m_VertexBuffer.GetBindingDescription();
-  auto attributeDescriptions = m_VertexBuffer.GetAttributeDescriptions();
+  auto bindingDescription = m_VertexBuffer->GetBindingDescription();
+  auto attributeDescriptions = m_VertexBuffer->GetAttributeDescriptions();
   VkPipelineVertexInputStateCreateInfo vertexInputStateCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
       .vertexBindingDescriptionCount = 1,
@@ -443,6 +445,10 @@ void Renderer::RecordCommandBuffer(VkCommandBuffer commandBuffer,
   vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                     m_GraphicsPipeline);
 
+  VkBuffer vertexBuffers[] = {m_VertexBuffer->GetBuffer()};
+  VkDeviceSize offsets[] = {0};
+  vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+
   VkViewport viewport = {
       .x = 0.0f,
       .y = 0.0f,
@@ -461,7 +467,7 @@ void Renderer::RecordCommandBuffer(VkCommandBuffer commandBuffer,
 
   vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-  vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+  vkCmdDraw(commandBuffer, static_cast<uint32_t>(vertices.size()), 1, 0, 0);
   vkCmdEndRenderPass(commandBuffer);
   vkEndCommandBuffer(commandBuffer);
 }

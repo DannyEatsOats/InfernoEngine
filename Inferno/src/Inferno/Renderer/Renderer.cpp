@@ -9,9 +9,9 @@
 #include "Shader.h"
 
 namespace Inferno {
-const std::vector<Vertex> vertices = {{{0.0f, -0.5f}, {0.7f, 0.2f, 0.2f}},
-                                      {{0.5f, 0.5f}, {0.2f, 0.7f, 0.2f}},
-                                      {{-0.5f, 0.5f}, {0.2f, 0.2f, 0.7f}}};
+const std::vector<Vertex> vertices = {{{0.0f, -0.5f}, {0.322f, 0.133f, 0.346f}},
+                                      {{0.5f, 0.5f}, {0.549f, 0.188f, 0.380f}},
+                                      {{-0.5f, 0.5f}, {0.776f, 0.235f, 0.318f}}};
 
 void Renderer::Init() {
   m_Context = RenderingContext::GetContext();
@@ -21,8 +21,6 @@ void Renderer::Init() {
       {"inPosition", ShaderDataType::Float2},
       {"inColor", ShaderDataType::Float3},
   });
-
-  m_VertexBuffer->SetData(vertices.data(), sizeof(Vertex) * vertices.size());
 
   CreateRenderPass();
   CreateGraphicsPipeline();

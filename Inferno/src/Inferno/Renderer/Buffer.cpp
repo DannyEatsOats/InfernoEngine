@@ -32,10 +32,8 @@ Buffer::Buffer(const RenderingContext *context, VkDeviceSize size,
   VkMemoryAllocateInfo allocInfo = {
       .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
       .allocationSize = memRequirements.size,
-      .memoryTypeIndex =
-          m_pContext->FindMemoryType(memRequirements.memoryTypeBits,
-                                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                                         VK_MEMORY_PROPERTY_HOST_COHERENT_BIT),
+      .memoryTypeIndex = m_pContext->FindMemoryType(
+          memRequirements.memoryTypeBits, properties),
   };
 
   if (vkAllocateMemory(m_pContext->GetDevice(), &allocInfo, nullptr,
@@ -46,7 +44,13 @@ Buffer::Buffer(const RenderingContext *context, VkDeviceSize size,
   vkBindBufferMemory(m_pContext->GetDevice(), m_Buffer, m_Memory, 0);
 }
 
-Buffer::~Buffer() {}
+Buffer::~Buffer() {
+    if(m_Buffer != VK_NULL_HANDLE)
+      vkDestroyBuffer(m_pContext->GetDevice(), m_Buffer, nullptr);
+
+    if(m_Memory != VK_NULL_HANDLE)
+      vkFreeMemory(m_pContext->GetDevice(), m_Memory, nullptr);
+}
 
 void Buffer::Map(void **data) {
   vkMapMemory(m_pContext->GetDevice(), m_Memory, 0, m_Size, 0, data);
@@ -61,23 +65,22 @@ void Buffer::SetData(const void *data, unsigned int size) {
   Unmap();
 }
 
-void Buffer::Destroy() const {
-  vkDestroyBuffer(m_pContext->GetDevice(), m_Buffer, nullptr);
-  vkFreeMemory(m_pContext->GetDevice(), m_Memory, nullptr);
-}
-
 //===================VERTEX BUFFER=============================
 VertexBuffer::VertexBuffer(const RenderingContext *context,
                            const Vertex *vertices, uint32_t size) {
-  m_Buffer =
-      std::make_unique<Buffer>(context, size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+
+  m_StagingBuffer =
+      std::make_unique<Buffer>(context, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                                    VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
-  m_Buffer->SetData(vertices, size);
-}
+  m_StagingBuffer->SetData(vertices, size);
 
-void VertexBuffer::Destroy() const { m_Buffer->Destroy(); }
+  m_VertexBuffer = std::make_unique<Buffer>(
+      context, size,
+      VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+}
 
 VkVertexInputBindingDescription VertexBuffer::GetBindingDescription() const {
   VkVertexInputBindingDescription binding = {
@@ -218,5 +221,13 @@ std::shared_ptr<VertexBuffer>
 VertexBuffer::Create(const RenderingContext *context, const Vertex *vertices,
                      uint32_t size) {
   return std::make_shared<VertexBuffer>(context, vertices, size);
+}
+
+void VertexBuffer::CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size) {
+    VkCommandBufferAllocateInfo allocInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandPool = 
+    };
 }
 } // namespace Inferno

@@ -136,8 +136,6 @@ public:
 
   ~Buffer();
 
-  void Destroy() const;
-
   void Map(void **data);
   void Unmap();
   void SetData(const void *data, unsigned int size);
@@ -158,9 +156,7 @@ public:
   VertexBuffer(const RenderingContext *context, const Vertex *vertices,
                uint32_t size);
 
-  void Destroy() const;
-
-  const VkBuffer &GetBuffer() const { return m_Buffer->GetBuffer(); }
+  const VkBuffer &GetBuffer() const { return m_VertexBuffer->GetBuffer(); }
 
   const inline BufferLayout &GetLayout() { return m_Layout; }
   void inline SetLayout(const BufferLayout &layout) { m_Layout = layout; }
@@ -175,7 +171,11 @@ public:
                                               uint32_t size);
 
 private:
-  std::unique_ptr<Buffer> m_Buffer;
+  void CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size);
+
+private:
+  std::unique_ptr<Buffer> m_StagingBuffer;
+  std::unique_ptr<Buffer> m_VertexBuffer;
   BufferLayout m_Layout;
 
   const RenderingContext *m_pRenderingContext;

@@ -35,8 +35,6 @@ void Renderer::ShutDown() {
     vkDeviceWaitIdle(m_Context->GetDevice());
   }
 
-  m_VertexBuffer->Destroy();
-
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
     vkDestroySemaphore(m_Context->GetDevice(), m_RenderFinishedSemaphores[i],
                        nullptr);

@@ -153,10 +153,9 @@ private:
 //===================VERTEX BUFFER=============================
 class VertexBuffer {
 public:
-  VertexBuffer(const RenderingContext *context, const Vertex *vertices,
-               uint32_t size);
+  VertexBuffer(const RenderingContext *context, uint32_t size);
 
-  const VkBuffer &GetBuffer() const { return m_VertexBuffer->GetBuffer(); }
+  const VkBuffer &GetBuffer() const { return m_VertexBuffer.GetBuffer(); }
 
   const inline BufferLayout &GetLayout() { return m_Layout; }
   void inline SetLayout(const BufferLayout &layout) { m_Layout = layout; }
@@ -166,18 +165,18 @@ public:
   std::vector<VkVertexInputAttributeDescription>
   GetAttributeDescriptions() const;
 
+  void SetData(const Vertex *vertices, uint32_t size);
+
   static std::shared_ptr<VertexBuffer> Create(const RenderingContext *context,
-                                              const Vertex *vertices,
                                               uint32_t size);
 
 private:
   void CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size);
 
 private:
-  std::unique_ptr<Buffer> m_StagingBuffer;
-  std::unique_ptr<Buffer> m_VertexBuffer;
+  Buffer m_VertexBuffer;
   BufferLayout m_Layout;
 
-  const RenderingContext *m_pRenderingContext;
+  const RenderingContext *m_pRenderingContext = nullptr;
 };
 } // namespace Inferno

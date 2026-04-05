@@ -48,6 +48,10 @@ public:
   const VkQueue &GetGraphicsQueue() const { return m_GrapicsQueue; }
   const VkQueue &GetPresentQueue() const { return m_PresentQueue; }
 
+  const VkCommandPool &GetCommandPool() const { return m_CommandPool; }
+
+  void CreateCommandPool();
+
   uint32_t FindMemoryType(uint32_t typeFilter,
                           VkMemoryPropertyFlags properties) const;
 
@@ -91,6 +95,8 @@ private:
   VkFormat m_SwapChainImageFormat;
   VkExtent2D m_SwapChainExtent;
   std::vector<VkImageView> m_SwapChainImageViews;
+
+  VkCommandPool m_CommandPool;
 
   static std::shared_ptr<RenderingContext> s_Context;
 

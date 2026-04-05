@@ -22,7 +22,6 @@ private:
   void CreateRenderPass();
   void CreateGraphicsPipeline();
   void CreateFramebuffers();
-  void CreateCommandPool();
   void CreateCommandBuffers();
   void CreateSyncObjects();
   void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
@@ -35,7 +34,6 @@ private:
   VkPipelineLayout m_PipelineLayout;
   VkPipeline m_GraphicsPipeline;
 
-  VkCommandPool m_CommandPool;
   std::vector<VkCommandBuffer> m_CommandBuffers;
 
   std::vector<VkSemaphore> m_ImageAvailableSemaphores;

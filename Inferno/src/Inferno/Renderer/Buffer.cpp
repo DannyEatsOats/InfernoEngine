@@ -5,6 +5,7 @@
 #include <vulkan/vulkan_core.h>
 
 #include "Buffer.h"
+#include "Inferno/Log.h"
 #include "Inferno/Renderer/RenderingContext.h"
 
 namespace Inferno {
@@ -45,11 +46,11 @@ Buffer::Buffer(const RenderingContext *context, VkDeviceSize size,
 }
 
 Buffer::~Buffer() {
-    if(m_Buffer != VK_NULL_HANDLE)
-      vkDestroyBuffer(m_pContext->GetDevice(), m_Buffer, nullptr);
+  if (m_Buffer != VK_NULL_HANDLE)
+    vkDestroyBuffer(m_pContext->GetDevice(), m_Buffer, nullptr);
 
-    if(m_Memory != VK_NULL_HANDLE)
-      vkFreeMemory(m_pContext->GetDevice(), m_Memory, nullptr);
+  if (m_Memory != VK_NULL_HANDLE)
+    vkFreeMemory(m_pContext->GetDevice(), m_Memory, nullptr);
 }
 
 void Buffer::Map(void **data) {
@@ -66,20 +67,21 @@ void Buffer::SetData(const void *data, unsigned int size) {
 }
 
 //===================VERTEX BUFFER=============================
-VertexBuffer::VertexBuffer(const RenderingContext *context,
-                           const Vertex *vertices, uint32_t size) {
+VertexBuffer::VertexBuffer(const RenderingContext *context, uint32_t size)
+    : m_pRenderingContext(context),
+      m_VertexBuffer(context, size,
+                     VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {}
 
-  m_StagingBuffer =
-      std::make_unique<Buffer>(context, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                                   VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+void VertexBuffer::SetData(const Vertex *vertices, uint32_t size) {
+  Buffer stagingBuffer(m_pRenderingContext, size,
+                       VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                           VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
-  m_StagingBuffer->SetData(vertices, size);
-
-  m_VertexBuffer = std::make_unique<Buffer>(
-      context, size,
-      VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+  stagingBuffer.SetData(vertices, size);
+  CopyBuffer(stagingBuffer.GetBuffer(), m_VertexBuffer.GetBuffer(), size);
 }
 
 VkVertexInputBindingDescription VertexBuffer::GetBindingDescription() const {
@@ -218,16 +220,47 @@ VertexBuffer::GetAttributeDescriptions() const {
   return attributes;
 }
 std::shared_ptr<VertexBuffer>
-VertexBuffer::Create(const RenderingContext *context, const Vertex *vertices,
+VertexBuffer::Create(const RenderingContext *context,
                      uint32_t size) {
-  return std::make_shared<VertexBuffer>(context, vertices, size);
+  return std::make_shared<VertexBuffer>(context, size);
 }
 
 void VertexBuffer::CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size) {
-    VkCommandBufferAllocateInfo allocInfo = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-        .commandPool = 
-    };
+  VkCommandBufferAllocateInfo allocInfo{};
+  allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+  allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+  allocInfo.commandPool = m_pRenderingContext->GetCommandPool();
+  allocInfo.commandBufferCount = 1;
+
+  VkCommandBuffer commandBuffer;
+  vkAllocateCommandBuffers(m_pRenderingContext->GetDevice(), &allocInfo,
+                           &commandBuffer);
+
+  VkCommandBufferBeginInfo beginInfo{};
+  beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+  vkBeginCommandBuffer(commandBuffer, &beginInfo);
+
+  VkBufferCopy copyRegion{};
+  copyRegion.srcOffset = 0;
+  copyRegion.dstOffset = 0;
+  copyRegion.size = size;
+
+  vkCmdCopyBuffer(commandBuffer, src, dst, 1, &copyRegion);
+  vkEndCommandBuffer(commandBuffer);
+
+  VkSubmitInfo submitInfo{};
+  submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+  submitInfo.commandBufferCount = 1;
+  submitInfo.pCommandBuffers = &commandBuffer;
+
+  vkQueueSubmit(m_pRenderingContext->GetGraphicsQueue(), 1, &submitInfo,
+                VK_NULL_HANDLE);
+  vkQueueWaitIdle(m_pRenderingContext->GetGraphicsQueue());
+
+  vkFreeCommandBuffers(m_pRenderingContext->GetDevice(),
+                       m_pRenderingContext->GetCommandPool(), 1,
+                       &commandBuffer);
 }
 } // namespace Inferno

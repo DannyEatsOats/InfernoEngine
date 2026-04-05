@@ -9,14 +9,17 @@
 #include "Shader.h"
 
 namespace Inferno {
-const std::vector<Vertex> vertices = {{{0.0f, -0.5f}, {0.322f, 0.133f, 0.346f}},
-                                      {{0.5f, 0.5f}, {0.549f, 0.188f, 0.380f}},
-                                      {{-0.5f, 0.5f}, {0.776f, 0.235f, 0.318f}}};
+const std::vector<Vertex> vertices = {
+    {{0.0f, -0.5f}, {0.322f, 0.133f, 0.346f}},
+    {{0.5f, 0.5f}, {0.549f, 0.188f, 0.380f}},
+    {{-0.5f, 0.5f}, {0.776f, 0.235f, 0.318f}}};
 
 void Renderer::Init() {
   m_Context = RenderingContext::GetContext();
-  m_VertexBuffer = VertexBuffer::Create(m_Context.get(), vertices.data(),
-                                        sizeof(Vertex) * vertices.size());
+
+  m_VertexBuffer =
+      VertexBuffer::Create(m_Context.get(), sizeof(Vertex) * vertices.size());
+
   m_VertexBuffer->SetLayout({
       {"inPosition", ShaderDataType::Float2},
       {"inColor", ShaderDataType::Float3},
@@ -25,9 +28,11 @@ void Renderer::Init() {
   CreateRenderPass();
   CreateGraphicsPipeline();
   CreateFramebuffers();
-  CreateCommandPool();
+  m_Context->CreateCommandPool();
   CreateCommandBuffers();
   CreateSyncObjects();
+
+  m_VertexBuffer->SetData(vertices.data(), sizeof(Vertex) * vertices.size());
 }
 
 void Renderer::ShutDown() {
@@ -42,7 +47,8 @@ void Renderer::ShutDown() {
                        nullptr);
     vkDestroyFence(m_Context->GetDevice(), m_InFlightFences[i], nullptr);
   }
-  vkDestroyCommandPool(m_Context->GetDevice(), m_CommandPool, nullptr);
+  vkDestroyCommandPool(m_Context->GetDevice(), m_Context->GetCommandPool(),
+                       nullptr);
 
   for (auto framebuffer : m_SwapChainFrameBuffers) {
     vkDestroyFramebuffer(m_Context->GetDevice(), framebuffer, nullptr);
@@ -351,28 +357,12 @@ void Renderer::CreateFramebuffers() {
   }
 }
 
-void Renderer::CreateCommandPool() {
-  QueueFamilyIndices queueFamilyIndices =
-      m_Context->FindQueueFamilies(m_Context->GetPhysicalDevice());
-
-  VkCommandPoolCreateInfo poolCreateInfo = {
-      .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-      .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-      .queueFamilyIndex = queueFamilyIndices.graphicsFamily.value(),
-  };
-
-  if (vkCreateCommandPool(m_Context->GetDevice(), &poolCreateInfo, nullptr,
-                          &m_CommandPool) != VK_SUCCESS) {
-    throw std::runtime_error("Failed to create command pool!");
-  }
-}
-
 void Renderer::CreateCommandBuffers() {
   m_CommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
 
   VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-      .commandPool = m_CommandPool,
+      .commandPool = m_Context->GetCommandPool(),
       .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
       .commandBufferCount = static_cast<uint32_t>(m_CommandBuffers.size()),
   };

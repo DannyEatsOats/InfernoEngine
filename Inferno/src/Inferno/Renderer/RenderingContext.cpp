@@ -473,6 +473,22 @@ bool RenderingContext::CheckDeviceExtensionSupport(VkPhysicalDevice device) {
   return requiredExtensions.empty();
 }
 
+void RenderingContext::CreateCommandPool() {
+  QueueFamilyIndices queueFamilyIndices =
+      FindQueueFamilies(GetPhysicalDevice());
+
+  VkCommandPoolCreateInfo poolCreateInfo = {
+      .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+      .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+      .queueFamilyIndex = queueFamilyIndices.graphicsFamily.value(),
+  };
+
+  if (vkCreateCommandPool(GetDevice(), &poolCreateInfo, nullptr,
+                          &m_CommandPool) != VK_SUCCESS) {
+    throw std::runtime_error("Failed to create command pool!");
+  }
+}
+
 uint32_t RenderingContext::FindMemoryType(uint32_t typeFilter,
                                           VkMemoryPropertyFlags properties) const {
   VkPhysicalDeviceMemoryProperties memProperties;

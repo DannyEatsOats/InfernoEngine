@@ -7,6 +7,10 @@
 #include <vulkan/vulkan_core.h>
 
 namespace Inferno {
+
+//============================================================
+// Shader Data Types
+//============================================================
 enum class ShaderDataType {
   None = 0,
   Float,
@@ -22,7 +26,7 @@ enum class ShaderDataType {
   Bool
 };
 
-static uint32_t ShaderDataTypeSize(ShaderDataType type) {
+inline uint32_t ShaderDataTypeSize(ShaderDataType type) {
   switch (type) {
   case ShaderDataType::Float:
     return 4;
@@ -51,22 +55,28 @@ static uint32_t ShaderDataTypeSize(ShaderDataType type) {
   }
 }
 
+//============================================================
+// Vertex
+//============================================================
 struct Vertex {
   glm::vec2 Position;
   glm::vec3 Color;
 };
 
+//============================================================
+// Buffer Layout
+//============================================================
 struct BufferElement {
   std::string Name;
-  uint32_t Offset;
-  uint32_t Size;
-  ShaderDataType Type;
-  bool Normalized;
+  uint32_t Offset = 0;
+  uint32_t Size = 0;
+  ShaderDataType Type = ShaderDataType::None;
+  bool Normalized = false;
 
   BufferElement() = default;
+
   BufferElement(std::string name, ShaderDataType type)
-      : Name(std::move(name)), Offset(0), Size(ShaderDataTypeSize(type)),
-        Type(type), Normalized(false) {}
+      : Name(std::move(name)), Size(ShaderDataTypeSize(type)), Type(type) {}
 
   uint32_t GetComponentCount() const {
     switch (Type) {
@@ -79,11 +89,11 @@ struct BufferElement {
     case ShaderDataType::Float4:
       return 4;
     case ShaderDataType::Mat3:
-      return 3 * 3;
+      return 9;
     case ShaderDataType::Mat4:
-      return 4 * 4;
+      return 16;
     case ShaderDataType::Int:
-      return 4;
+      return 1;
     case ShaderDataType::Int2:
       return 2;
     case ShaderDataType::Int3:
@@ -102,20 +112,19 @@ class BufferLayout {
 public:
   BufferLayout() = default;
 
-  BufferLayout(const std::initializer_list<BufferElement> &elements)
+  BufferLayout(std::initializer_list<BufferElement> elements)
       : m_Elements(elements) {
     CalculateOffsetsAndStride();
   }
 
-  const inline uint32_t GetStride() const { return m_Stride; }
-  const inline std::vector<BufferElement> &GetElements() const {
-    return m_Elements;
-  }
+  uint32_t GetStride() const { return m_Stride; }
+  const std::vector<BufferElement> &GetElements() const { return m_Elements; }
 
 private:
   void CalculateOffsetsAndStride() {
     uint32_t offset = 0;
     m_Stride = 0;
+
     for (auto &element : m_Elements) {
       element.Offset = offset;
       offset += element.Size;
@@ -128,7 +137,9 @@ private:
   uint32_t m_Stride = 0;
 };
 
-//===================BUFFER=============================
+//============================================================
+// Buffer (GPU Resource Only)
+//============================================================
 class Buffer {
 public:
   Buffer(const RenderingContext *context, VkDeviceSize size,
@@ -136,11 +147,9 @@ public:
 
   ~Buffer();
 
-  void Map(void **data);
-  void Unmap();
-  void SetData(const void *data, unsigned int size);
-
-  const VkBuffer &GetBuffer() const { return m_Buffer; }
+  VkBuffer Get() const { return m_Buffer; }
+  VkDeviceMemory GetMemory() const { return m_Memory; }
+  VkDeviceSize GetSize() const { return m_Size; }
 
 private:
   VkBuffer m_Buffer = VK_NULL_HANDLE;
@@ -150,33 +159,42 @@ private:
   const RenderingContext *m_pContext = nullptr;
 };
 
-//===================VERTEX BUFFER=============================
+//============================================================
+// Buffer Upload Utility (Staging + Copy)
+//============================================================
+class BufferUploader {
+public:
+  static void Upload(const RenderingContext *context, Buffer &dst,
+                     const void *data, VkDeviceSize size);
+};
+
+//============================================================
+// Vertex Buffer (Thin Wrapper)
+//============================================================
 class VertexBuffer {
 public:
-  VertexBuffer(const RenderingContext *context, uint32_t size);
+  VertexBuffer(const RenderingContext *context, VkDeviceSize size);
 
-  const VkBuffer &GetBuffer() const { return m_VertexBuffer.GetBuffer(); }
+  VkBuffer Get() const { return m_Buffer.Get(); }
 
-  const inline BufferLayout &GetLayout() { return m_Layout; }
-  void inline SetLayout(const BufferLayout &layout) { m_Layout = layout; }
+  void Upload(const void *data);
+
+  void SetLayout(const BufferLayout &layout) { m_Layout = layout; }
+  const BufferLayout &GetLayout() const { return m_Layout; }
 
   VkVertexInputBindingDescription GetBindingDescription() const;
-
   std::vector<VkVertexInputAttributeDescription>
   GetAttributeDescriptions() const;
 
-  void SetData(const Vertex *vertices, uint32_t size);
-
+  // Convenience factory
   static std::shared_ptr<VertexBuffer> Create(const RenderingContext *context,
-                                              uint32_t size);
+                                              VkDeviceSize size);
 
 private:
-  void CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size);
-
-private:
-  Buffer m_VertexBuffer;
+  Buffer m_Buffer;
   BufferLayout m_Layout;
 
-  const RenderingContext *m_pRenderingContext = nullptr;
+  const RenderingContext *m_pContext = nullptr;
 };
+
 } // namespace Inferno

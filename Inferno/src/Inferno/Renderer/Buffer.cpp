@@ -1,45 +1,42 @@
 #include <cstring>
-#include <memory>
 #include <pch.h>
 #include <stdexcept>
 #include <vulkan/vulkan_core.h>
 
-#include "Buffer.h"
-#include "Inferno/Log.h"
+#include "Inferno/Renderer/Buffer.h"
 #include "Inferno/Renderer/RenderingContext.h"
 
 namespace Inferno {
 
-//===================BUFFER=============================
+//=================== BUFFER ==============================
 Buffer::Buffer(const RenderingContext *context, VkDeviceSize size,
                VkBufferUsageFlags usage, VkMemoryPropertyFlags properties)
     : m_pContext(context), m_Size(size) {
-  VkBufferCreateInfo bufferInfo{
-      .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-      .size = size,
-      .usage = usage,
-      .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-  };
+
+  VkBufferCreateInfo bufferInfo{};
+  bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+  bufferInfo.size = size;
+  bufferInfo.usage = usage;
+  bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
   if (vkCreateBuffer(m_pContext->GetDevice(), &bufferInfo, nullptr,
                      &m_Buffer) != VK_SUCCESS) {
-    throw std::runtime_error("Failed to Create Buffer");
+    throw std::runtime_error("Failed to create buffer");
   }
 
   VkMemoryRequirements memRequirements;
   vkGetBufferMemoryRequirements(m_pContext->GetDevice(), m_Buffer,
                                 &memRequirements);
 
-  VkMemoryAllocateInfo allocInfo = {
-      .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-      .allocationSize = memRequirements.size,
-      .memoryTypeIndex = m_pContext->FindMemoryType(
-          memRequirements.memoryTypeBits, properties),
-  };
+  VkMemoryAllocateInfo allocInfo{};
+  allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+  allocInfo.allocationSize = memRequirements.size;
+  allocInfo.memoryTypeIndex =
+      m_pContext->FindMemoryType(memRequirements.memoryTypeBits, properties);
 
   if (vkAllocateMemory(m_pContext->GetDevice(), &allocInfo, nullptr,
                        &m_Memory) != VK_SUCCESS) {
-    throw std::runtime_error("Failed to Allocate Vertex Buffer Memory!");
+    throw std::runtime_error("Failed to allocate buffer memory");
   }
 
   vkBindBufferMemory(m_pContext->GetDevice(), m_Buffer, m_Memory, 0);
@@ -53,35 +50,73 @@ Buffer::~Buffer() {
     vkFreeMemory(m_pContext->GetDevice(), m_Memory, nullptr);
 }
 
-void Buffer::Map(void **data) {
-  vkMapMemory(m_pContext->GetDevice(), m_Memory, 0, m_Size, 0, data);
-}
+//=================== BUFFER UTILITY ==============================
 
-void Buffer::Unmap() { vkUnmapMemory(m_pContext->GetDevice(), m_Memory); }
+void BufferUploader::Upload(const RenderingContext *context, Buffer &dst,
+                            const void *data, VkDeviceSize size) {
+  if (size > dst.GetSize()) {
+    throw std::runtime_error("Size passed in BufferUploader is invalid");
+  }
 
-void Buffer::SetData(const void *data, unsigned int size) {
-  void *dst;
-  Map(&dst);
-  memcpy(dst, data, size);
-  Unmap();
-}
-
-//===================VERTEX BUFFER=============================
-VertexBuffer::VertexBuffer(const RenderingContext *context, uint32_t size)
-    : m_pRenderingContext(context),
-      m_VertexBuffer(context, size,
-                     VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {}
-
-void VertexBuffer::SetData(const Vertex *vertices, uint32_t size) {
-  Buffer stagingBuffer(m_pRenderingContext, size,
-                       VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+  // 1. Create staging buffer
+  Buffer stagingBuffer(context, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
-  stagingBuffer.SetData(vertices, size);
-  CopyBuffer(stagingBuffer.GetBuffer(), m_VertexBuffer.GetBuffer(), size);
+  // 2. Copy CPU → staging
+  void *mapped;
+  vkMapMemory(context->GetDevice(), stagingBuffer.GetMemory(), 0, size, 0,
+              &mapped);
+  memcpy(mapped, data, static_cast<size_t>(size));
+  vkUnmapMemory(context->GetDevice(), stagingBuffer.GetMemory());
+
+  // 3. Allocate command buffer
+  VkCommandBufferAllocateInfo allocInfo{};
+  allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+  allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+  allocInfo.commandPool = context->GetCommandPool();
+  allocInfo.commandBufferCount = 1;
+
+  VkCommandBuffer cmd;
+  vkAllocateCommandBuffers(context->GetDevice(), &allocInfo, &cmd);
+
+  // 4. Record copy command
+  VkCommandBufferBeginInfo beginInfo{};
+  beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+  vkBeginCommandBuffer(cmd, &beginInfo);
+
+  VkBufferCopy copy{};
+  copy.size = size;
+
+  vkCmdCopyBuffer(cmd, stagingBuffer.Get(), dst.Get(), 1, &copy);
+
+  vkEndCommandBuffer(cmd);
+
+  // 5. Submit
+  VkSubmitInfo submit{};
+  submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+  submit.commandBufferCount = 1;
+  submit.pCommandBuffers = &cmd;
+
+  vkQueueSubmit(context->GetGraphicsQueue(), 1, &submit, VK_NULL_HANDLE);
+  vkQueueWaitIdle(context->GetGraphicsQueue());
+
+  // 6. Cleanup
+  vkFreeCommandBuffers(context->GetDevice(), context->GetCommandPool(), 1,
+                       &cmd);
+}
+//=================== VERTEX BUFFER ==============================
+
+VertexBuffer::VertexBuffer(const RenderingContext *context, VkDeviceSize size)
+    : m_pContext(context), m_Buffer(context, size,
+                                    VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                                        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {}
+
+void VertexBuffer::Upload(const void *data) {
+  BufferUploader::Upload(m_pContext, m_Buffer, data, m_Buffer.GetSize());
 }
 
 VkVertexInputBindingDescription VertexBuffer::GetBindingDescription() const {
@@ -97,12 +132,9 @@ std::vector<VkVertexInputAttributeDescription>
 VertexBuffer::GetAttributeDescriptions() const {
   std::vector<VkVertexInputAttributeDescription> attributes;
   const auto &elements = m_Layout.GetElements();
-
   uint32_t locationCounter = 0;
-
   for (const auto &e : elements) {
-    switch (e.Type) {
-    // Float types
+    switch (e.Type) { // Float types
     case ShaderDataType::Float: {
       VkVertexInputAttributeDescription attr{};
       attr.binding = 0;
@@ -139,8 +171,7 @@ VertexBuffer::GetAttributeDescriptions() const {
       attributes.push_back(attr);
       break;
     }
-
-    // Integer types
+      // Integer types
     case ShaderDataType::Int: {
       VkVertexInputAttributeDescription attr{};
       attr.binding = 0;
@@ -176,9 +207,7 @@ VertexBuffer::GetAttributeDescriptions() const {
       attr.format = VK_FORMAT_R32G32B32A32_SINT;
       attributes.push_back(attr);
       break;
-    }
-
-    // Matrix types (split into columns)
+    } // Matrix types (split into columns)
     case ShaderDataType::Mat3: {
       for (uint32_t i = 0; i < 3; ++i) {
         VkVertexInputAttributeDescription attr{};
@@ -201,7 +230,6 @@ VertexBuffer::GetAttributeDescriptions() const {
       }
       break;
     }
-
     case ShaderDataType::Bool: {
       VkVertexInputAttributeDescription attr{};
       attr.binding = 0;
@@ -211,56 +239,17 @@ VertexBuffer::GetAttributeDescriptions() const {
       attributes.push_back(attr);
       break;
     }
-
     default:
       throw std::runtime_error("Unsupported ShaderDataType in VertexBuffer");
     }
   }
-
   return attributes;
 }
+
 std::shared_ptr<VertexBuffer>
-VertexBuffer::Create(const RenderingContext *context,
-                     uint32_t size) {
-  return std::make_shared<VertexBuffer>(context, size);
-}
+VertexBuffer::Create(const RenderingContext *context, VkDeviceSize size) {
+  auto vertexBuffer = std::make_shared<VertexBuffer>(context, size);
 
-void VertexBuffer::CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size) {
-  VkCommandBufferAllocateInfo allocInfo{};
-  allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-  allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-  allocInfo.commandPool = m_pRenderingContext->GetCommandPool();
-  allocInfo.commandBufferCount = 1;
-
-  VkCommandBuffer commandBuffer;
-  vkAllocateCommandBuffers(m_pRenderingContext->GetDevice(), &allocInfo,
-                           &commandBuffer);
-
-  VkCommandBufferBeginInfo beginInfo{};
-  beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-  beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-  vkBeginCommandBuffer(commandBuffer, &beginInfo);
-
-  VkBufferCopy copyRegion{};
-  copyRegion.srcOffset = 0;
-  copyRegion.dstOffset = 0;
-  copyRegion.size = size;
-
-  vkCmdCopyBuffer(commandBuffer, src, dst, 1, &copyRegion);
-  vkEndCommandBuffer(commandBuffer);
-
-  VkSubmitInfo submitInfo{};
-  submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-  submitInfo.commandBufferCount = 1;
-  submitInfo.pCommandBuffers = &commandBuffer;
-
-  vkQueueSubmit(m_pRenderingContext->GetGraphicsQueue(), 1, &submitInfo,
-                VK_NULL_HANDLE);
-  vkQueueWaitIdle(m_pRenderingContext->GetGraphicsQueue());
-
-  vkFreeCommandBuffers(m_pRenderingContext->GetDevice(),
-                       m_pRenderingContext->GetCommandPool(), 1,
-                       &commandBuffer);
+  return vertexBuffer;
 }
 } // namespace Inferno

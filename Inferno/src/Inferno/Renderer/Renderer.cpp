@@ -32,7 +32,7 @@ void Renderer::Init() {
   CreateCommandBuffers();
   CreateSyncObjects();
 
-  m_VertexBuffer->SetData(vertices.data(), sizeof(Vertex) * vertices.size());
+    m_VertexBuffer->Upload(vertices.data());
 }
 
 void Renderer::ShutDown() {
@@ -431,7 +431,7 @@ void Renderer::RecordCommandBuffer(VkCommandBuffer commandBuffer,
   vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                     m_GraphicsPipeline);
 
-  VkBuffer vertexBuffers[] = {m_VertexBuffer->GetBuffer()};
+  VkBuffer vertexBuffers[] = {m_VertexBuffer->Get()};
   VkDeviceSize offsets[] = {0};
   vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 

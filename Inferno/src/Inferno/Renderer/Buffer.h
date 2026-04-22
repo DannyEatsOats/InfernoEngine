@@ -147,6 +147,9 @@ public:
 
   ~Buffer();
 
+  Buffer(const Buffer &) = delete;
+  Buffer &operator=(const Buffer &) = delete;
+
   VkBuffer Get() const { return m_Buffer; }
   VkDeviceMemory GetMemory() const { return m_Memory; }
   VkDeviceSize GetSize() const { return m_Size; }
@@ -175,6 +178,9 @@ class VertexBuffer {
 public:
   VertexBuffer(const RenderingContext *context, VkDeviceSize size);
 
+  VertexBuffer(const VertexBuffer &) = delete;
+  VertexBuffer &operator=(const VertexBuffer &) = delete;
+
   VkBuffer Get() const { return m_Buffer.Get(); }
 
   void Upload(const void *data);
@@ -186,8 +192,7 @@ public:
   std::vector<VkVertexInputAttributeDescription>
   GetAttributeDescriptions() const;
 
-  // Convenience factory
-  static std::shared_ptr<VertexBuffer> Create(const RenderingContext *context,
+  static std::unique_ptr<VertexBuffer> Create(const RenderingContext *context,
                                               VkDeviceSize size);
 
 private:
@@ -196,5 +201,54 @@ private:
 
   const RenderingContext *m_pContext = nullptr;
 };
+//============================================================
+// Index Buffer (Thin Wrapper)
+//============================================================
+class IndexBuffer {
+public:
+  IndexBuffer(const RenderingContext *context, VkDeviceSize size,
+              VkIndexType indexType);
 
+  IndexBuffer(const IndexBuffer &) = delete;
+  IndexBuffer &operator=(const IndexBuffer &) = delete;
+
+  VkBuffer Get() const { return m_Buffer.Get(); }
+  VkIndexType GetIndexType() const { return m_IndexType; }
+
+  void Upload(const void *data);
+
+  static std::unique_ptr<IndexBuffer> Create(const RenderingContext *context,
+                                             VkDeviceSize size,
+                                             VkIndexType indexType);
+
+private:
+  Buffer m_Buffer;
+  VkIndexType m_IndexType;
+
+  const RenderingContext *m_pContext = nullptr;
+};
+//============================================================
+// Uniform Buffer (Thin Wrapper)
+//============================================================
+class UniformBuffer {
+public:
+  UniformBuffer(const RenderingContext *context, VkDeviceSize size);
+  ~UniformBuffer();
+
+  UniformBuffer(const UniformBuffer &) = delete;
+  UniformBuffer &operator=(const UniformBuffer &) = delete;
+
+  VkBuffer Get() const { return m_Buffer.Get(); }
+
+  void Update(const void *data, VkDeviceSize size);
+
+  static std::unique_ptr<UniformBuffer> Create(const RenderingContext *context,
+                                               VkDeviceSize size);
+
+private:
+  Buffer m_Buffer;
+  void *m_pMapped = nullptr;
+
+  const RenderingContext *m_pContext = nullptr;
+};
 } // namespace Inferno

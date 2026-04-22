@@ -1,8 +1,22 @@
+#include <cstddef>
+#include <glm/ext/matrix_clip_space.hpp>
+#include <glm/ext/matrix_transform.hpp>
+#include <glm/fwd.hpp>
+#include <glm/trigonometric.hpp>
 #include <pch.h>
 #include <stdexcept>
+#include <vector>
 #include <vulkan/vulkan_core.h>
 
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
+#include <chrono>
+
 #include "Inferno/Renderer/Buffer.h"
+#include "Inferno/Renderer/RenderData.h"
 #include "Inferno/Renderer/RenderingContext.h"
 #include "Renderer.h"
 
@@ -10,62 +24,82 @@
 
 namespace Inferno {
 const std::vector<Vertex> vertices = {
-    {{0.0f, -0.5f}, {0.322f, 0.133f, 0.346f}},
-    {{0.5f, 0.5f}, {0.549f, 0.188f, 0.380f}},
-    {{-0.5f, 0.5f}, {0.776f, 0.235f, 0.318f}}};
+    {{-0.5f, -0.5f}, {0.322f, 0.133f, 0.346f}},
+    {{0.5f, -0.5f}, {0.549f, 0.188f, 0.380f}},
+    {{0.5f, 0.5f}, {0.776f, 0.235f, 0.318f}},
+    {{-0.5f, 0.5f}, {0.676f, 0.245f, 0.348f}}};
+
+const std::vector<uint16_t> indices = {0, 1, 2, 2, 3, 0};
 
 void Renderer::Init() {
-  m_Context = RenderingContext::GetContext();
+  m_pContext = RenderingContext::GetContext();
 
   m_VertexBuffer =
-      VertexBuffer::Create(m_Context.get(), sizeof(Vertex) * vertices.size());
+      VertexBuffer::Create(m_pContext.get(), sizeof(Vertex) * vertices.size());
 
   m_VertexBuffer->SetLayout({
       {"inPosition", ShaderDataType::Float2},
       {"inColor", ShaderDataType::Float3},
   });
 
+  m_IndexBuffer =
+      IndexBuffer::Create(m_pContext.get(), sizeof(indices[0]) * indices.size(),
+                          VK_INDEX_TYPE_UINT16);
+
+  m_UniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+    m_UniformBuffers[i] =
+        UniformBuffer::Create(m_pContext.get(), sizeof(UniformBufferOjbect));
+  }
+
   CreateRenderPass();
+  CreateDescriptorSetLayout();
+  CreateDescriptorPool();
+  CreateDescriptorSets();
   CreateGraphicsPipeline();
   CreateFramebuffers();
-  m_Context->CreateCommandPool();
+  m_pContext->CreateCommandPool();
   CreateCommandBuffers();
   CreateSyncObjects();
 
-    m_VertexBuffer->Upload(vertices.data());
+  m_VertexBuffer->Upload(vertices.data());
+  m_IndexBuffer->Upload(indices.data());
 }
 
 void Renderer::ShutDown() {
-  if (m_Context->GetDevice() != VK_NULL_HANDLE) {
-    vkDeviceWaitIdle(m_Context->GetDevice());
+  if (m_pContext->GetDevice() != VK_NULL_HANDLE) {
+    vkDeviceWaitIdle(m_pContext->GetDevice());
   }
 
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-    vkDestroySemaphore(m_Context->GetDevice(), m_RenderFinishedSemaphores[i],
+    vkDestroySemaphore(m_pContext->GetDevice(), m_RenderFinishedSemaphores[i],
                        nullptr);
-    vkDestroySemaphore(m_Context->GetDevice(), m_ImageAvailableSemaphores[i],
+    vkDestroySemaphore(m_pContext->GetDevice(), m_ImageAvailableSemaphores[i],
                        nullptr);
-    vkDestroyFence(m_Context->GetDevice(), m_InFlightFences[i], nullptr);
+    vkDestroyFence(m_pContext->GetDevice(), m_InFlightFences[i], nullptr);
   }
-  vkDestroyCommandPool(m_Context->GetDevice(), m_Context->GetCommandPool(),
+  vkDestroyCommandPool(m_pContext->GetDevice(), m_pContext->GetCommandPool(),
                        nullptr);
 
   for (auto framebuffer : m_SwapChainFrameBuffers) {
-    vkDestroyFramebuffer(m_Context->GetDevice(), framebuffer, nullptr);
+    vkDestroyFramebuffer(m_pContext->GetDevice(), framebuffer, nullptr);
   }
 
-  vkDestroyPipeline(m_Context->GetDevice(), m_GraphicsPipeline, nullptr);
-  vkDestroyPipelineLayout(m_Context->GetDevice(), m_PipelineLayout, nullptr);
-  vkDestroyRenderPass(m_Context->GetDevice(), m_RenderPass, nullptr);
+  vkDestroyDescriptorPool(m_pContext->GetDevice(), m_DescriptorPool, nullptr);
+  vkDestroyDescriptorSetLayout(m_pContext->GetDevice(), m_DescriptorSetLayout,
+                               nullptr);
+  vkDestroyPipeline(m_pContext->GetDevice(), m_GraphicsPipeline, nullptr);
+  vkDestroyPipelineLayout(m_pContext->GetDevice(), m_PipelineLayout, nullptr);
+  vkDestroyRenderPass(m_pContext->GetDevice(), m_RenderPass, nullptr);
 }
 
 void Renderer::DrawFrame() {
-  vkWaitForFences(m_Context->GetDevice(), 1, &m_InFlightFences[m_CurrentFrame],
+  vkWaitForFences(m_pContext->GetDevice(), 1, &m_InFlightFences[m_CurrentFrame],
                   VK_TRUE, UINT64_MAX);
 
   uint32_t imageIndex;
   VkResult result = vkAcquireNextImageKHR(
-      m_Context->GetDevice(), m_Context->GetSwapChain(), UINT64_MAX,
+      m_pContext->GetDevice(), m_pContext->GetSwapChain(), UINT64_MAX,
       m_ImageAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &imageIndex);
 
   if (result == VK_ERROR_OUT_OF_DATE_KHR) {
@@ -75,7 +109,7 @@ void Renderer::DrawFrame() {
     throw std::runtime_error("Failed to acquire swapchain image");
   }
 
-  vkResetFences(m_Context->GetDevice(), 1, &m_InFlightFences[m_CurrentFrame]);
+  vkResetFences(m_pContext->GetDevice(), 1, &m_InFlightFences[m_CurrentFrame]);
 
   // maybe this could be moved to record command buffer
   vkResetCommandBuffer(m_CommandBuffers[m_CurrentFrame], 0);
@@ -86,6 +120,8 @@ void Renderer::DrawFrame() {
       VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
 
   VkSemaphore signalSemaphores[] = {m_RenderFinishedSemaphores[m_CurrentFrame]};
+
+  UpdateUniformBuffer(m_CurrentFrame);
 
   VkSubmitInfo submitInfo = {
       .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -98,12 +134,12 @@ void Renderer::DrawFrame() {
       .pSignalSemaphores = signalSemaphores,
   };
 
-  if (vkQueueSubmit(m_Context->GetGraphicsQueue(), 1, &submitInfo,
+  if (vkQueueSubmit(m_pContext->GetGraphicsQueue(), 1, &submitInfo,
                     m_InFlightFences[m_CurrentFrame]) != VK_SUCCESS) {
     throw std::runtime_error("Failed to Submit Draw Command Buffer");
   }
 
-  VkSwapchainKHR swapChains[] = {m_Context->GetSwapChain()};
+  VkSwapchainKHR swapChains[] = {m_pContext->GetSwapChain()};
 
   VkPresentInfoKHR presentInfo = {
       .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
@@ -115,7 +151,7 @@ void Renderer::DrawFrame() {
       .pResults = nullptr,
   };
 
-  result = vkQueuePresentKHR(m_Context->GetPresentQueue(), &presentInfo);
+  result = vkQueuePresentKHR(m_pContext->GetPresentQueue(), &presentInfo);
   if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR ||
       m_FrameBufferResized) {
     m_FrameBufferResized = false;
@@ -125,7 +161,7 @@ void Renderer::DrawFrame() {
     throw std::runtime_error("Failed to Present Swap Chain Image");
   }
 
-  vkQueueWaitIdle(m_Context->GetPresentQueue());
+  vkQueueWaitIdle(m_pContext->GetPresentQueue());
 
   m_CurrentFrame = (m_CurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
@@ -136,7 +172,7 @@ void Renderer::OnWindowResize(uint32_t width, uint32_t height) {
 
 void Renderer::CreateRenderPass() {
   VkAttachmentDescription colorAttachment = {
-      .format = m_Context->GetSwapChainImgFormat(),
+      .format = m_pContext->GetSwapChainImgFormat(),
       .samples = VK_SAMPLE_COUNT_1_BIT,
       .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
       .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -176,16 +212,96 @@ void Renderer::CreateRenderPass() {
       .pDependencies = &dependency,
   };
 
-  if (vkCreateRenderPass(m_Context->GetDevice(), &renderPassCreateInfo, nullptr,
-                         &m_RenderPass) != VK_SUCCESS) {
+  if (vkCreateRenderPass(m_pContext->GetDevice(), &renderPassCreateInfo,
+                         nullptr, &m_RenderPass) != VK_SUCCESS) {
     throw std::runtime_error("Failed to create render pass");
+  }
+}
+
+void Renderer::CreateDescriptorSetLayout() {
+  VkDescriptorSetLayoutBinding uboLayoutBinding = {
+      .binding = 0,
+      .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+      .descriptorCount = 1,
+      .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+      .pImmutableSamplers = nullptr,
+  };
+
+  VkDescriptorSetLayoutCreateInfo layoutInfo = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+      .bindingCount = 1,
+      .pBindings = &uboLayoutBinding,
+  };
+
+  if (vkCreateDescriptorSetLayout(m_pContext->GetDevice(), &layoutInfo, nullptr,
+                                  &m_DescriptorSetLayout) != VK_SUCCESS) {
+    throw std::runtime_error("Failed To Create Descriptor Set Layout");
+  };
+}
+
+void Renderer::CreateDescriptorPool() {
+  VkDescriptorPoolSize poolSize = {
+      .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+      .descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT),
+  };
+
+  VkDescriptorPoolCreateInfo poolInfo = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+      .maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT),
+      .poolSizeCount = 1,
+      .pPoolSizes = &poolSize,
+  };
+
+  if (vkCreateDescriptorPool(m_pContext->GetDevice(), &poolInfo, nullptr,
+                             &m_DescriptorPool) != VK_SUCCESS) {
+    throw std::runtime_error("Failed To Create Descriptor Pool");
+  }
+}
+
+void Renderer::CreateDescriptorSets() {
+  std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT,
+                                             m_DescriptorSetLayout);
+  VkDescriptorSetAllocateInfo allocInfo = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+      .descriptorPool = m_DescriptorPool,
+      .descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT),
+      .pSetLayouts = layouts.data(),
+  };
+
+  m_DescriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
+  if (vkAllocateDescriptorSets(m_pContext->GetDevice(), &allocInfo,
+                               m_DescriptorSets.data()) != VK_SUCCESS) {
+    throw std::runtime_error("Failed To Allocate Descriptor Sets");
+  }
+
+  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+    VkDescriptorBufferInfo bufferInfo = {
+        .buffer = m_UniformBuffers[i]->Get(),
+        .offset = 0,
+        .range = sizeof(UniformBufferOjbect),
+    };
+
+    VkWriteDescriptorSet descriptorWrite = {
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = m_DescriptorSets[i],
+        .dstBinding = 0,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .pImageInfo = nullptr,
+        .pBufferInfo = &bufferInfo,
+        .pTexelBufferView = nullptr,
+    };
+
+    vkUpdateDescriptorSets(m_pContext->GetDevice(), 1, &descriptorWrite, 0,
+                           nullptr);
   }
 }
 
 void Renderer::CreateGraphicsPipeline() {
   // PIPELINE SHADER STAGE
   auto shader =
-      Shader::Create("shader", &m_Context->GetDevice(),
+      Shader::Create("shader", &m_pContext->GetDevice(),
                      "assets/shaders/vert.spv", "assets/shaders/frag.spv");
 
   VkPipelineShaderStageCreateInfo vertShaderStageInfo = {
@@ -241,7 +357,7 @@ void Renderer::CreateGraphicsPipeline() {
       .rasterizerDiscardEnable = VK_FALSE,
       .polygonMode = VK_POLYGON_MODE_FILL,
       .cullMode = VK_CULL_MODE_BACK_BIT,
-      .frontFace = VK_FRONT_FACE_CLOCKWISE,
+      .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
       .depthBiasEnable = VK_FALSE,
       .depthBiasConstantFactor = 0.0f,
       .depthBiasClamp = 0.0f,
@@ -286,13 +402,13 @@ void Renderer::CreateGraphicsPipeline() {
   // Pipeline Layout
   VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-      .setLayoutCount = 0,
-      .pSetLayouts = nullptr,
+      .setLayoutCount = 1,
+      .pSetLayouts = &m_DescriptorSetLayout,
       .pushConstantRangeCount = 0,
       .pPushConstantRanges = nullptr,
   };
 
-  if (vkCreatePipelineLayout(m_Context->GetDevice(), &pipelineLayoutCreateInfo,
+  if (vkCreatePipelineLayout(m_pContext->GetDevice(), &pipelineLayoutCreateInfo,
                              nullptr, &m_PipelineLayout) != VK_SUCCESS) {
     throw std::runtime_error("Failed to create pipeline layout");
   }
@@ -326,7 +442,7 @@ void Renderer::CreateGraphicsPipeline() {
       .basePipelineIndex = -1,
   };
 
-  if (vkCreateGraphicsPipelines(m_Context->GetDevice(), VK_NULL_HANDLE, 1,
+  if (vkCreateGraphicsPipelines(m_pContext->GetDevice(), VK_NULL_HANDLE, 1,
                                 &pipelineCreateInfo, nullptr,
                                 &m_GraphicsPipeline) != VK_SUCCESS) {
     throw std::runtime_error("Failed to Create Graphics Pipeline");
@@ -334,22 +450,22 @@ void Renderer::CreateGraphicsPipeline() {
 }
 
 void Renderer::CreateFramebuffers() {
-  m_SwapChainFrameBuffers.resize(m_Context->GetSwapChainImageViews().size());
+  m_SwapChainFrameBuffers.resize(m_pContext->GetSwapChainImageViews().size());
 
-  for (size_t i = 0; i < m_Context->GetSwapChainImageViews().size(); ++i) {
-    VkImageView attachments[] = {m_Context->GetSwapChainImageViews()[i]};
+  for (size_t i = 0; i < m_pContext->GetSwapChainImageViews().size(); ++i) {
+    VkImageView attachments[] = {m_pContext->GetSwapChainImageViews()[i]};
 
     VkFramebufferCreateInfo frameBufferCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
         .renderPass = m_RenderPass,
         .attachmentCount = 1,
         .pAttachments = attachments,
-        .width = m_Context->GetSwapChainExtent().width,
-        .height = m_Context->GetSwapChainExtent().height,
+        .width = m_pContext->GetSwapChainExtent().width,
+        .height = m_pContext->GetSwapChainExtent().height,
         .layers = 1,
     };
 
-    if (vkCreateFramebuffer(m_Context->GetDevice(), &frameBufferCreateInfo,
+    if (vkCreateFramebuffer(m_pContext->GetDevice(), &frameBufferCreateInfo,
                             nullptr,
                             &m_SwapChainFrameBuffers[i]) != VK_SUCCESS) {
       throw std::runtime_error("Failed to create Framebuffer!");
@@ -362,12 +478,12 @@ void Renderer::CreateCommandBuffers() {
 
   VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-      .commandPool = m_Context->GetCommandPool(),
+      .commandPool = m_pContext->GetCommandPool(),
       .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
       .commandBufferCount = static_cast<uint32_t>(m_CommandBuffers.size()),
   };
 
-  if (vkAllocateCommandBuffers(m_Context->GetDevice(),
+  if (vkAllocateCommandBuffers(m_pContext->GetDevice(),
                                &commandBufferAllocateInfo,
                                m_CommandBuffers.data()) != VK_SUCCESS) {
     throw std::runtime_error("Failed to Allocate Command Buffers");
@@ -389,11 +505,13 @@ void Renderer::CreateSyncObjects() {
   };
 
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-    if (vkCreateSemaphore(m_Context->GetDevice(), &semaphoreCreateInfo, nullptr,
+    if (vkCreateSemaphore(m_pContext->GetDevice(), &semaphoreCreateInfo,
+                          nullptr,
                           &m_ImageAvailableSemaphores[i]) != VK_SUCCESS ||
-        vkCreateSemaphore(m_Context->GetDevice(), &semaphoreCreateInfo, nullptr,
+        vkCreateSemaphore(m_pContext->GetDevice(), &semaphoreCreateInfo,
+                          nullptr,
                           &m_RenderFinishedSemaphores[i]) != VK_SUCCESS ||
-        vkCreateFence(m_Context->GetDevice(), &fenceCreateInfo, nullptr,
+        vkCreateFence(m_pContext->GetDevice(), &fenceCreateInfo, nullptr,
                       &m_InFlightFences[i]) != VK_SUCCESS) {
       throw std::runtime_error("Failed to Create Semaphores");
     }
@@ -420,7 +538,7 @@ void Renderer::RecordCommandBuffer(VkCommandBuffer commandBuffer,
   };
 
   renderPassBeginInfo.renderArea.offset = {0, 0};
-  renderPassBeginInfo.renderArea.extent = m_Context->GetSwapChainExtent();
+  renderPassBeginInfo.renderArea.extent = m_pContext->GetSwapChainExtent();
 
   VkClearValue clearColor = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
   renderPassBeginInfo.clearValueCount = 1;
@@ -435,11 +553,14 @@ void Renderer::RecordCommandBuffer(VkCommandBuffer commandBuffer,
   VkDeviceSize offsets[] = {0};
   vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
+  vkCmdBindIndexBuffer(commandBuffer, m_IndexBuffer->Get(), 0,
+                       m_IndexBuffer->GetIndexType());
+
   VkViewport viewport = {
       .x = 0.0f,
       .y = 0.0f,
-      .width = static_cast<float>(m_Context->GetSwapChainExtent().width),
-      .height = static_cast<float>(m_Context->GetSwapChainExtent().height),
+      .width = static_cast<float>(m_pContext->GetSwapChainExtent().width),
+      .height = static_cast<float>(m_pContext->GetSwapChainExtent().height),
       .minDepth = 0.0f,
       .maxDepth = 1.0f,
   };
@@ -448,24 +569,54 @@ void Renderer::RecordCommandBuffer(VkCommandBuffer commandBuffer,
 
   VkRect2D scissor = {
       .offset = {0, 0},
-      .extent = m_Context->GetSwapChainExtent(),
+      .extent = m_pContext->GetSwapChainExtent(),
   };
 
   vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-  vkCmdDraw(commandBuffer, static_cast<uint32_t>(vertices.size()), 1, 0, 0);
+  vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                          m_PipelineLayout, 0, 1,
+                          &m_DescriptorSets[m_CurrentFrame], 0, nullptr);
+
+  vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices.size()), 1, 0,
+                   0, 0);
   vkCmdEndRenderPass(commandBuffer);
   vkEndCommandBuffer(commandBuffer);
 }
 
 void Renderer::RecreateSwapChain() {
-  vkDeviceWaitIdle(m_Context->GetDevice());
+  vkDeviceWaitIdle(m_pContext->GetDevice());
 
   for (auto framebuffer : m_SwapChainFrameBuffers) {
-    vkDestroyFramebuffer(m_Context->GetDevice(), framebuffer, nullptr);
+    vkDestroyFramebuffer(m_pContext->GetDevice(), framebuffer, nullptr);
   }
 
-  m_Context->RecreateSwapChain();
+  m_pContext->RecreateSwapChain();
   CreateFramebuffers();
+}
+
+void Renderer::UpdateUniformBuffer(uint32_t currentImage) {
+  static auto startTime = std::chrono::high_resolution_clock::now();
+
+  auto currentTime = std::chrono::high_resolution_clock::now();
+  float time = std::chrono::duration<float, std::chrono::seconds::period>(
+                   currentTime - startTime)
+                   .count();
+
+  UniformBufferOjbect ubo{};
+  ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f),
+                          glm::vec3(0.0f, 0.0f, 1.0f));
+  ubo.view =
+      glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f),
+                  glm::vec3(0.0f, 0.0f, 1.0f));
+  ubo.proj =
+      glm::perspective(glm::radians(45.0f),
+                       m_pContext->GetSwapChainExtent().width /
+                           (float)m_pContext->GetSwapChainExtent().height,
+                       0.1f, 10.0f);
+
+  ubo.proj[1][1] *= -1;
+
+  m_UniformBuffers[currentImage]->Update(&ubo, sizeof(ubo));
 }
 } // namespace Inferno

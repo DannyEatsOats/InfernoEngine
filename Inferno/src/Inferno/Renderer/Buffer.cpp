@@ -1,4 +1,5 @@
 #include <cstring>
+#include <memory>
 #include <pch.h>
 #include <stdexcept>
 #include <vulkan/vulkan_core.h>
@@ -246,10 +247,51 @@ VertexBuffer::GetAttributeDescriptions() const {
   return attributes;
 }
 
-std::shared_ptr<VertexBuffer>
+std::unique_ptr<VertexBuffer>
 VertexBuffer::Create(const RenderingContext *context, VkDeviceSize size) {
-  auto vertexBuffer = std::make_shared<VertexBuffer>(context, size);
+  return std::make_unique<VertexBuffer>(context, size);
+}
 
-  return vertexBuffer;
+//=================== INDEX BUFFER ==============================
+IndexBuffer::IndexBuffer(const RenderingContext *context, VkDeviceSize size,
+                         VkIndexType indexType)
+    : m_pContext(context), m_Buffer(context, size,
+                                    VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                                        VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+                                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT),
+      m_IndexType(indexType) {}
+
+void IndexBuffer::Upload(const void *data) {
+  BufferUploader::Upload(m_pContext, m_Buffer, data, m_Buffer.GetSize());
+}
+
+std::unique_ptr<IndexBuffer>
+IndexBuffer::Create(const RenderingContext *context, VkDeviceSize size,
+                    VkIndexType indexType) {
+  return std::make_unique<IndexBuffer>(context, size, indexType);
+}
+
+//=================== UNIFORM BUFFER ==============================
+UniformBuffer::UniformBuffer(const RenderingContext *context, VkDeviceSize size)
+    : m_pContext(context),
+      m_Buffer(context, size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                   VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) {
+  vkMapMemory(m_pContext->GetDevice(), m_Buffer.GetMemory(), 0, size, 0,
+              &m_pMapped);
+}
+
+UniformBuffer::~UniformBuffer() {
+  if (m_pMapped)
+    vkUnmapMemory(m_pContext->GetDevice(), m_Buffer.GetMemory());
+}
+
+void UniformBuffer::Update(const void *data, VkDeviceSize size) {
+  memcpy(m_pMapped, data, static_cast<size_t>(size));
+}
+
+std::unique_ptr<UniformBuffer>
+UniformBuffer::Create(const RenderingContext *context, VkDeviceSize size) {
+  return std::make_unique<UniformBuffer>(context, size);
 }
 } // namespace Inferno

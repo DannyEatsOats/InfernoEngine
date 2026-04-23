@@ -7,6 +7,16 @@
 #include <vector>
 #include <vulkan/vulkan_core.h>
 namespace Inferno {
+
+struct FrameData {
+  std::unique_ptr<UniformBuffer> UniBuffer = nullptr;
+  VkDescriptorSet DescriptorSet = VK_NULL_HANDLE;
+  VkCommandBuffer CommandBuffer = VK_NULL_HANDLE;
+  VkSemaphore ImageAvailable = VK_NULL_HANDLE;
+  VkSemaphore RenderFinished = VK_NULL_HANDLE;
+  VkFence InFlight = VK_NULL_HANDLE;
+};
+
 class Renderer {
 public:
   Renderer() = default;
@@ -44,20 +54,16 @@ private:
 
   VkDescriptorPool m_DescriptorPool;
   VkDescriptorSetLayout m_DescriptorSetLayout;
-  std::vector<VkDescriptorSet> m_DescriptorSets;
-
-  std::vector<VkSemaphore> m_ImageAvailableSemaphores;
-  std::vector<VkSemaphore> m_RenderFinishedSemaphores;
-  std::vector<VkFence> m_InFlightFences;
   bool m_FrameBufferResized = false;
 
   uint32_t m_CurrentFrame;
+
+  std::vector<FrameData> m_Frames;
 
   std::shared_ptr<RenderingContext> m_pContext = nullptr;
 
   std::shared_ptr<VertexBuffer> m_VertexBuffer = nullptr;
   std::shared_ptr<IndexBuffer> m_IndexBuffer = nullptr;
-  std::vector<std::shared_ptr<UniformBuffer>> m_UniformBuffers;
 
   static constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 };

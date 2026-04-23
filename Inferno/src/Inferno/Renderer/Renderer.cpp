@@ -46,9 +46,9 @@ void Renderer::Init() {
       IndexBuffer::Create(m_pContext.get(), sizeof(indices[0]) * indices.size(),
                           VK_INDEX_TYPE_UINT16);
 
-  m_UniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-    m_UniformBuffers[i] =
+  m_Frames.resize(MAX_FRAMES_IN_FLIGHT);
+  for (auto &frame : m_Frames) {
+    frame.UniBuffer =
         UniformBuffer::Create(m_pContext.get(), sizeof(UniformBufferOjbect));
   }
 
@@ -72,11 +72,11 @@ void Renderer::ShutDown() {
   }
 
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-    vkDestroySemaphore(m_pContext->GetDevice(), m_RenderFinishedSemaphores[i],
+    vkDestroySemaphore(m_pContext->GetDevice(), m_Frames[i].RenderFinished,
                        nullptr);
-    vkDestroySemaphore(m_pContext->GetDevice(), m_ImageAvailableSemaphores[i],
+    vkDestroySemaphore(m_pContext->GetDevice(), m_Frames[i].ImageAvailable,
                        nullptr);
-    vkDestroyFence(m_pContext->GetDevice(), m_InFlightFences[i], nullptr);
+    vkDestroyFence(m_pContext->GetDevice(), m_Frames[i].InFlight, nullptr);
   }
   vkDestroyCommandPool(m_pContext->GetDevice(), m_pContext->GetCommandPool(),
                        nullptr);
@@ -94,13 +94,13 @@ void Renderer::ShutDown() {
 }
 
 void Renderer::DrawFrame() {
-  vkWaitForFences(m_pContext->GetDevice(), 1, &m_InFlightFences[m_CurrentFrame],
-                  VK_TRUE, UINT64_MAX);
+  vkWaitForFences(m_pContext->GetDevice(), 1,
+                  &m_Frames[m_CurrentFrame].InFlight, VK_TRUE, UINT64_MAX);
 
   uint32_t imageIndex;
   VkResult result = vkAcquireNextImageKHR(
       m_pContext->GetDevice(), m_pContext->GetSwapChain(), UINT64_MAX,
-      m_ImageAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &imageIndex);
+      m_Frames[m_CurrentFrame].ImageAvailable, VK_NULL_HANDLE, &imageIndex);
 
   if (result == VK_ERROR_OUT_OF_DATE_KHR) {
     RecreateSwapChain();
@@ -109,17 +109,17 @@ void Renderer::DrawFrame() {
     throw std::runtime_error("Failed to acquire swapchain image");
   }
 
-  vkResetFences(m_pContext->GetDevice(), 1, &m_InFlightFences[m_CurrentFrame]);
+  vkResetFences(m_pContext->GetDevice(), 1, &m_Frames[m_CurrentFrame].InFlight);
 
   // maybe this could be moved to record command buffer
   vkResetCommandBuffer(m_CommandBuffers[m_CurrentFrame], 0);
   RecordCommandBuffer(m_CommandBuffers[m_CurrentFrame], imageIndex);
 
-  VkSemaphore waitSemaphores[] = {m_ImageAvailableSemaphores[m_CurrentFrame]};
+  VkSemaphore waitSemaphores[] = {m_Frames[m_CurrentFrame].ImageAvailable};
   VkPipelineStageFlags waitStages[] = {
       VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
 
-  VkSemaphore signalSemaphores[] = {m_RenderFinishedSemaphores[m_CurrentFrame]};
+  VkSemaphore signalSemaphores[] = {m_Frames[m_CurrentFrame].RenderFinished};
 
   UpdateUniformBuffer(m_CurrentFrame);
 
@@ -135,7 +135,7 @@ void Renderer::DrawFrame() {
   };
 
   if (vkQueueSubmit(m_pContext->GetGraphicsQueue(), 1, &submitInfo,
-                    m_InFlightFences[m_CurrentFrame]) != VK_SUCCESS) {
+                    m_Frames[m_CurrentFrame].InFlight) != VK_SUCCESS) {
     throw std::runtime_error("Failed to Submit Draw Command Buffer");
   }
 
@@ -268,30 +268,32 @@ void Renderer::CreateDescriptorSets() {
       .pSetLayouts = layouts.data(),
   };
 
-  m_DescriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
+  std::vector<VkDescriptorSet> descriptorSets(MAX_FRAMES_IN_FLIGHT);
+
   if (vkAllocateDescriptorSets(m_pContext->GetDevice(), &allocInfo,
-                               m_DescriptorSets.data()) != VK_SUCCESS) {
+                               descriptorSets.data()) != VK_SUCCESS) {
     throw std::runtime_error("Failed To Allocate Descriptor Sets");
   }
 
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-    VkDescriptorBufferInfo bufferInfo = {
-        .buffer = m_UniformBuffers[i]->Get(),
-        .offset = 0,
-        .range = sizeof(UniformBufferOjbect),
-    };
+    m_Frames[i].DescriptorSet = descriptorSets[i];
+  }
 
-    VkWriteDescriptorSet descriptorWrite = {
-        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstSet = m_DescriptorSets[i],
-        .dstBinding = 0,
-        .dstArrayElement = 0,
-        .descriptorCount = 1,
-        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        .pImageInfo = nullptr,
-        .pBufferInfo = &bufferInfo,
-        .pTexelBufferView = nullptr,
-    };
+  for (auto &frame : m_Frames) {
+    VkDescriptorBufferInfo bufferInfo{};
+    bufferInfo.buffer = frame.UniBuffer->Get();
+    bufferInfo.offset = 0;
+    bufferInfo.range = sizeof(UniformBufferOjbect);
+
+    VkWriteDescriptorSet descriptorWrite{};
+    descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptorWrite.dstSet = frame.DescriptorSet;
+    descriptorWrite.dstBinding = 0, descriptorWrite.dstArrayElement = 0;
+    descriptorWrite.descriptorCount = 1;
+    descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    descriptorWrite.pImageInfo = nullptr;
+    descriptorWrite.pBufferInfo = &bufferInfo;
+    descriptorWrite.pTexelBufferView = nullptr;
 
     vkUpdateDescriptorSets(m_pContext->GetDevice(), 1, &descriptorWrite, 0,
                            nullptr);
@@ -491,10 +493,6 @@ void Renderer::CreateCommandBuffers() {
 }
 
 void Renderer::CreateSyncObjects() {
-  m_ImageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-  m_RenderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-  m_InFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
-
   VkSemaphoreCreateInfo semaphoreCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
   };
@@ -504,15 +502,13 @@ void Renderer::CreateSyncObjects() {
       .flags = VK_FENCE_CREATE_SIGNALED_BIT,
   };
 
-  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+  for (auto &frame : m_Frames) {
     if (vkCreateSemaphore(m_pContext->GetDevice(), &semaphoreCreateInfo,
-                          nullptr,
-                          &m_ImageAvailableSemaphores[i]) != VK_SUCCESS ||
+                          nullptr, &frame.ImageAvailable) != VK_SUCCESS ||
         vkCreateSemaphore(m_pContext->GetDevice(), &semaphoreCreateInfo,
-                          nullptr,
-                          &m_RenderFinishedSemaphores[i]) != VK_SUCCESS ||
+                          nullptr, &frame.RenderFinished) != VK_SUCCESS ||
         vkCreateFence(m_pContext->GetDevice(), &fenceCreateInfo, nullptr,
-                      &m_InFlightFences[i]) != VK_SUCCESS) {
+                      &frame.InFlight) != VK_SUCCESS) {
       throw std::runtime_error("Failed to Create Semaphores");
     }
   }
@@ -576,7 +572,7 @@ void Renderer::RecordCommandBuffer(VkCommandBuffer commandBuffer,
 
   vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                           m_PipelineLayout, 0, 1,
-                          &m_DescriptorSets[m_CurrentFrame], 0, nullptr);
+                          &m_Frames[m_CurrentFrame].DescriptorSet, 0, nullptr);
 
   vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices.size()), 1, 0,
                    0, 0);
@@ -617,6 +613,6 @@ void Renderer::UpdateUniformBuffer(uint32_t currentImage) {
 
   ubo.proj[1][1] *= -1;
 
-  m_UniformBuffers[currentImage]->Update(&ubo, sizeof(ubo));
+  m_Frames[currentImage].UniBuffer->Update(&ubo, sizeof(ubo));
 }
 } // namespace Inferno

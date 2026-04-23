@@ -5,7 +5,7 @@ find_package(Vulkan REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
 
-add_library(Inferno 
+add_library(Inferno
     SHARED
         # MAIN ENGINE COMPONENTS
         src/Inferno/Application.h
@@ -22,6 +22,7 @@ add_library(Inferno
         src/Inferno/Renderer/RenderingContext.cpp
         src/Inferno/Renderer/Renderer.h
         src/Inferno/Renderer/Renderer.cpp
+        src/Inferno/Renderer/RenderData.h
         src/Inferno/Renderer/Shader.h
         src/Inferno/Renderer/Shader.cpp
         src/Inferno/Renderer/Buffer.h

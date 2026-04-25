@@ -1,33 +1,16 @@
 #pragma once
 
+#include "Inferno/Window.h"
 #include <cstdint>
 #include <memory>
-#include <optional>
 #include <vector>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
 
-struct GLFWwindow;
-
-struct QueueFamilyIndices {
-  std::optional<uint32_t> graphicsFamily;
-  std::optional<uint32_t> presentFamily;
-
-  bool IsComplete() {
-    return graphicsFamily.has_value() && presentFamily.has_value();
-  }
-};
-
-struct SwapChainSupportDetails {
-  VkSurfaceCapabilitiesKHR capabilities;
-  std::vector<VkSurfaceFormatKHR> formats;
-  std::vector<VkPresentModeKHR> presentModes;
-};
-
 namespace Inferno {
 class RenderingContext {
 public:
-  RenderingContext(GLFWwindow *window);
+  RenderingContext(Window *window);
   ~RenderingContext();
 
   void Init();
@@ -45,17 +28,14 @@ public:
   const std::vector<VkImageView> &GetSwapChainImageViews() const {
     return m_SwapChainImageViews;
   }
-  const VkQueue &GetGraphicsQueue() const { return m_GrapicsQueue; }
+  const VkQueue &GetGraphicsQueue() const { return m_GraphicsQueue; }
   const VkQueue &GetPresentQueue() const { return m_PresentQueue; }
 
   const VkCommandPool &GetCommandPool() const { return m_CommandPool; }
 
   void CreateCommandPool();
 
-  uint32_t FindMemoryType(uint32_t typeFilter,
-                          VkMemoryPropertyFlags properties) const;
-
-  static std::shared_ptr<RenderingContext> &CreateContext(GLFWwindow *window);
+  static std::shared_ptr<RenderingContext> &CreateContext(Window *window);
   static std::shared_ptr<RenderingContext> &GetContext();
 
 private:
@@ -68,18 +48,11 @@ private:
   void CreateImageViews();
   void RecreateSwapChain();
 
-  QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
-  SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device);
-  VkSurfaceFormatKHR ChooseSwapSurfaceFormat(
-      const std::vector<VkSurfaceFormatKHR> &availableFormats);
-  VkPresentModeKHR ChooseSwapPresentMode(
-      const std::vector<VkPresentModeKHR> &availablePresentationModes);
-  VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities);
   bool IsDeviceSuitable(VkPhysicalDevice device);
   bool CheckDeviceExtensionSupport(VkPhysicalDevice device);
 
 private:
-  GLFWwindow *m_Window = nullptr;
+  Window *m_Window = nullptr;
 
   VkInstance m_Instance = VK_NULL_HANDLE;
   VkSurfaceKHR m_Surface = VK_NULL_HANDLE;
@@ -87,7 +60,7 @@ private:
   VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE;
   VkDevice m_Device = VK_NULL_HANDLE;
 
-  VkQueue m_GrapicsQueue = VK_NULL_HANDLE;
+  VkQueue m_GraphicsQueue = VK_NULL_HANDLE;
   VkQueue m_PresentQueue = VK_NULL_HANDLE;
 
   VkSwapchainKHR m_SwapChain = VK_NULL_HANDLE;

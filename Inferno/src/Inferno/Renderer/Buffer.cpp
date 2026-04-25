@@ -6,6 +6,7 @@
 
 #include "Inferno/Renderer/Buffer.h"
 #include "Inferno/Renderer/RenderingContext.h"
+#include "Inferno/Renderer/VulkanUtils.h"
 
 namespace Inferno {
 
@@ -33,7 +34,8 @@ Buffer::Buffer(const RenderingContext *context, VkDeviceSize size,
   allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
   allocInfo.allocationSize = memRequirements.size;
   allocInfo.memoryTypeIndex =
-      m_pContext->FindMemoryType(memRequirements.memoryTypeBits, properties);
+      VulkanUtils::FindMemoryType(m_pContext->GetPhysicalDevice(),
+                                  memRequirements.memoryTypeBits, properties);
 
   if (vkAllocateMemory(m_pContext->GetDevice(), &allocInfo, nullptr,
                        &m_Memory) != VK_SUCCESS) {
@@ -108,6 +110,7 @@ void BufferUploader::Upload(const RenderingContext *context, Buffer &dst,
   vkFreeCommandBuffers(context->GetDevice(), context->GetCommandPool(), 1,
                        &cmd);
 }
+
 //=================== VERTEX BUFFER ==============================
 
 VertexBuffer::VertexBuffer(const RenderingContext *context, VkDeviceSize size)

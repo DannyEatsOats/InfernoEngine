@@ -169,6 +169,9 @@ class BufferUploader {
 public:
   static void Upload(const RenderingContext *context, Buffer &dst,
                      const void *data, VkDeviceSize size);
+
+  static void UploadToImage(const RenderingContext *context, VkImage image,
+                            uint32_t imageSize);
 };
 
 //============================================================

@@ -1,5 +1,5 @@
 #include "Window.h"
-#include "Inferno/Renderer/RenderingContext.h"
+#include <memory>
 
 // #include "imgui_impl_glfw.h"
 #define GLFW_INCLUDE_VULKAN
@@ -12,8 +12,8 @@
 namespace Inferno {
 static bool s_WindowInitialized = false;
 
-Window *Window::Create(const WindowProperties &properties) {
-  return new Window(properties);
+std::unique_ptr<Window> Window::Create(const WindowProperties &properties) {
+  return std::make_unique<Window>(properties);
 }
 
 Window::Window(const WindowProperties &properties) { Window::Init(properties); }
@@ -49,9 +49,6 @@ void Window::Init(const WindowProperties &properties) {
     glfwTerminate();
     return;
   }
-
-  m_Context = RenderingContext::CreateContext(m_Window);
-  m_Context->Init();
 
   glfwSetWindowUserPointer(m_Window, &m_Data);
   SetVSync(true);
@@ -112,6 +109,7 @@ void Window::Init(const WindowProperties &properties) {
         }
         case GLFW_RELEASE: {
           MouseButtonReleasedEvent event(button);
+          data.EventCallback(event);
           break;
         }
         default:
@@ -139,7 +137,13 @@ void Window::Init(const WindowProperties &properties) {
   });
 }
 
-void Window::Shutdown() { glfwDestroyWindow(m_Window); }
+void Window::Shutdown() {
+  glfwDestroyWindow(m_Window);
+  if (s_WindowInitialized) {
+    glfwTerminate();
+    s_WindowInitialized = false;
+  }
+}
 
 void Window::OnUpdate() { glfwPollEvents(); }
 
@@ -157,4 +161,6 @@ void Window::SetVSync(const bool enabled) {
 }
 
 bool Window::IsVSync() const { return m_Data.VSync; }
+
+void Window::GetFrameBufferSize(int *width, int *height) const {}
 } // namespace Inferno

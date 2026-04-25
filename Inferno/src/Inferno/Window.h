@@ -1,60 +1,60 @@
 #pragma once
-#include "pch.h"
 #include "Events/Event.h"
-#include "GLFW/glfw3.h"
-#include "Renderer/RenderingContext.h"
 #include <memory>
+#include <pch.h>
 
 namespace Inferno {
-    struct WindowProperties {
-        std::string Title;
-        uint32_t Width, Height;
+struct WindowProperties {
+  std::string Title;
+  uint32_t Width, Height;
 
-        WindowProperties(std::string title = "Engine", const uint32_t width = 1920, const uint32_t height = 1080)
-            : Title(std::move(title)), Width(width), Height(height) {
-        }
-    };
+  WindowProperties(std::string title = "Engine", const uint32_t width = 1920,
+                   const uint32_t height = 1080)
+      : Title(std::move(title)), Width(width), Height(height) {}
+};
 
-    class Window {
-    public:
-        using EventCallbackFn = std::function<void(Event &)>;
+class Window {
+public:
+  using EventCallbackFn = std::function<void(Event &)>;
 
-        Window(const WindowProperties &properties);
-        virtual ~Window();
+  Window(const WindowProperties &properties);
+  virtual ~Window();
 
-        virtual void OnUpdate();
+  virtual void OnUpdate();
 
-        virtual uint32_t GetWidth() const;
+  virtual uint32_t GetWidth() const;
 
-        virtual uint32_t GetHeight() const;
+  virtual uint32_t GetHeight() const;
 
-        virtual inline GLFWwindow* GetNativeWindow() const {return m_Window;}
+  virtual inline GLFWwindow *GetNativeWindow() const { return m_Window; }
 
-        virtual void SetEventCallback(const EventCallbackFn &callback);
+  virtual void SetEventCallback(const EventCallbackFn &callback);
 
-        virtual void SetVSync(bool enabled);
+  virtual void SetVSync(bool enabled);
 
-        virtual bool IsVSync() const;
+  virtual bool IsVSync() const;
 
-        static Window *Create(const WindowProperties &properties = WindowProperties());
+  virtual void GetFrameBufferSize(int *width, int *height) const;
 
-    private:
-        void Init(const WindowProperties &windownProperties);
+  static std::unique_ptr<Window>
+  Create(const WindowProperties &properties = WindowProperties());
 
-        void Shutdown();
+private:
+  void Init(const WindowProperties &windownProperties);
 
-    private:
-        GLFWwindow *m_Window;
-    std::shared_ptr<RenderingContext> m_Context;
+  void Shutdown();
 
-        struct WindowData {
-            std::string Title;
-            uint32_t Width, Height;
-            bool VSync;
+private:
+  GLFWwindow *m_Window;
 
-            EventCallbackFn EventCallback;
-        };
+  struct WindowData {
+    std::string Title;
+    uint32_t Width, Height;
+    bool VSync;
 
-        WindowData m_Data;
-    };
-}
+    EventCallbackFn EventCallback;
+  };
+
+  WindowData m_Data;
+};
+} // namespace Inferno

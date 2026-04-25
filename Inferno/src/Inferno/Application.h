@@ -31,6 +31,7 @@ private:
 
 private:
   std::unique_ptr<Window> m_Window;
+  std::shared_ptr<RenderingContext> m_Context;
   std::unique_ptr<Renderer> m_Renderer;
   LayerStack m_LayerStack;
   bool m_Running = true;

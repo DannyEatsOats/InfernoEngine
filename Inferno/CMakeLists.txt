@@ -20,6 +20,8 @@ add_library(Inferno
         #Renderer
         src/Inferno/Renderer/RenderingContext.h
         src/Inferno/Renderer/RenderingContext.cpp
+        src/Inferno/Renderer/VulkanUtils.h
+        src/Inferno/Renderer/VulkanUtils.cpp
         src/Inferno/Renderer/Renderer.h
         src/Inferno/Renderer/Renderer.cpp
         src/Inferno/Renderer/RenderData.h
@@ -27,6 +29,8 @@ add_library(Inferno
         src/Inferno/Renderer/Shader.cpp
         src/Inferno/Renderer/Buffer.h
         src/Inferno/Renderer/Buffer.cpp
+        src/Inferno/Renderer/Texture.h
+        src/Inferno/Renderer/Texture.cpp
         # EVENTS
         src/Inferno/Events/Event.h
         src/Inferno/Events/ApplicationEvent.h
@@ -34,6 +38,9 @@ add_library(Inferno
         src/Inferno/Events/MouseEvent.h
         # CORE UTILS
         src/Inferno/Core/DeltaTime.h
+        # VENDOR
+        vendor/stb_image/stb_image.h
+        vendor/stb_image/stb_image.cpp
 )
 
 set_target_properties(Inferno PROPERTIES
@@ -52,6 +59,7 @@ target_include_directories(Inferno
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/vendor/spdlog/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/stb_image
 )
 
 target_compile_definitions(Inferno

@@ -1,12 +1,11 @@
-#include "RenderingContext.h"
-#include "Inferno/Renderer/Shader.h"
 #include "pch.h"
+#include "RenderingContext.h"
 
+#define GLFW_INCLUDE_VULKAN
 #include "GLFW/glfw3.h"
 #include "Inferno/Log.h"
-#include <algorithm>
+#include "Inferno/Renderer/VulkanUtils.h"
 #include <cstdint>
-#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <vector>
@@ -53,7 +52,7 @@ namespace Inferno {
 std::shared_ptr<RenderingContext> RenderingContext::s_Context = nullptr;
 
 std::shared_ptr<RenderingContext> &
-RenderingContext::CreateContext(GLFWwindow *window) {
+RenderingContext::CreateContext(Window *window) {
   if (!s_Context)
     s_Context = std::make_shared<RenderingContext>(window);
   return s_Context;
@@ -65,7 +64,7 @@ std::shared_ptr<RenderingContext> &RenderingContext::GetContext() {
   return s_Context;
 }
 
-RenderingContext::RenderingContext(GLFWwindow *window) : m_Window(window) {}
+RenderingContext::RenderingContext(Window *window) : m_Window(window) {}
 
 RenderingContext::~RenderingContext() {}
 
@@ -141,7 +140,7 @@ void RenderingContext::CreateInstance() {
 }
 
 void RenderingContext::CreateSurface() {
-  if (glfwCreateWindowSurface(m_Instance, m_Window, nullptr, &m_Surface) !=
+  if (glfwCreateWindowSurface(m_Instance, m_Window->GetNativeWindow(), nullptr, &m_Surface) !=
       VK_SUCCESS) {
     throw std::runtime_error("Failed to create Vulkan Surface");
   }
@@ -171,7 +170,8 @@ void RenderingContext::PickPhysicalDevice() {
 }
 
 void RenderingContext::CreateLogicalDevice() {
-  QueueFamilyIndices indices = FindQueueFamilies(m_PhysicalDevice);
+  VulkanUtils::QueueFamilyIndices indices =
+      VulkanUtils::FindQueueFamilies(m_PhysicalDevice, m_Surface);
 
   std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
   std::set<uint32_t> uniqueQueueFamilies = {indices.graphicsFamily.value(),
@@ -212,19 +212,20 @@ void RenderingContext::CreateLogicalDevice() {
   }
 
   vkGetDeviceQueue(m_Device, indices.graphicsFamily.value(), 0,
-                   &m_GrapicsQueue);
+                   &m_GraphicsQueue);
   vkGetDeviceQueue(m_Device, indices.presentFamily.value(), 0, &m_PresentQueue);
 }
 
 void RenderingContext::CreateSwapChain() {
-  SwapChainSupportDetails swapChainDetails =
-      QuerySwapChainSupport(m_PhysicalDevice);
+  VulkanUtils::SwapChainSupportDetails swapChainDetails =
+      VulkanUtils::QuerySwapChainSupport(m_PhysicalDevice, m_Surface);
 
   VkSurfaceFormatKHR surfaceFormat =
-      ChooseSwapSurfaceFormat(swapChainDetails.formats);
+      VulkanUtils::ChooseSwapSurfaceFormat(swapChainDetails.formats);
   VkPresentModeKHR presentMode =
-      ChooseSwapPresentMode(swapChainDetails.presentModes);
-  VkExtent2D extent = ChooseSwapExtent(swapChainDetails.capabilities);
+      VulkanUtils::ChooseSwapPresentMode(swapChainDetails.presentModes);
+  VkExtent2D extent =
+      VulkanUtils::ChooseSwapExtent(swapChainDetails.capabilities, m_Window);
 
   uint32_t imageCount = swapChainDetails.capabilities.minImageCount + 1;
 
@@ -244,7 +245,8 @@ void RenderingContext::CreateSwapChain() {
       .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
   };
 
-  QueueFamilyIndices indices = FindQueueFamilies(m_PhysicalDevice);
+  VulkanUtils::QueueFamilyIndices indices =
+      VulkanUtils::FindQueueFamilies(m_PhysicalDevice, m_Surface);
   uint32_t queueFamilyIndices[] = {indices.graphicsFamily.value(),
                                    indices.presentFamily.value()};
 
@@ -267,7 +269,7 @@ void RenderingContext::CreateSwapChain() {
   INFERNO_LOG_ERROR("Width {}, Height {}", createInfo.imageExtent.width,
                     createInfo.imageExtent.height);
 
-  if (vkCreateSwapchainKHR(m_Device, &createInfo, nullptr, &m_SwapChain)) {
+  if (vkCreateSwapchainKHR(m_Device, &createInfo, nullptr, &m_SwapChain) != VK_SUCCESS) {
     throw std::runtime_error("Failed to Create SwapChain");
   }
 
@@ -322,131 +324,15 @@ void RenderingContext::RecreateSwapChain() {
   CreateImageViews();
 }
 
-QueueFamilyIndices
-RenderingContext::FindQueueFamilies(VkPhysicalDevice device) {
-  QueueFamilyIndices indices;
-
-  uint32_t queueFamilyCount = 0;
-  vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
-
-  std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-  vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount,
-                                           queueFamilies.data());
-
-  int i = 0;
-  for (const auto &queueFamily : queueFamilies) {
-    if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-      indices.graphicsFamily = i;
-    }
-
-    VkBool32 presentSupported = false;
-    vkGetPhysicalDeviceSurfaceSupportKHR(device, i, m_Surface,
-                                         &presentSupported);
-
-    if (presentSupported) {
-      indices.presentFamily = i;
-    }
-
-    if (indices.IsComplete()) {
-      break;
-    }
-
-    i++;
-  }
-
-  return indices;
-}
-
-SwapChainSupportDetails
-RenderingContext::QuerySwapChainSupport(VkPhysicalDevice device) {
-  SwapChainSupportDetails details;
-
-  vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, m_Surface,
-                                            &details.capabilities);
-
-  uint32_t formatCount = 0;
-
-  vkGetPhysicalDeviceSurfaceFormatsKHR(device, m_Surface, &formatCount,
-                                       nullptr);
-
-  if (formatCount != 0) {
-    details.formats.resize(formatCount);
-    vkGetPhysicalDeviceSurfaceFormatsKHR(device, m_Surface, &formatCount,
-                                         details.formats.data());
-  }
-
-  uint32_t presentModeCount = 0;
-  vkGetPhysicalDeviceSurfacePresentModesKHR(device, m_Surface,
-                                            &presentModeCount, nullptr);
-
-  if (presentModeCount != 0) {
-    details.presentModes.resize(presentModeCount);
-    vkGetPhysicalDeviceSurfacePresentModesKHR(
-        device, m_Surface, &presentModeCount, details.presentModes.data());
-  }
-
-  return details;
-}
-
-VkSurfaceFormatKHR RenderingContext::ChooseSwapSurfaceFormat(
-    const std::vector<VkSurfaceFormatKHR> &availableFormats) {
-
-  for (const auto &availableFormat : availableFormats) {
-    if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB &&
-        availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
-      return availableFormat;
-    }
-  }
-  return availableFormats[0];
-}
-
-VkPresentModeKHR RenderingContext::ChooseSwapPresentMode(
-    const std::vector<VkPresentModeKHR> &availablePresentationModes) {
-
-  for (const auto &availablePresentMode : availablePresentationModes) {
-    if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
-      return availablePresentMode;
-    }
-  }
-
-  return VK_PRESENT_MODE_FIFO_KHR;
-}
-
-VkExtent2D RenderingContext::ChooseSwapExtent(
-    const VkSurfaceCapabilitiesKHR &capabilities) {
-  if (capabilities.currentExtent.width !=
-      std::numeric_limits<uint32_t>::max()) {
-    return capabilities.currentExtent;
-  } else {
-    int width, height;
-    glfwGetFramebufferSize(m_Window, &width, &height);
-
-    VkExtent2D actualExtent = {
-        .width = static_cast<uint32_t>(width),
-        .height = static_cast<uint32_t>(height),
-    };
-
-    actualExtent.width =
-        std::clamp(actualExtent.width, capabilities.minImageExtent.width,
-                   capabilities.maxImageExtent.width);
-    actualExtent.height =
-        std::clamp(actualExtent.height, capabilities.minImageExtent.height,
-                   capabilities.maxImageExtent.height);
-    INFERNO_LOG_INFO("Surface extent: {} x {}",
-                     capabilities.currentExtent.width,
-                     capabilities.currentExtent.height);
-
-    return actualExtent;
-  }
-}
-
 bool RenderingContext::IsDeviceSuitable(VkPhysicalDevice device) {
-  QueueFamilyIndices indices = FindQueueFamilies(device);
+  VulkanUtils::QueueFamilyIndices indices =
+      VulkanUtils::FindQueueFamilies(device, m_Surface);
   bool extensionsSupported = CheckDeviceExtensionSupport(device);
 
   bool swapChainAdequate = false;
   if (extensionsSupported) {
-    SwapChainSupportDetails swapChainSupport = QuerySwapChainSupport(device);
+    VulkanUtils::SwapChainSupportDetails swapChainSupport =
+        VulkanUtils::QuerySwapChainSupport(device, m_Surface);
     swapChainAdequate = !swapChainSupport.formats.empty() &&
                         !swapChainSupport.presentModes.empty();
   }
@@ -474,8 +360,8 @@ bool RenderingContext::CheckDeviceExtensionSupport(VkPhysicalDevice device) {
 }
 
 void RenderingContext::CreateCommandPool() {
-  QueueFamilyIndices queueFamilyIndices =
-      FindQueueFamilies(GetPhysicalDevice());
+  VulkanUtils::QueueFamilyIndices queueFamilyIndices =
+      VulkanUtils::FindQueueFamilies(GetPhysicalDevice(), m_Surface);
 
   VkCommandPoolCreateInfo poolCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -487,20 +373,6 @@ void RenderingContext::CreateCommandPool() {
                           &m_CommandPool) != VK_SUCCESS) {
     throw std::runtime_error("Failed to create command pool!");
   }
-}
-
-uint32_t RenderingContext::FindMemoryType(uint32_t typeFilter,
-                                          VkMemoryPropertyFlags properties) const {
-  VkPhysicalDeviceMemoryProperties memProperties;
-  vkGetPhysicalDeviceMemoryProperties(m_PhysicalDevice, &memProperties);
-
-    for(uint32_t i = 0; i < memProperties.memoryTypeCount; ++i) {
-        if(typeFilter & (1 << i) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
-            return i;
-        }
-    }
-
-    throw std::runtime_error("Failed to find suitable memory type!");
 }
 
 } // namespace Inferno

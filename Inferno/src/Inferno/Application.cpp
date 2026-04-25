@@ -17,9 +17,11 @@ void Application::StartUp() {
   Log::Init();
   INFERNO_LOG_INFO("Starting Up Engine...");
 
-  m_Window = std::unique_ptr<Window>(Window::Create());
+  m_Window = Window::Create();
   m_Window->SetEventCallback([this](Event &event) { this->OnEvent(event); });
   // TODO Init subsystems
+  m_Context = RenderingContext::CreateContext(m_Window.get());
+  m_Context->Init();
   m_Renderer = std::make_unique<Renderer>();
   m_Renderer->Init();
 }

@@ -62,45 +62,25 @@ void Texture::LoadFromFile(const RenderingContext *context,
 }
 
 void Texture::CreateImage(const RenderingContext *context) {
-  // Add Type Creation Switch
-  VkImageCreateInfo imageInfo{};
-  imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-  imageInfo.imageType = VK_IMAGE_TYPE_2D;
-  imageInfo.extent.width = m_Width;
-  imageInfo.extent.height = m_Height;
-  imageInfo.extent.depth = 1;
-  imageInfo.mipLevels = 1;
-  imageInfo.arrayLayers = 1;
-  imageInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
-  imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-  imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-  imageInfo.usage =
-      VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-  imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-  imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-  imageInfo.flags = 0;
+  VulkanUtils::ImageSpec spec{};
 
-  if (vkCreateImage(context->GetDevice(), &imageInfo, nullptr, &m_Image) !=
-      VK_SUCCESS) {
-    throw std::runtime_error("Failed To Create Texture Image");
+  switch (m_Type) {
+  case TextureType::Texture2D: {
+    spec.Width = m_Width;
+    spec.Height = m_Height;
+    spec.Format = VK_FORMAT_R8G8B8A8_SRGB;
+    spec.Tiling = VK_IMAGE_TILING_OPTIMAL;
+    spec.Usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    spec.Properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    break;
+  }
+  default:
+    throw std::runtime_error("Unsupported Texture Type");
   }
 
-  VkMemoryRequirements memRequirements{};
-  vkGetImageMemoryRequirements(context->GetDevice(), m_Image, &memRequirements);
-
-  VkMemoryAllocateInfo allocInfo{};
-  allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-  allocInfo.allocationSize = memRequirements.size;
-  allocInfo.memoryTypeIndex = VulkanUtils::FindMemoryType(
-      context->GetPhysicalDevice(), memRequirements.memoryTypeBits,
-      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-  if (vkAllocateMemory(context->GetDevice(), &allocInfo, nullptr,
-                       &m_TextureImageMemory) != VK_SUCCESS) {
-    throw std::runtime_error("Failed To Allocate Memory For Texture Image!");
-  }
-
-  vkBindImageMemory(context->GetDevice(), m_Image, m_TextureImageMemory, 0);
+  auto allocated = VulkanUtils::CreateImage(context, spec);
+  m_Image = allocated.Image;
+  m_TextureImageMemory = allocated.Memory;
 }
 
 } // namespace Inferno

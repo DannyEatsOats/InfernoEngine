@@ -28,7 +28,7 @@ private:
   void LoadFromFile(const RenderingContext *context, const std::string &path,
                     VkCommandPool commandPool, VkQueue graphicsQueue);
 
-  void CreateImage(const RenderingContext* context);
+  void CreateImage(const RenderingContext *context);
 
 private:
   VkDevice m_Device = VK_NULL_HANDLE;

@@ -1,13 +1,13 @@
-#include <pch.h>
 #include "VulkanUtils.h"
 #include "Inferno/Log.h"
 #include "Inferno/Window.h"
+#include <pch.h>
 
 namespace Inferno {
+namespace VulkanUtils {
 
-uint32_t
-VulkanUtils::FindMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter,
-                                 VkMemoryPropertyFlags properties) {
+uint32_t FindMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter,
+                        VkMemoryPropertyFlags properties) {
   VkPhysicalDeviceMemoryProperties memProperties;
   vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
 
@@ -21,8 +21,8 @@ VulkanUtils::FindMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter
   throw std::runtime_error("Failed to find suitable memory type!");
 }
 
-VulkanUtils::QueueFamilyIndices
-VulkanUtils::FindQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface) {
+QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device,
+                                     VkSurfaceKHR surface) {
   QueueFamilyIndices indices;
 
   uint32_t queueFamilyCount = 0;
@@ -39,8 +39,7 @@ VulkanUtils::FindQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface) {
     }
 
     VkBool32 presentSupported = false;
-    vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface,
-                                         &presentSupported);
+    vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupported);
 
     if (presentSupported) {
       indices.presentFamily = i;
@@ -56,8 +55,8 @@ VulkanUtils::FindQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface) {
   return indices;
 }
 
-VulkanUtils::SwapChainSupportDetails
-VulkanUtils::QuerySwapChainSupport(VkPhysicalDevice device, VkSurfaceKHR surface) {
+SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device,
+                                              VkSurfaceKHR surface) {
   SwapChainSupportDetails details;
 
   vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface,
@@ -65,8 +64,7 @@ VulkanUtils::QuerySwapChainSupport(VkPhysicalDevice device, VkSurfaceKHR surface
 
   uint32_t formatCount = 0;
 
-  vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount,
-                                       nullptr);
+  vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, nullptr);
 
   if (formatCount != 0) {
     details.formats.resize(formatCount);
@@ -75,8 +73,8 @@ VulkanUtils::QuerySwapChainSupport(VkPhysicalDevice device, VkSurfaceKHR surface
   }
 
   uint32_t presentModeCount = 0;
-  vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface,
-                                            &presentModeCount, nullptr);
+  vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount,
+                                            nullptr);
 
   if (presentModeCount != 0) {
     details.presentModes.resize(presentModeCount);
@@ -87,7 +85,7 @@ VulkanUtils::QuerySwapChainSupport(VkPhysicalDevice device, VkSurfaceKHR surface
   return details;
 }
 
-VkSurfaceFormatKHR VulkanUtils::ChooseSwapSurfaceFormat(
+VkSurfaceFormatKHR ChooseSwapSurfaceFormat(
     const std::vector<VkSurfaceFormatKHR> &availableFormats) {
 
   for (const auto &availableFormat : availableFormats) {
@@ -99,7 +97,7 @@ VkSurfaceFormatKHR VulkanUtils::ChooseSwapSurfaceFormat(
   return availableFormats[0];
 }
 
-VkPresentModeKHR VulkanUtils::ChooseSwapPresentMode(
+VkPresentModeKHR ChooseSwapPresentMode(
     const std::vector<VkPresentModeKHR> &availablePresentationModes) {
 
   for (const auto &availablePresentMode : availablePresentationModes) {
@@ -111,8 +109,8 @@ VkPresentModeKHR VulkanUtils::ChooseSwapPresentMode(
   return VK_PRESENT_MODE_FIFO_KHR;
 }
 
-VkExtent2D VulkanUtils::ChooseSwapExtent(
-    const VkSurfaceCapabilitiesKHR &capabilities, Window* window) {
+VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities,
+                            Window *window) {
   if (capabilities.currentExtent.width !=
       std::numeric_limits<uint32_t>::max()) {
     return capabilities.currentExtent;
@@ -138,4 +136,52 @@ VkExtent2D VulkanUtils::ChooseSwapExtent(
     return actualExtent;
   }
 }
+
+// Image Creation
+AllocatedImage CreateImage(const RenderingContext *context,
+                           const ImageSpec &spec) {
+  AllocatedImage allocated{};
+
+  VkImageCreateInfo imageInfo{};
+  imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+  imageInfo.imageType = VK_IMAGE_TYPE_2D;
+  imageInfo.extent.width = spec.Width;
+  imageInfo.extent.height = spec.Height;
+  imageInfo.extent.depth = 1;
+  imageInfo.mipLevels = 1;
+  imageInfo.arrayLayers = 1;
+  imageInfo.format = spec.Format;
+  imageInfo.tiling = spec.Tiling;
+  imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  imageInfo.usage = spec.Usage;
+  imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+  imageInfo.flags = 0;
+
+  if (vkCreateImage(context->GetDevice(), &imageInfo, nullptr,
+                    &allocated.Image) != VK_SUCCESS) {
+    throw std::runtime_error("Failed To Create Texture Image");
+  }
+
+  VkMemoryRequirements memRequirements{};
+  vkGetImageMemoryRequirements(context->GetDevice(), allocated.Image,
+                               &memRequirements);
+
+  VkMemoryAllocateInfo allocInfo{};
+  allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+  allocInfo.allocationSize = memRequirements.size;
+  allocInfo.memoryTypeIndex = VulkanUtils::FindMemoryType(
+      context->GetPhysicalDevice(), memRequirements.memoryTypeBits,
+      spec.Properties);
+
+  if (vkAllocateMemory(context->GetDevice(), &allocInfo, nullptr,
+                       &allocated.Memory) != VK_SUCCESS) {
+    throw std::runtime_error("Failed To Allocate Memory For Texture Image!");
+  }
+
+  vkBindImageMemory(context->GetDevice(), allocated.Image, allocated.Memory, 0);
+
+  return allocated;
 }
+} // namespace VulkanUtils
+} // namespace Inferno

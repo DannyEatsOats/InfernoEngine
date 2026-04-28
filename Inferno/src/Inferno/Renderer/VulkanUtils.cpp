@@ -1,13 +1,16 @@
 #include "VulkanUtils.h"
 #include "Inferno/Log.h"
+#include "Inferno/Renderer/RenderingContext.h"
 #include "Inferno/Window.h"
 #include <pch.h>
+#include <stdexcept>
+#include <vk_video/vulkan_video_codec_av1std.h>
+#include <vulkan/vulkan_core.h>
 
 namespace Inferno {
-namespace VulkanUtils {
-
-uint32_t FindMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter,
-                        VkMemoryPropertyFlags properties) {
+uint32_t VulkanUtils::FindMemoryType(VkPhysicalDevice physicalDevice,
+                                     uint32_t typeFilter,
+                                     VkMemoryPropertyFlags properties) {
   VkPhysicalDeviceMemoryProperties memProperties;
   vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
 
@@ -21,8 +24,8 @@ uint32_t FindMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter,
   throw std::runtime_error("Failed to find suitable memory type!");
 }
 
-QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device,
-                                     VkSurfaceKHR surface) {
+VulkanUtils::QueueFamilyIndices
+VulkanUtils::FindQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface) {
   QueueFamilyIndices indices;
 
   uint32_t queueFamilyCount = 0;
@@ -55,8 +58,9 @@ QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device,
   return indices;
 }
 
-SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device,
-                                              VkSurfaceKHR surface) {
+VulkanUtils::SwapChainSupportDetails
+VulkanUtils::QuerySwapChainSupport(VkPhysicalDevice device,
+                                   VkSurfaceKHR surface) {
   SwapChainSupportDetails details;
 
   vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface,
@@ -85,7 +89,7 @@ SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device,
   return details;
 }
 
-VkSurfaceFormatKHR ChooseSwapSurfaceFormat(
+VkSurfaceFormatKHR VulkanUtils::ChooseSwapSurfaceFormat(
     const std::vector<VkSurfaceFormatKHR> &availableFormats) {
 
   for (const auto &availableFormat : availableFormats) {
@@ -97,7 +101,7 @@ VkSurfaceFormatKHR ChooseSwapSurfaceFormat(
   return availableFormats[0];
 }
 
-VkPresentModeKHR ChooseSwapPresentMode(
+VkPresentModeKHR VulkanUtils::ChooseSwapPresentMode(
     const std::vector<VkPresentModeKHR> &availablePresentationModes) {
 
   for (const auto &availablePresentMode : availablePresentationModes) {
@@ -109,8 +113,9 @@ VkPresentModeKHR ChooseSwapPresentMode(
   return VK_PRESENT_MODE_FIFO_KHR;
 }
 
-VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities,
-                            Window *window) {
+VkExtent2D
+VulkanUtils::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities,
+                              Window *window) {
   if (capabilities.currentExtent.width !=
       std::numeric_limits<uint32_t>::max()) {
     return capabilities.currentExtent;
@@ -137,51 +142,127 @@ VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities,
   }
 }
 
-// Image Creation
-AllocatedImage CreateImage(const RenderingContext *context,
-                           const ImageSpec &spec) {
-  AllocatedImage allocated{};
+// Command Buffer
 
-  VkImageCreateInfo imageInfo{};
-  imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-  imageInfo.imageType = VK_IMAGE_TYPE_2D;
-  imageInfo.extent.width = spec.Width;
-  imageInfo.extent.height = spec.Height;
-  imageInfo.extent.depth = 1;
-  imageInfo.mipLevels = 1;
-  imageInfo.arrayLayers = 1;
-  imageInfo.format = spec.Format;
-  imageInfo.tiling = spec.Tiling;
-  imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-  imageInfo.usage = spec.Usage;
-  imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-  imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-  imageInfo.flags = 0;
+VkCommandBuffer
+VulkanUtils::BeginSingleTimeCommands(const RenderingContext *context) {
+  VkCommandBufferAllocateInfo allocInfo{};
+  allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+  allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+  allocInfo.commandPool = context->GetCommandPool();
+  allocInfo.commandBufferCount = 1;
 
-  if (vkCreateImage(context->GetDevice(), &imageInfo, nullptr,
-                    &allocated.Image) != VK_SUCCESS) {
-    throw std::runtime_error("Failed To Create Texture Image");
-  }
+  VkCommandBuffer commandBuffer;
+  vkAllocateCommandBuffers(context->GetDevice(), &allocInfo, &commandBuffer);
 
-  VkMemoryRequirements memRequirements{};
-  vkGetImageMemoryRequirements(context->GetDevice(), allocated.Image,
-                               &memRequirements);
+  VkCommandBufferBeginInfo beginInfo{};
+  beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-  VkMemoryAllocateInfo allocInfo{};
-  allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-  allocInfo.allocationSize = memRequirements.size;
-  allocInfo.memoryTypeIndex = VulkanUtils::FindMemoryType(
-      context->GetPhysicalDevice(), memRequirements.memoryTypeBits,
-      spec.Properties);
+  vkBeginCommandBuffer(commandBuffer, &beginInfo);
 
-  if (vkAllocateMemory(context->GetDevice(), &allocInfo, nullptr,
-                       &allocated.Memory) != VK_SUCCESS) {
-    throw std::runtime_error("Failed To Allocate Memory For Texture Image!");
-  }
-
-  vkBindImageMemory(context->GetDevice(), allocated.Image, allocated.Memory, 0);
-
-  return allocated;
+  return commandBuffer;
 }
-} // namespace VulkanUtils
+
+void VulkanUtils::EndSingleTimeCommands(const RenderingContext *context,
+                                        VkCommandBuffer commandBuffer) {
+  vkEndCommandBuffer(commandBuffer);
+
+  VkSubmitInfo submitInfo{};
+  submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+  submitInfo.commandBufferCount = 1;
+  submitInfo.pCommandBuffers = &commandBuffer;
+
+  vkQueueSubmit(context->GetGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
+  vkQueueWaitIdle(context->GetGraphicsQueue());
+
+  vkFreeCommandBuffers(context->GetDevice(), context->GetCommandPool(), 1,
+                       &commandBuffer);
+}
+
+// Buffer Stuff
+
+void VulkanUtils::CopyBuffer(const RenderingContext *context,
+                             VkBuffer srcBuffer, VkBuffer dstBuffer,
+                             VkDeviceSize size) {
+  VkCommandBuffer commandbuffer = BeginSingleTimeCommands(context);
+
+  VkBufferCopy copyRegion{};
+  copyRegion.size = size;
+  vkCmdCopyBuffer(commandbuffer, srcBuffer, dstBuffer, 1, &copyRegion);
+
+  EndSingleTimeCommands(context, commandbuffer);
+}
+
+void VulkanUtils::CopyBufferToImage(const RenderingContext *context,
+                                    VkBuffer buffer, VkImage image,
+                                    uint32_t width, uint32_t height) {
+  VkCommandBuffer commandBuffer = BeginSingleTimeCommands(context);
+
+  VkBufferImageCopy region{};
+  region.bufferOffset = 0;
+  region.bufferRowLength = 0;
+  region.bufferImageHeight = 0;
+
+  region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  region.imageSubresource.mipLevel = 0;
+  region.imageSubresource.baseArrayLayer = 0;
+  region.imageSubresource.layerCount = 1;
+
+  region.imageOffset = {0, 0, 0};
+  region.imageExtent = {width, height, 1};
+
+  vkCmdCopyBufferToImage(commandBuffer, buffer, image,
+                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+  EndSingleTimeCommands(context, commandBuffer);
+}
+
+void VulkanUtils::TransitionImageLayout(const RenderingContext *context,
+                                        VkImage image, VkFormat format,
+                                        VkImageLayout oldLayout,
+                                        VkImageLayout newLayout) {
+  VkCommandBuffer commandBuffer = BeginSingleTimeCommands(context);
+
+  VkImageMemoryBarrier barrier{};
+  barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+  barrier.oldLayout = oldLayout;
+  barrier.newLayout = newLayout;
+  barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier.image = image;
+
+  barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  barrier.subresourceRange.baseMipLevel = 0;
+  barrier.subresourceRange.levelCount = 1;
+  barrier.subresourceRange.baseArrayLayer = 0;
+  barrier.subresourceRange.layerCount = 1;
+
+  VkPipelineStageFlags srcStage;
+  VkPipelineStageFlags dstStage;
+
+  if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED &&
+      newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+    barrier.srcAccessMask = 0;
+    barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+    srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+    dstStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+  } else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
+             newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+    barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+    srcStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+  } else {
+    throw std::invalid_argument("Unsupported Image Layout Transition!");
+  }
+
+  vkCmdPipelineBarrier(commandBuffer, srcStage, dstStage, 0, 0, nullptr, 0,
+                       nullptr, 1, &barrier);
+
+  EndSingleTimeCommands(context, commandBuffer);
+}
+
 } // namespace Inferno

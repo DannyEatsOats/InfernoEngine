@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Inferno/Renderer/Image.h"
 #include "Inferno/Renderer/RenderingContext.h"
 #include <vulkan/vulkan_core.h>
 namespace Inferno {
@@ -11,7 +12,7 @@ public:
   static std::shared_ptr<Texture> Create2D(const RenderingContext *context,
                                            const std::string &filePath);
 
-  ~Texture();
+  ~Texture() = default;
 
   uint32_t GetWidth() const { return m_Width; };
   uint32_t GetHeight() const { return m_Height; };
@@ -25,8 +26,7 @@ public:
 private:
   Texture(TextureType type, VkDevice device, VkPhysicalDevice physicalDevice);
 
-  void LoadFromFile(const RenderingContext *context, const std::string &path,
-                    VkCommandPool commandPool, VkQueue graphicsQueue);
+  void LoadFromFile(const RenderingContext *context, const std::string &path);
 
   void CreateImage(const RenderingContext *context);
 
@@ -34,12 +34,11 @@ private:
   VkDevice m_Device = VK_NULL_HANDLE;
   VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE;
 
-  VkImage m_Image = VK_NULL_HANDLE;
-  VkDeviceMemory m_TextureImageMemory = VK_NULL_HANDLE;
+  Image m_Image;
   VkImageView m_ImageView = VK_NULL_HANDLE;
   VkSampler m_Sampler = VK_NULL_HANDLE;
 
-  VkDeviceSize m_ImageSize = 0;
+  VkFormat m_Format = VK_FORMAT_R8G8B8A8_SRGB;
 
   TextureType m_Type;
 

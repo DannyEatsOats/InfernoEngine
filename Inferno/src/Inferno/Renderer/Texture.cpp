@@ -17,9 +17,8 @@ std::shared_ptr<Texture> Texture::Create2D(const RenderingContext *context,
   auto tex = std::shared_ptr<Texture>(
       new Texture(TextureType::Texture2D, context->GetDevice(),
                   context->GetPhysicalDevice()));
-  tex->LoadFromFile(context, filePath, context->GetCommandPool(),
-                    context->GetGraphicsQueue());
-  tex->CreateImage(context);
+  tex->LoadFromFile(context, filePath);
+
   return tex;
 }
 
@@ -27,11 +26,9 @@ Texture::Texture(TextureType type, VkDevice device,
                  VkPhysicalDevice physicalDevice)
     : m_Type(type), m_Device(device), m_PhysicalDevice(physicalDevice) {}
 
-Texture::~Texture() {}
-
 void Texture::LoadFromFile(const RenderingContext *context,
-                           const std::string &path, VkCommandPool commandPool,
-                           VkQueue graphicsQueue) {
+                           const std::string &path) {
+  // Loading
   int width, height, channels;
   stbi_uc *pixels =
       stbi_load(path.c_str(), &width, &height, &channels, STBI_rgb_alpha);
@@ -40,9 +37,7 @@ void Texture::LoadFromFile(const RenderingContext *context,
   m_Height = static_cast<uint32_t>(height);
   m_Channels = static_cast<uint32_t>(channels);
 
-  VkDeviceSize imageSize = width * height * 4;
-
-  m_ImageSize = imageSize;
+  VkDeviceSize imageSize = m_Width * m_Height * 4;
 
   if (!pixels) {
     throw std::runtime_error("Failed To Load Texture: " + path);
@@ -59,10 +54,21 @@ void Texture::LoadFromFile(const RenderingContext *context,
   vkUnmapMemory(context->GetDevice(), stagingBuffer.GetMemory());
 
   stbi_image_free(pixels);
+
+  // Image Creation
+  CreateImage(context);
+  VulkanUtils::TransitionImageLayout(context, m_Image.Get(), m_Format,
+                                     VK_IMAGE_LAYOUT_UNDEFINED,
+                                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+  VulkanUtils::CopyBufferToImage(context, stagingBuffer.Get(), m_Image.Get(),
+                                 m_Width, m_Height);
+  VulkanUtils::TransitionImageLayout(context, m_Image.Get(), m_Format,
+                                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 void Texture::CreateImage(const RenderingContext *context) {
-  VulkanUtils::ImageSpec spec{};
+  ImageSpec spec{};
 
   switch (m_Type) {
   case TextureType::Texture2D: {
@@ -78,9 +84,6 @@ void Texture::CreateImage(const RenderingContext *context) {
     throw std::runtime_error("Unsupported Texture Type");
   }
 
-  auto allocated = VulkanUtils::CreateImage(context, spec);
-  m_Image = allocated.Image;
-  m_TextureImageMemory = allocated.Memory;
+  m_Image = Image::Create(context, spec);
 }
-
 } // namespace Inferno

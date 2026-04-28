@@ -31,6 +31,8 @@ add_library(Inferno
         src/Inferno/Renderer/Buffer.cpp
         src/Inferno/Renderer/Texture.h
         src/Inferno/Renderer/Texture.cpp
+        src/Inferno/Renderer/Image.h
+        src/Inferno/Renderer/Image.cpp
         # EVENTS
         src/Inferno/Events/Event.h
         src/Inferno/Events/ApplicationEvent.h

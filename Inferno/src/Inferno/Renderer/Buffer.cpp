@@ -73,42 +73,7 @@ void BufferUploader::Upload(const RenderingContext *context, Buffer &dst,
   memcpy(mapped, data, static_cast<size_t>(size));
   vkUnmapMemory(context->GetDevice(), stagingBuffer.GetMemory());
 
-  // 3. Allocate command buffer
-  VkCommandBufferAllocateInfo allocInfo{};
-  allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-  allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-  allocInfo.commandPool = context->GetCommandPool();
-  allocInfo.commandBufferCount = 1;
-
-  VkCommandBuffer cmd;
-  vkAllocateCommandBuffers(context->GetDevice(), &allocInfo, &cmd);
-
-  // 4. Record copy command
-  VkCommandBufferBeginInfo beginInfo{};
-  beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-  beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-  vkBeginCommandBuffer(cmd, &beginInfo);
-
-  VkBufferCopy copy{};
-  copy.size = size;
-
-  vkCmdCopyBuffer(cmd, stagingBuffer.Get(), dst.Get(), 1, &copy);
-
-  vkEndCommandBuffer(cmd);
-
-  // 5. Submit
-  VkSubmitInfo submit{};
-  submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-  submit.commandBufferCount = 1;
-  submit.pCommandBuffers = &cmd;
-
-  vkQueueSubmit(context->GetGraphicsQueue(), 1, &submit, VK_NULL_HANDLE);
-  vkQueueWaitIdle(context->GetGraphicsQueue());
-
-  // 6. Cleanup
-  vkFreeCommandBuffers(context->GetDevice(), context->GetCommandPool(), 1,
-                       &cmd);
+  VulkanUtils::CopyBuffer(context, stagingBuffer.Get(), dst.Get(), size);
 }
 
 //=================== VERTEX BUFFER ==============================

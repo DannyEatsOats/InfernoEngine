@@ -46,6 +46,9 @@ public:
   ChooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities,
                    Window *window);
 
+  static VkPhysicalDeviceProperties
+  GetPhysicalDeviceProps(VkPhysicalDevice device);
+
   // Command Buffers
 
   static VkCommandBuffer
@@ -67,7 +70,9 @@ public:
                                     VkImageLayout oldLayout,
                                     VkImageLayout newLayout);
 
+  // Image View
+
   static VkImageView CreateImageView(const RenderingContext *context,
-                                     Image& image);
+                                     Image &image);
 };
 } // namespace Inferno

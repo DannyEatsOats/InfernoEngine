@@ -1,6 +1,7 @@
 #include "VulkanUtils.h"
 #include "Inferno/Log.h"
 #include "Inferno/Renderer/RenderingContext.h"
+#include "Inferno/Renderer/Texture.h"
 #include "Inferno/Window.h"
 #include <pch.h>
 #include <stdexcept>
@@ -140,6 +141,13 @@ VulkanUtils::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities,
 
     return actualExtent;
   }
+}
+
+VkPhysicalDeviceProperties
+VulkanUtils::GetPhysicalDeviceProps(VkPhysicalDevice device) {
+  VkPhysicalDeviceProperties properties{};
+  vkGetPhysicalDeviceProperties(device, &properties);
+  return properties;
 }
 
 // Command Buffer

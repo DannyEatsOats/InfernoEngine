@@ -189,6 +189,7 @@ void RenderingContext::CreateLogicalDevice() {
   }
 
   VkPhysicalDeviceFeatures deviceFeatures{};
+  deviceFeatures.samplerAnisotropy = VK_TRUE;
 
   VkDeviceCreateInfo createInfo = {
       .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
@@ -340,7 +341,10 @@ bool RenderingContext::IsDeviceSuitable(VkPhysicalDevice device) {
                         !swapChainSupport.presentModes.empty();
   }
 
-  return indices.IsComplete() && extensionsSupported && swapChainAdequate;
+  VkPhysicalDeviceFeatures supportedFeatures;
+  vkGetPhysicalDeviceFeatures(device, &supportedFeatures);
+
+  return indices.IsComplete() && extensionsSupported && swapChainAdequate && supportedFeatures.samplerAnisotropy;
 }
 
 bool RenderingContext::CheckDeviceExtensionSupport(VkPhysicalDevice device) {

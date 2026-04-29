@@ -12,7 +12,7 @@ public:
   static std::shared_ptr<Texture> Create2D(const RenderingContext *context,
                                            const std::string &filePath);
 
-  ~Texture() = default;
+  ~Texture();
 
   uint32_t GetWidth() const { return m_Width; };
   uint32_t GetHeight() const { return m_Height; };
@@ -29,6 +29,7 @@ private:
   void LoadFromFile(const RenderingContext *context, const std::string &path);
 
   void CreateImage(const RenderingContext *context);
+  void CreateSampler(const RenderingContext *context);
 
 private:
   VkDevice m_Device = VK_NULL_HANDLE;

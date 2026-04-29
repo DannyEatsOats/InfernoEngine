@@ -1,3 +1,5 @@
+#include "Inferno/Renderer/Texture.h"
+#include <array>
 #include <cstddef>
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_transform.hpp>
@@ -24,15 +26,16 @@
 
 namespace Inferno {
 const std::vector<Vertex> vertices = {
-    {{-0.5f, -0.5f}, {0.322f, 0.133f, 0.346f}},
-    {{0.5f, -0.5f}, {0.549f, 0.188f, 0.380f}},
-    {{0.5f, 0.5f}, {0.776f, 0.235f, 0.318f}},
-    {{-0.5f, 0.5f}, {0.676f, 0.245f, 0.348f}}};
+    {{-0.5f, -0.5f}, {0.322f, 0.133f, 0.346f}, {1.0f, 0.0f}},
+    {{0.5f, -0.5f}, {0.549f, 0.188f, 0.380f}, {0.0f, 0.0f}},
+    {{0.5f, 0.5f}, {0.776f, 0.235f, 0.318f}, {0.0f, 1.0f}},
+    {{-0.5f, 0.5f}, {0.676f, 0.245f, 0.348f}, {1.0f, 1.0f}}};
 
 const std::vector<uint16_t> indices = {0, 1, 2, 2, 3, 0};
 
 void Renderer::Init() {
   m_pContext = RenderingContext::GetContext();
+  m_pContext->CreateCommandPool();
 
   m_VertexBuffer =
       VertexBuffer::Create(m_pContext.get(), sizeof(Vertex) * vertices.size());
@@ -40,6 +43,7 @@ void Renderer::Init() {
   m_VertexBuffer->SetLayout({
       {"inPosition", ShaderDataType::Float2},
       {"inColor", ShaderDataType::Float3},
+      {"inTexCoord", ShaderDataType::Float2},
   });
 
   m_IndexBuffer =
@@ -52,18 +56,21 @@ void Renderer::Init() {
         UniformBuffer::Create(m_pContext.get(), sizeof(UniformBufferOjbect));
   }
 
+  m_Texture = Texture::Create2D(m_pContext.get(), "assets/texture/texture.jpg");
+
   CreateRenderPass();
   CreateDescriptorSetLayout();
   CreateDescriptorPool();
   CreateDescriptorSets();
   CreateGraphicsPipeline();
   CreateFramebuffers();
-  m_pContext->CreateCommandPool();
   CreateCommandBuffers();
   CreateSyncObjects();
 
   m_VertexBuffer->Upload(vertices.data());
   m_IndexBuffer->Upload(indices.data());
+
+  // ASSET CREATION
 }
 
 void Renderer::ShutDown() {
@@ -227,10 +234,21 @@ void Renderer::CreateDescriptorSetLayout() {
       .pImmutableSamplers = nullptr,
   };
 
+  VkDescriptorSetLayoutBinding samplerLayoutBinding = {
+      .binding = 1,
+      .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+      .descriptorCount = 1,
+      .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+      .pImmutableSamplers = nullptr,
+  };
+
+  std::array<VkDescriptorSetLayoutBinding, 2> bindings = {uboLayoutBinding,
+                                                          samplerLayoutBinding};
+
   VkDescriptorSetLayoutCreateInfo layoutInfo = {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-      .bindingCount = 1,
-      .pBindings = &uboLayoutBinding,
+      .bindingCount = static_cast<uint32_t>(bindings.size()),
+      .pBindings = bindings.data(),
   };
 
   if (vkCreateDescriptorSetLayout(m_pContext->GetDevice(), &layoutInfo, nullptr,
@@ -240,16 +258,17 @@ void Renderer::CreateDescriptorSetLayout() {
 }
 
 void Renderer::CreateDescriptorPool() {
-  VkDescriptorPoolSize poolSize = {
-      .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-      .descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT),
-  };
+  std::array<VkDescriptorPoolSize, 2> poolSizes{};
+  poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+  poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+  poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+  poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
   VkDescriptorPoolCreateInfo poolInfo = {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
       .maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT),
-      .poolSizeCount = 1,
-      .pPoolSizes = &poolSize,
+      .poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
+      .pPoolSizes = poolSizes.data(),
   };
 
   if (vkCreateDescriptorPool(m_pContext->GetDevice(), &poolInfo, nullptr,
@@ -285,18 +304,28 @@ void Renderer::CreateDescriptorSets() {
     bufferInfo.offset = 0;
     bufferInfo.range = sizeof(UniformBufferOjbect);
 
-    VkWriteDescriptorSet descriptorWrite{};
-    descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    descriptorWrite.dstSet = frame.DescriptorSet;
-    descriptorWrite.dstBinding = 0, descriptorWrite.dstArrayElement = 0;
-    descriptorWrite.descriptorCount = 1;
-    descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    descriptorWrite.pImageInfo = nullptr;
-    descriptorWrite.pBufferInfo = &bufferInfo;
-    descriptorWrite.pTexelBufferView = nullptr;
+    std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
+    descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptorWrites[0].dstSet = frame.DescriptorSet;
+    descriptorWrites[0].dstBinding = 0;
+    descriptorWrites[0].dstArrayElement = 0;
+    descriptorWrites[0].descriptorCount = 1;
+    descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    descriptorWrites[0].pBufferInfo = &bufferInfo;
 
-    vkUpdateDescriptorSets(m_pContext->GetDevice(), 1, &descriptorWrite, 0,
-                           nullptr);
+    auto imageInfo = m_Texture->GetDescriptorInfo();
+    descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptorWrites[1].dstSet = frame.DescriptorSet;
+    descriptorWrites[1].dstBinding = 1;
+    descriptorWrites[1].dstArrayElement = 0;
+    descriptorWrites[1].descriptorCount = 1;
+    descriptorWrites[1].descriptorType =
+        VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    descriptorWrites[1].pImageInfo = &imageInfo;
+
+    vkUpdateDescriptorSets(m_pContext->GetDevice(),
+                           static_cast<uint32_t>(descriptorWrites.size()),
+                           descriptorWrites.data(), 0, nullptr);
   }
 }
 

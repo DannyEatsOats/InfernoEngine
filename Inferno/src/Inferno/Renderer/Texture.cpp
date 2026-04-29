@@ -1,3 +1,4 @@
+#include <filesystem>
 #include <pch.h>
 
 #include "Inferno/Renderer/Buffer.h"
@@ -23,6 +24,15 @@ std::shared_ptr<Texture> Texture::Create2D(const RenderingContext *context,
   return tex;
 }
 
+VkDescriptorImageInfo Texture::GetDescriptorInfo() const {
+  VkDescriptorImageInfo imageInfo{};
+  imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  imageInfo.imageView = m_ImageView;
+  imageInfo.sampler = m_Sampler;
+
+  return imageInfo;
+}
+
 Texture::Texture(TextureType type, VkDevice device,
                  VkPhysicalDevice physicalDevice)
     : m_Type(type), m_Device(device), m_PhysicalDevice(physicalDevice) {}
@@ -34,10 +44,14 @@ Texture::~Texture() {
 
 void Texture::LoadFromFile(const RenderingContext *context,
                            const std::string &path) {
+  std::filesystem::path exePath =
+      std::filesystem::canonical("/proc/self/exe").parent_path();
+  std::filesystem::path fullPath = exePath / path;
+
   // Loading
   int width, height, channels;
   stbi_uc *pixels =
-      stbi_load(path.c_str(), &width, &height, &channels, STBI_rgb_alpha);
+      stbi_load(fullPath.c_str(), &width, &height, &channels, STBI_rgb_alpha);
 
   m_Width = static_cast<uint32_t>(width);
   m_Height = static_cast<uint32_t>(height);

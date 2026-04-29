@@ -2,6 +2,7 @@
 
 #include "Inferno/Renderer/Buffer.h"
 #include "Inferno/Renderer/RenderingContext.h"
+#include "Inferno/Renderer/Texture.h"
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -64,6 +65,8 @@ private:
 
   std::shared_ptr<VertexBuffer> m_VertexBuffer = nullptr;
   std::shared_ptr<IndexBuffer> m_IndexBuffer = nullptr;
+
+  std::shared_ptr<Texture> m_Texture = nullptr;
 
   static constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 };

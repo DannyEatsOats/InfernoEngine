@@ -62,10 +62,12 @@ public:
                                 VkBuffer buffer, VkImage image, uint32_t width,
                                 uint32_t height);
 
-
   static void TransitionImageLayout(const RenderingContext *context,
                                     VkImage image, VkFormat format,
                                     VkImageLayout oldLayout,
                                     VkImageLayout newLayout);
+
+  static VkImageView CreateImageView(const RenderingContext *context,
+                                     Image& image);
 };
 } // namespace Inferno

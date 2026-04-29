@@ -1,5 +1,5 @@
-#include "pch.h"
 #include "RenderingContext.h"
+#include "pch.h"
 
 #define GLFW_INCLUDE_VULKAN
 #include "GLFW/glfw3.h"
@@ -140,8 +140,8 @@ void RenderingContext::CreateInstance() {
 }
 
 void RenderingContext::CreateSurface() {
-  if (glfwCreateWindowSurface(m_Instance, m_Window->GetNativeWindow(), nullptr, &m_Surface) !=
-      VK_SUCCESS) {
+  if (glfwCreateWindowSurface(m_Instance, m_Window->GetNativeWindow(), nullptr,
+                              &m_Surface) != VK_SUCCESS) {
     throw std::runtime_error("Failed to create Vulkan Surface");
   }
 }
@@ -269,7 +269,8 @@ void RenderingContext::CreateSwapChain() {
   INFERNO_LOG_ERROR("Width {}, Height {}", createInfo.imageExtent.width,
                     createInfo.imageExtent.height);
 
-  if (vkCreateSwapchainKHR(m_Device, &createInfo, nullptr, &m_SwapChain) != VK_SUCCESS) {
+  if (vkCreateSwapchainKHR(m_Device, &createInfo, nullptr, &m_SwapChain) !=
+      VK_SUCCESS) {
     throw std::runtime_error("Failed to Create SwapChain");
   }
 
@@ -294,6 +295,8 @@ void RenderingContext::CreateImageViews() {
   m_SwapChainImageViews.resize(m_SwapChainImages.size());
 
   for (size_t i = 0; i < m_SwapChainImages.size(); ++i) {
+    // m_SwapChainImageViews[i] = VulkanUtils::CreateImageView(this, Image
+    // &image)
     VkImageViewCreateInfo createInfo = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
         .image = m_SwapChainImages[i],

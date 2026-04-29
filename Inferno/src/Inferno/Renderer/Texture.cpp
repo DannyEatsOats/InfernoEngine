@@ -65,6 +65,8 @@ void Texture::LoadFromFile(const RenderingContext *context,
   VulkanUtils::TransitionImageLayout(context, m_Image.Get(), m_Format,
                                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+  m_ImageView = VulkanUtils::CreateImageView(context, m_Image);
 }
 
 void Texture::CreateImage(const RenderingContext *context) {

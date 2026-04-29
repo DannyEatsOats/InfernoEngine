@@ -28,9 +28,9 @@ public:
 
   VkImage Get() const { return m_Image; }
   VkDeviceMemory GetMemory() const { return m_Memory; }
+  VkFormat GetFormat() const { return m_Format; }
 
-  static Image Create(const RenderingContext *context,
-                           const ImageSpec &spec);
+  static Image Create(const RenderingContext *context, const ImageSpec &spec);
 
 private:
   Image(VkDevice device, VkImage image, VkDeviceMemory memory, VkFormat format)

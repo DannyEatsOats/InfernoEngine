@@ -4,6 +4,7 @@
 #include "Inferno/Renderer/RenderingContext.h"
 #include "Inferno/Window.h"
 #include <optional>
+#include <vector>
 #include <vulkan/vulkan_core.h>
 
 struct GLFWwindow;
@@ -49,6 +50,11 @@ public:
   static VkPhysicalDeviceProperties
   GetPhysicalDeviceProps(VkPhysicalDevice device);
 
+  static VkFormat FindSupportedFormat(VkPhysicalDevice device,
+                                      const std::vector<VkFormat> &candidates,
+                                      VkImageTiling tiling,
+                                      VkFormatFeatureFlags features);
+
   // Command Buffers
 
   static VkCommandBuffer
@@ -73,6 +79,6 @@ public:
   // Image View
 
   static VkImageView CreateImageView(const RenderingContext *context,
-                                     Image &image);
+                                     Image &image, VkImageAspectFlags aspectFlags);
 };
 } // namespace Inferno

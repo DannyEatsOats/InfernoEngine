@@ -86,7 +86,7 @@ void Texture::LoadFromFile(const RenderingContext *context,
                                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-  m_ImageView = VulkanUtils::CreateImageView(context, m_Image);
+  m_ImageView = VulkanUtils::CreateImageView(context, m_Image, VK_IMAGE_ASPECT_COLOR_BIT);
 
   CreateSampler(context);
 }

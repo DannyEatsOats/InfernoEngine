@@ -1,3 +1,6 @@
+#include <pch.h>
+
+#include "Inferno/Renderer/Image.h"
 #include "Inferno/Renderer/Texture.h"
 #include <array>
 #include <cstddef>
@@ -10,8 +13,6 @@
 #include <vector>
 #include <vulkan/vulkan_core.h>
 
-#define GLM_FORCE_RADIANS
-#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -22,16 +23,23 @@
 #include "Inferno/Renderer/RenderingContext.h"
 #include "Renderer.h"
 
+#include "Inferno/Renderer/VulkanUtils.h"
 #include "Shader.h"
 
 namespace Inferno {
 const std::vector<Vertex> vertices = {
-    {{-0.5f, -0.5f}, {0.322f, 0.133f, 0.346f}, {1.0f, 0.0f}},
-    {{0.5f, -0.5f}, {0.549f, 0.188f, 0.380f}, {0.0f, 0.0f}},
-    {{0.5f, 0.5f}, {0.776f, 0.235f, 0.318f}, {0.0f, 1.0f}},
-    {{-0.5f, 0.5f}, {0.676f, 0.245f, 0.348f}, {1.0f, 1.0f}}};
+    {{-0.5f, -0.5f, 0.0f}, {0.322f, 0.133f, 0.346f}, {1.0f, 0.0f}},
+    {{0.5f, -0.5f, 0.0f}, {0.549f, 0.188f, 0.380f}, {0.0f, 0.0f}},
+    {{0.5f, 0.5f, 0.0f}, {0.776f, 0.235f, 0.318f}, {0.0f, 1.0f}},
+    {{-0.5f, 0.5f, 0.0f}, {0.676f, 0.245f, 0.348f}, {1.0f, 1.0f}},
 
-const std::vector<uint16_t> indices = {0, 1, 2, 2, 3, 0};
+    {{-0.5f, -0.5f, 0.5f}, {0.322f, 0.133f, 0.346f}, {1.0f, 0.0f}},
+    {{0.5f, -0.5f, 0.5f}, {0.549f, 0.188f, 0.380f}, {0.0f, 0.0f}},
+    {{0.5f, 0.5f, 0.5f}, {0.776f, 0.235f, 0.318f}, {0.0f, 1.0f}},
+    {{-0.5f, 0.5f, 0.5f}, {0.676f, 0.245f, 0.348f}, {1.0f, 1.0f}},
+};
+
+const std::vector<uint16_t> indices = {0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4};
 
 void Renderer::Init() {
   m_pContext = RenderingContext::GetContext();
@@ -41,7 +49,7 @@ void Renderer::Init() {
       VertexBuffer::Create(m_pContext.get(), sizeof(Vertex) * vertices.size());
 
   m_VertexBuffer->SetLayout({
-      {"inPosition", ShaderDataType::Float2},
+      {"inPosition", ShaderDataType::Float3},
       {"inColor", ShaderDataType::Float3},
       {"inTexCoord", ShaderDataType::Float2},
   });
@@ -194,25 +202,49 @@ void Renderer::CreateRenderPass() {
       .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
   };
 
+  VkAttachmentDescription depthAttachment = {
+      .format = VulkanUtils::FindSupportedFormat(
+          m_pContext->GetPhysicalDevice(),
+          {VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT,
+           VK_FORMAT_D24_UNORM_S8_UINT},
+          VK_IMAGE_TILING_OPTIMAL,
+          VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT),
+      .samples = VK_SAMPLE_COUNT_1_BIT,
+      .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+      .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+      .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+      .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+      .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+      .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+  };
+
+  VkAttachmentReference depthAttachmentRef = {
+      .attachment = 1,
+      .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+  };
+
   VkSubpassDescription subpassDesc = {
       .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
       .colorAttachmentCount = 1,
       .pColorAttachments = &colorAttachmentRef,
+      .pDepthStencilAttachment = &depthAttachmentRef,
   };
 
   VkSubpassDependency dependency = {
       .srcSubpass = VK_SUBPASS_EXTERNAL,
       .dstSubpass = 0,
-      .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-      .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-      .srcAccessMask = 0,
-      .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+      .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+      .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+      .srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+      .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
   };
 
+  std::array<VkAttachmentDescription, 2> attachments = {colorAttachment,
+                                                        depthAttachment};
   VkRenderPassCreateInfo renderPassCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-      .attachmentCount = 1,
-      .pAttachments = &colorAttachment,
+      .attachmentCount = static_cast<uint32_t>(attachments.size()),
+      .pAttachments = attachments.data(),
       .subpassCount = 1,
       .pSubpasses = &subpassDesc,
       .dependencyCount = 1,
@@ -255,6 +287,26 @@ void Renderer::CreateDescriptorSetLayout() {
                                   &m_DescriptorSetLayout) != VK_SUCCESS) {
     throw std::runtime_error("Failed To Create Descriptor Set Layout");
   };
+}
+
+void Renderer::CreateDepthBuffer() {
+  VkFormat format = VulkanUtils::FindSupportedFormat(
+      m_pContext->GetPhysicalDevice(),
+      {VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT,
+       VK_FORMAT_D24_UNORM_S8_UINT},
+      VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
+
+  ImageSpec spec{};
+  spec.Width = m_pContext->GetSwapChainExtent().width;
+  spec.Height = m_pContext->GetSwapChainExtent().height;
+  spec.Format = format;
+  spec.Tiling = VK_IMAGE_TILING_OPTIMAL;
+  spec.Usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+  spec.Properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+  Image image = Image::Create(m_pContext.get(), spec);
+  m_DepthImageView = VulkanUtils::CreateImageView(m_pContext.get(), image,
+                                                  VK_IMAGE_ASPECT_DEPTH_BIT);
 }
 
 void Renderer::CreateDescriptorPool() {

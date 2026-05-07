@@ -150,6 +150,23 @@ VulkanUtils::GetPhysicalDeviceProps(VkPhysicalDevice device) {
   return properties;
 }
 
+VkFormat VulkanUtils::FindSupportedFormat(
+    VkPhysicalDevice device, const std::vector<VkFormat> &candidates,
+    VkImageTiling tiling, VkFormatFeatureFlags features) {
+  for (VkFormat format : candidates) {
+    VkFormatProperties props;
+    vkGetPhysicalDeviceFormatProperties(device, format, &props);
+    if (tiling == VK_IMAGE_TILING_LINEAR &&
+        (props.linearTilingFeatures & features) == features) {
+      return format;
+    } else if (tiling == VK_IMAGE_TILING_OPTIMAL &&
+               (props.optimalTilingFeatures & features) == features) {
+      return format;
+    }
+  }
+  throw std::runtime_error("Failed to Find Supported PhysicalDevice Format");
+}
+
 // Command Buffer
 
 VkCommandBuffer
@@ -274,7 +291,7 @@ void VulkanUtils::TransitionImageLayout(const RenderingContext *context,
 }
 
 VkImageView VulkanUtils::CreateImageView(const RenderingContext *context,
-                                         Image &image) {
+                                         Image &image, VkImageAspectFlags aspectFlags) {
   VkImageView imageView;
 
   VkImageViewCreateInfo viewInfo{};
@@ -283,7 +300,7 @@ VkImageView VulkanUtils::CreateImageView(const RenderingContext *context,
   viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
   viewInfo.format = image.GetFormat();
 
-  viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  viewInfo.subresourceRange.aspectMask = aspectFlags;
   viewInfo.subresourceRange.baseMipLevel = 0;
   viewInfo.subresourceRange.levelCount = 1;
   viewInfo.subresourceRange.baseArrayLayer = 0;

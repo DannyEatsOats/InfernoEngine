@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Inferno/Renderer/Buffer.h"
+#include "Inferno/Renderer/Image.h"
 #include "Inferno/Renderer/RenderingContext.h"
 #include "Inferno/Renderer/Texture.h"
 #include <cstdint>
@@ -35,6 +36,7 @@ private:
   void CreateDescriptorSetLayout();
   void CreateDescriptorPool();
   void CreateDescriptorSets();
+  void CreateDepthBuffer();
   void CreateGraphicsPipeline();
   void CreateFramebuffers();
   void CreateCommandBuffers();
@@ -48,6 +50,7 @@ private:
   std::vector<VkFramebuffer> m_SwapChainFrameBuffers;
 
   VkRenderPass m_RenderPass;
+  VkImageView m_DepthImageView;
   VkPipelineLayout m_PipelineLayout;
   VkPipeline m_GraphicsPipeline;
 

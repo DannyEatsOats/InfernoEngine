@@ -79,6 +79,7 @@ public:
   // Image View
 
   static VkImageView CreateImageView(const RenderingContext *context,
-                                     Image &image, VkImageAspectFlags aspectFlags);
+                                     Image &image,
+                                     VkImageAspectFlags aspectFlags);
 };
 } // namespace Inferno

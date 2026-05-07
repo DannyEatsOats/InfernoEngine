@@ -1,14 +1,12 @@
+#include "Renderer.h"
 #include <pch.h>
 
-#include "Inferno/Renderer/Image.h"
-#include "Inferno/Renderer/Texture.h"
 #include <array>
 #include <cstddef>
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/fwd.hpp>
 #include <glm/trigonometric.hpp>
-#include <pch.h>
 #include <stdexcept>
 #include <vector>
 #include <vulkan/vulkan_core.h>
@@ -21,10 +19,11 @@
 #include "Inferno/Renderer/Buffer.h"
 #include "Inferno/Renderer/RenderData.h"
 #include "Inferno/Renderer/RenderingContext.h"
-#include "Renderer.h"
+
+#include "Inferno/Renderer/Shader.h"
+#include "Inferno/Renderer/Texture.h"
 
 #include "Inferno/Renderer/VulkanUtils.h"
-#include "Shader.h"
 
 namespace Inferno {
 const std::vector<Vertex> vertices = {
@@ -70,6 +69,7 @@ void Renderer::Init() {
   CreateDescriptorSetLayout();
   CreateDescriptorPool();
   CreateDescriptorSets();
+  CreateDepthResources();
   CreateGraphicsPipeline();
   CreateFramebuffers();
   CreateCommandBuffers();
@@ -96,16 +96,20 @@ void Renderer::ShutDown() {
   vkDestroyCommandPool(m_pContext->GetDevice(), m_pContext->GetCommandPool(),
                        nullptr);
 
-  for (auto framebuffer : m_SwapChainFrameBuffers) {
+  for (auto framebuffer : m_SwapchainResources.SwapChainFrameBuffers) {
     vkDestroyFramebuffer(m_pContext->GetDevice(), framebuffer, nullptr);
   }
+
+  // TODO move this to SwwapchainResource Destroy RAII
+  vkDestroyImageView(m_pContext->GetDevice(), m_SwapchainResources.DepthImageView, nullptr);
 
   vkDestroyDescriptorPool(m_pContext->GetDevice(), m_DescriptorPool, nullptr);
   vkDestroyDescriptorSetLayout(m_pContext->GetDevice(), m_DescriptorSetLayout,
                                nullptr);
   vkDestroyPipeline(m_pContext->GetDevice(), m_GraphicsPipeline, nullptr);
   vkDestroyPipelineLayout(m_pContext->GetDevice(), m_PipelineLayout, nullptr);
-  vkDestroyRenderPass(m_pContext->GetDevice(), m_RenderPass, nullptr);
+  vkDestroyRenderPass(m_pContext->GetDevice(), m_RenderPass,
+                      nullptr);
 }
 
 void Renderer::DrawFrame() {
@@ -233,10 +237,13 @@ void Renderer::CreateRenderPass() {
   VkSubpassDependency dependency = {
       .srcSubpass = VK_SUBPASS_EXTERNAL,
       .dstSubpass = 0,
-      .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-      .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+      .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                      VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+      .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                      VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
       .srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-      .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+      .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+                       VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
   };
 
   std::array<VkAttachmentDescription, 2> attachments = {colorAttachment,
@@ -252,7 +259,8 @@ void Renderer::CreateRenderPass() {
   };
 
   if (vkCreateRenderPass(m_pContext->GetDevice(), &renderPassCreateInfo,
-                         nullptr, &m_RenderPass) != VK_SUCCESS) {
+                         nullptr,
+                         &m_RenderPass) != VK_SUCCESS) {
     throw std::runtime_error("Failed to create render pass");
   }
 }
@@ -289,7 +297,7 @@ void Renderer::CreateDescriptorSetLayout() {
   };
 }
 
-void Renderer::CreateDepthBuffer() {
+void Renderer::CreateDepthResources() {
   VkFormat format = VulkanUtils::FindSupportedFormat(
       m_pContext->GetPhysicalDevice(),
       {VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT,
@@ -304,9 +312,10 @@ void Renderer::CreateDepthBuffer() {
   spec.Usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
   spec.Properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-  Image image = Image::Create(m_pContext.get(), spec);
-  m_DepthImageView = VulkanUtils::CreateImageView(m_pContext.get(), image,
-                                                  VK_IMAGE_ASPECT_DEPTH_BIT);
+  m_SwapchainResources.DepthImage = Image::Create(m_pContext.get(), spec);
+  m_SwapchainResources.DepthImageView = VulkanUtils::CreateImageView(
+      m_pContext.get(), m_SwapchainResources.DepthImage,
+      VK_IMAGE_ASPECT_DEPTH_BIT);
 }
 
 void Renderer::CreateDescriptorPool() {
@@ -506,6 +515,20 @@ void Renderer::CreateGraphicsPipeline() {
       .pDynamicStates = dynamicStates.data(),
   };
 
+  // Depth Testing
+  VkPipelineDepthStencilStateCreateInfo depthStencil{};
+  depthStencil.sType =
+      VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+  depthStencil.depthTestEnable = VK_TRUE;
+  depthStencil.depthWriteEnable = VK_TRUE;
+  depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+  depthStencil.depthBoundsTestEnable = VK_FALSE;
+  depthStencil.minDepthBounds = 0.0f;
+  depthStencil.maxDepthBounds = 1.0f;
+  depthStencil.stencilTestEnable = VK_FALSE;
+  depthStencil.front = {};
+  depthStencil.back = {};
+
   VkGraphicsPipelineCreateInfo pipelineCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
       .stageCount = 2,
@@ -515,7 +538,7 @@ void Renderer::CreateGraphicsPipeline() {
       .pViewportState = &viewportStateCreateInfo,
       .pRasterizationState = &rasterizationStateCreateInfo,
       .pMultisampleState = &mutlisampleStateCreateInfo,
-      .pDepthStencilState = nullptr,
+      .pDepthStencilState = &depthStencil,
       .pColorBlendState = &colorBlendStateCreateInfo,
       .pDynamicState = &dynamicStateCreateInfo,
       .layout = m_PipelineLayout,
@@ -533,24 +556,27 @@ void Renderer::CreateGraphicsPipeline() {
 }
 
 void Renderer::CreateFramebuffers() {
-  m_SwapChainFrameBuffers.resize(m_pContext->GetSwapChainImageViews().size());
+  m_SwapchainResources.SwapChainFrameBuffers.resize(
+      m_pContext->GetSwapChainImageViews().size());
 
   for (size_t i = 0; i < m_pContext->GetSwapChainImageViews().size(); ++i) {
-    VkImageView attachments[] = {m_pContext->GetSwapChainImageViews()[i]};
+    std::array<VkImageView, 2> attachments = {
+        m_pContext->GetSwapChainImageViews()[i],
+        m_SwapchainResources.DepthImageView};
 
     VkFramebufferCreateInfo frameBufferCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
         .renderPass = m_RenderPass,
-        .attachmentCount = 1,
-        .pAttachments = attachments,
+        .attachmentCount = static_cast<uint32_t>(attachments.size()),
+        .pAttachments = attachments.data(),
         .width = m_pContext->GetSwapChainExtent().width,
         .height = m_pContext->GetSwapChainExtent().height,
         .layers = 1,
     };
 
-    if (vkCreateFramebuffer(m_pContext->GetDevice(), &frameBufferCreateInfo,
-                            nullptr,
-                            &m_SwapChainFrameBuffers[i]) != VK_SUCCESS) {
+    if (vkCreateFramebuffer(
+            m_pContext->GetDevice(), &frameBufferCreateInfo, nullptr,
+            &m_SwapchainResources.SwapChainFrameBuffers[i]) != VK_SUCCESS) {
       throw std::runtime_error("Failed to create Framebuffer!");
     }
   }
@@ -611,15 +637,18 @@ void Renderer::RecordCommandBuffer(VkCommandBuffer commandBuffer,
   VkRenderPassBeginInfo renderPassBeginInfo = {
       .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
       .renderPass = m_RenderPass,
-      .framebuffer = m_SwapChainFrameBuffers[imageIndex],
+      .framebuffer = m_SwapchainResources.SwapChainFrameBuffers[imageIndex],
   };
 
   renderPassBeginInfo.renderArea.offset = {0, 0};
   renderPassBeginInfo.renderArea.extent = m_pContext->GetSwapChainExtent();
 
-  VkClearValue clearColor = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
-  renderPassBeginInfo.clearValueCount = 1;
-  renderPassBeginInfo.pClearValues = &clearColor;
+  std::array<VkClearValue, 2> clearValues{};
+  clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
+  clearValues[1].depthStencil = {1.0f, 0};
+  renderPassBeginInfo.clearValueCount =
+      static_cast<uint32_t>(clearValues.size());
+  renderPassBeginInfo.pClearValues = clearValues.data();
 
   vkCmdBeginRenderPass(commandBuffer, &renderPassBeginInfo,
                        VK_SUBPASS_CONTENTS_INLINE);
@@ -664,11 +693,15 @@ void Renderer::RecordCommandBuffer(VkCommandBuffer commandBuffer,
 void Renderer::RecreateSwapChain() {
   vkDeviceWaitIdle(m_pContext->GetDevice());
 
-  for (auto framebuffer : m_SwapChainFrameBuffers) {
+  for (auto framebuffer : m_SwapchainResources.SwapChainFrameBuffers) {
     vkDestroyFramebuffer(m_pContext->GetDevice(), framebuffer, nullptr);
   }
 
+  vkDestroyImageView(m_pContext->GetDevice(),
+                     m_SwapchainResources.DepthImageView, nullptr);
+
   m_pContext->RecreateSwapChain();
+  CreateDepthResources();
   CreateFramebuffers();
 }
 

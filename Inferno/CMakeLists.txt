@@ -24,6 +24,8 @@ add_library(Inferno
         src/Inferno/Renderer/VulkanUtils.cpp
         src/Inferno/Renderer/Renderer.h
         src/Inferno/Renderer/Renderer.cpp
+        src/Inferno/Renderer/SwapchainResources.h
+        src/Inferno/Renderer/SwapchainResources.cpp
         src/Inferno/Renderer/RenderData.h
         src/Inferno/Renderer/Shader.h
         src/Inferno/Renderer/Shader.cpp

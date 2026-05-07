@@ -21,10 +21,12 @@ Image &Image::operator=(Image &&other) noexcept {
     m_Device = other.m_Device;
     m_Image = other.m_Image;
     m_Memory = other.m_Memory;
+    m_Format = other.m_Format;
 
     other.m_Device = VK_NULL_HANDLE;
     other.m_Image = VK_NULL_HANDLE;
     other.m_Memory = VK_NULL_HANDLE;
+    other.m_Format = {};
   }
   return *this;
 }
@@ -43,8 +45,7 @@ void Image::CleanUp() {
   m_Device = VK_NULL_HANDLE;
 }
 
-Image Image::Create(const RenderingContext *context,
-                         const ImageSpec &spec) {
+Image Image::Create(const RenderingContext *context, const ImageSpec &spec) {
   VkImage image;
   VkDeviceMemory memory;
 

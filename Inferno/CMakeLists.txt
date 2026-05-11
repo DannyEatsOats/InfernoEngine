@@ -3,7 +3,6 @@ project(Inferno LANGUAGES CXX)
 
 find_package(Vulkan REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
-find_package(glm CONFIG REQUIRED)
 
 add_library(Inferno
     SHARED
@@ -43,8 +42,7 @@ add_library(Inferno
         # CORE UTILS
         src/Inferno/Core/DeltaTime.h
         # VENDOR
-        vendor/stb_image/stb_image.h
-        vendor/stb_image/stb_image.cpp
+        vendor/stb_image_impl/stb_image.cpp
 )
 
 set_target_properties(Inferno PROPERTIES
@@ -52,18 +50,24 @@ set_target_properties(Inferno PROPERTIES
     CXX_STANDARD_REQUIRED ON
 )
 
+target_include_directories(Inferno
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/stb_image
+)
+
+add_subdirectory(vendor)
+
 target_link_libraries(Inferno
     PUBLIC
         Vulkan::Vulkan
         glfw
         glm::glm
-)
-
-target_include_directories(Inferno
-    PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
-        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/spdlog/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/stb_image
+        spdlog
+        tinyobjloader
+        tinygltf
+        VMA
+        imgui
 )
 
 target_compile_definitions(Inferno

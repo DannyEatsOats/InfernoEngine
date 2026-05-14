@@ -1,12 +1,14 @@
-#include <cstddef>
 #include <pch.h>
 
-#include "Inferno/Component.h"
-#include "Inferno/Log.h"
+#include <cstddef>
 
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/trigonometric.hpp>
+
+#include "Component.h"
+#include "Entity.h"
+#include "Inferno/Log.h"
 
 namespace Inferno {
 // -------- COMPONENT TYPE ID SYSTEM --------
@@ -89,7 +91,7 @@ glm::mat4 CameraComponent::GetProjectionMatrix() const {
 }
 
 // -------- MESH COMPONENT --------
-void MeshComponent::OnRender() {
+void MeshComponent::Render() {
   if (!m_Mesh || !m_Material) {
     INFERNO_LOG_WARN("Entity {} with MeshComponent has no Mesh or Material!",
                      GetEntity()->GetName());
@@ -103,8 +105,10 @@ void MeshComponent::OnRender() {
     return;
   }
 
+  /*
   m_Material->Bind();
   m_Material->SetUniform("modelMatrix", transform->GetTransformmatrix());
   m_Mesh->Render();
+  */
 }
 } // namespace Inferno

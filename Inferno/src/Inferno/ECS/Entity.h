@@ -6,7 +6,7 @@
 #include <utility>
 #include <vector>
 
-#include "Inferno/Component.h"
+#include "Component.h"
 #include "Inferno/Core/DeltaTime.h"
 
 namespace Inferno {

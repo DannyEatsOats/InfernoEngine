@@ -4,7 +4,6 @@
 #include "Inferno/Events/Event.h"
 #include "Inferno/Layer.h"
 #include "Inferno/LayerStack.h"
-#include "Inferno/Renderer/Renderer.h"
 #include "Inferno/Window.h"
 #include <memory>
 
@@ -31,8 +30,6 @@ private:
 
 private:
   std::unique_ptr<Window> m_Window;
-  std::shared_ptr<RenderingContext> m_Context;
-  std::unique_ptr<Renderer> m_Renderer;
   LayerStack m_LayerStack;
   bool m_Running = true;
   bool m_Minimized = false;

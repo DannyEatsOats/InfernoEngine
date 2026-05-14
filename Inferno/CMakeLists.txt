@@ -16,24 +16,10 @@ add_library(Inferno
         src/Inferno/LayerStack.cpp
         src/Inferno/Window.h
         src/Inferno/Window.cpp
+        src/Inferno/Component.h
+        src/Inferno/Entity.h
+        src/Inferno/Entity.cpp
         #Renderer
-        src/Inferno/Renderer/RenderingContext.h
-        src/Inferno/Renderer/RenderingContext.cpp
-        src/Inferno/Renderer/VulkanUtils.h
-        src/Inferno/Renderer/VulkanUtils.cpp
-        src/Inferno/Renderer/Renderer.h
-        src/Inferno/Renderer/Renderer.cpp
-        src/Inferno/Renderer/SwapchainResources.h
-        src/Inferno/Renderer/SwapchainResources.cpp
-        src/Inferno/Renderer/RenderData.h
-        src/Inferno/Renderer/Shader.h
-        src/Inferno/Renderer/Shader.cpp
-        src/Inferno/Renderer/Buffer.h
-        src/Inferno/Renderer/Buffer.cpp
-        src/Inferno/Renderer/Texture.h
-        src/Inferno/Renderer/Texture.cpp
-        src/Inferno/Renderer/Image.h
-        src/Inferno/Renderer/Image.cpp
         # EVENTS
         src/Inferno/Events/Event.h
         src/Inferno/Events/ApplicationEvent.h

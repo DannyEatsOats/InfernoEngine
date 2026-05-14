@@ -7,6 +7,7 @@
 namespace Inferno {
   enum class EventType {
     None = 0,
+    //Application
     WindowClose,
     WindowResize,
     WindowFocus,
@@ -15,6 +16,7 @@ namespace Inferno {
     AppTick,
     AppUpdate,
     AppRender,
+    //Input
     KeyPressed,
     KeyReleased,
     MouseButtonPressed,

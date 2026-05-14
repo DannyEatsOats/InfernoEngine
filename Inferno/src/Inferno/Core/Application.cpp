@@ -1,13 +1,8 @@
 #include "Application.h"
 
 #include "GLFW/glfw3.h"
-#include "Inferno/Core/DeltaTime.h"
-#include "Inferno/Events/ApplicationEvent.h"
-#include "Inferno/Events/Event.h"
-#include "Inferno/LayerStack.h"
-#include "Inferno/Window.h"
+#include "Inferno/Utils/DeltaTime.h"
 #include "Log.h"
-#include <memory>
 
 namespace Inferno {
 Application::Application() { StartUp(); }
@@ -48,7 +43,7 @@ void Application::Run() {
       }
 
       // TODO GUI Layer Stuff
-      //m_Renderer->DrawFrame();
+      // m_Renderer->DrawFrame();
     }
     // TODO Gui end
     // TODO window stuff
@@ -93,7 +88,7 @@ bool Application::OnWindowResize(WindowResizeEvent &event) {
     return false;
   }
   m_Minimized = false;
-  //m_Renderer->OnWindowResize(event.GetWidth(), event.GetHeight());
+  // m_Renderer->OnWindowResize(event.GetWidth(), event.GetHeight());
 
   return false;
 }

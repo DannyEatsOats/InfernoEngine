@@ -3,9 +3,9 @@
 
 // #include "imgui_impl_glfw.h"
 #define GLFW_INCLUDE_VULKAN
-#include "Events/ApplicationEvent.h"
-#include "Events/KeyEvent.h"
-#include "Events/MouseEvent.h"
+#include "Inferno/Events/ApplicationEvent.h"
+#include "Inferno/Events/KeyEvent.h"
+#include "Inferno/Events/MouseEvent.h"
 #include "Log.h"
 #include <GLFW/glfw3.h>
 

@@ -7,17 +7,18 @@ find_package(glfw3 CONFIG REQUIRED)
 add_library(Inferno
     SHARED
         # MAIN ENGINE COMPONENTS
-        src/Inferno/Application.h
-        src/Inferno/Application.cpp
-        src/Inferno/Log.h
-        src/Inferno/Log.cpp
-        src/Inferno/Layer.h
-        src/Inferno/LayerStack.h
-        src/Inferno/LayerStack.cpp
-        src/Inferno/Window.h
-        src/Inferno/Window.cpp
+        src/Inferno/Core/Application.h
+        src/Inferno/Core/Application.cpp
+        src/Inferno/Core/Log.h
+        src/Inferno/Core/Log.cpp
+        src/Inferno/Core/Layer.h
+        src/Inferno/Core/LayerStack.h
+        src/Inferno/Core/LayerStack.cpp
+        src/Inferno/Core/Window.h
+        src/Inferno/Core/Window.cpp
         # ENTITY COMPONENTS SYSTEMS
         src/Inferno/ECS/Component.h
+        src/Inferno/ECS/Component.cpp
         src/Inferno/ECS/Entity.h
         src/Inferno/ECS/Entity.cpp
         #Renderer
@@ -27,7 +28,7 @@ add_library(Inferno
         src/Inferno/Events/KeyEvent.h
         src/Inferno/Events/MouseEvent.h
         # CORE UTILS
-        src/Inferno/Core/DeltaTime.h
+        src/Inferno/Utils/DeltaTime.h
         # VENDOR
         vendor/stb_image_impl/stb_image.cpp
 )

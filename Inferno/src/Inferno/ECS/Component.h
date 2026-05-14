@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Inferno/Core/DeltaTime.h"
+#include "Inferno/Utils/DeltaTime.h"
 #include "glm/ext/matrix_float4x4.hpp"
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>

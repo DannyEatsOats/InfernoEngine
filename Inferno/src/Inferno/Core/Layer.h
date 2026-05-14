@@ -2,7 +2,7 @@
 
 #include <pch.h>
 
-#include "Inferno/Core/DeltaTime.h"
+#include "Inferno/Utils/DeltaTime.h"
 #include "Inferno/Events/Event.h"
 
 namespace Inferno {

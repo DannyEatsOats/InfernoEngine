@@ -1,7 +1,7 @@
 #pragma once
-#include "Events/Event.h"
+
+#include "Inferno/Events/Event.h"
 #include <memory>
-#include <pch.h>
 
 namespace Inferno {
 struct WindowProperties {

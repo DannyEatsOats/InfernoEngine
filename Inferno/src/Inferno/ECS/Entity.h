@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "Component.h"
-#include "Inferno/Core/DeltaTime.h"
+#include "Inferno/Utils/DeltaTime.h"
 
 namespace Inferno {
 class Entity {

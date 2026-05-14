@@ -1,9 +1,3 @@
-#include "Inferno/Application.h"
-#include "Inferno/Layer.h"
-#include "Inferno/Log.h"
-#include <iostream>
-#include <memory>
-
 #include <Inferno.h>
 
 namespace Inferno {

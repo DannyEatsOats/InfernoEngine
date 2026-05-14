@@ -8,7 +8,7 @@
 
 #include "Component.h"
 #include "Entity.h"
-#include "Inferno/Log.h"
+#include "Inferno/Core/Log.h"
 
 namespace Inferno {
 // -------- COMPONENT TYPE ID SYSTEM --------

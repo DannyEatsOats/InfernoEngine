@@ -1,6 +1,7 @@
 #pragma once
 
-#include "Inferno/Layer.h"
+#include "Layer.h"
+
 namespace Inferno {
 class LayerStack {
 public:

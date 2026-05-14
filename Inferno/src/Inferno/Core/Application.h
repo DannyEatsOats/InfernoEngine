@@ -2,9 +2,9 @@
 
 #include "Inferno/Events/ApplicationEvent.h"
 #include "Inferno/Events/Event.h"
-#include "Inferno/Layer.h"
-#include "Inferno/LayerStack.h"
-#include "Inferno/Window.h"
+#include "Layer.h"
+#include "LayerStack.h"
+#include "Window.h"
 #include <memory>
 
 namespace Inferno {

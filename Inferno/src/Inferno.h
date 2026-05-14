@@ -1,4 +1,5 @@
 #pragma once
 
-#include "Inferno/Application.h"
-#include "Inferno/Log.h"
+#include "Inferno/Core/Application.h"
+#include "Inferno/Core/Log.h"
+#include "Inferno/Core/Layer.h"

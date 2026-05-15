@@ -5,6 +5,7 @@
 #include <type_traits>
 #include <typeindex>
 #include <unordered_map>
+#include <utility>
 
 #include "Inferno/Resource/Resource.h"
 
@@ -14,7 +15,8 @@ template <typename T> class ResourceHandle;
 class ResourceManager {
 public:
   // Loading
-  template <typename T> ResourceHandle<T> Load(const std::string &resourceID) {
+  template <typename T, typename... Args>
+  ResourceHandle<T> Load(const std::string &resourceID, Args &&...args) {
     static_assert(std::is_base_of<Resource, T>::value,
                   "ResourceManager: T must derive from Resource");
 
@@ -30,7 +32,8 @@ public:
     }
 
     // Create new Resource and try loading
-    auto resource = std::make_shared<T>(resourceID);
+    auto resource =
+        std::make_shared<T>(resourceID, std::forward<Args>(args)...);
     if (!resource->Load()) {
       // Loading failed - return invalid handle
       return ResourceHandle<T>();

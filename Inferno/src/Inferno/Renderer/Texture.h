@@ -3,13 +3,14 @@
 #include <cstdint>
 #include <vulkan/vulkan_core.h>
 
+#include "Inferno/Renderer/DeviceContext.h"
 #include "Inferno/Resource/Resource.h"
 
 namespace Inferno {
 class Texture : public Resource {
 public:
-  explicit Texture(const std::string &id, VkDevice device)
-      : Resource(id), m_Device(device) {}
+  explicit Texture(const std::string &id, const DeviceContext *context)
+      : Resource(id), m_Context(context) {}
   ~Texture() = default;
 
   Texture(Texture &) = delete;
@@ -29,14 +30,13 @@ protected:
 private:
   void CleanUp();
 
-  unsigned char *LoadImageData(const std::string &filePath, int *width,
-                               int *height, int *channels);
+  void LoadFromKTX2(const std::string &filePath);
   void FreeImage(unsigned char *data);
   void CreateVulkanImage(unsigned char *data, uint32_t width, uint32_t height,
                          uint32_t channels);
 
 private:
-  VkDevice m_Device = VK_NULL_HANDLE;
+  const DeviceContext *m_Context = nullptr;
 
   VkImage m_Image = VK_NULL_HANDLE;
   VkDeviceMemory m_Memory = VK_NULL_HANDLE;
@@ -46,6 +46,7 @@ private:
 
   uint32_t m_Width = 0;
   uint32_t m_Height = 0;
-  uint32_t m_Channels = 0;
+  uint32_t m_MipLevels = 0;
+  VkFormat m_Format = VK_FORMAT_UNDEFINED;
 };
 } // namespace Inferno

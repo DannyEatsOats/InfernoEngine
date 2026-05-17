@@ -55,6 +55,7 @@ target_link_libraries(Inferno
         tinyobjloader
         tinygltf
         VMA
+        ktx
         imgui
 )
 

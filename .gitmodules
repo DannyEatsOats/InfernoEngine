@@ -22,3 +22,6 @@
 [submodule "Inferno/vendor/imgui"]
 	path = Inferno/vendor/imgui
 	url = https://github.com/ocornut/imgui.git
+[submodule "Inferno/vendor/ktx"]
+	path = Inferno/vendor/ktx
+	url = https://github.com/KhronosGroup/KTX-Software.git

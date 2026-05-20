@@ -1,31 +1,23 @@
+#include <cstring>
 #include <ktx.h>
+#include <ktxvulkan.h>
 #include <pch.h>
+#include <stb_image.h>
 #include <stdexcept>
 #include <vulkan/vulkan_core.h>
 
+#include "Inferno/Renderer/Buffer.h"
+#include "Inferno/Renderer/Image.h"
+#include "Inferno/Renderer/VulkanUtils.h"
 #include "Inferno/Resource/Resource.h"
 #include "Texture.h"
-#include "ktxvulkan.h"
 
 namespace Inferno {
 Texture::Texture(Texture &&other)
     : Resource(std::move(other)), m_Context(other.m_Context),
-      m_Image(other.m_Image), m_Memory(other.m_Memory),
-      m_Offset(other.m_Offset), m_ImageView(other.m_ImageView),
-      m_Sampler(other.m_Sampler), m_Width(other.m_Width),
-      m_Height(other.m_Height), m_MipLevels(other.m_MipLevels),
-      m_Format(other.m_Format) {
+      m_Image(std::move(other.m_Image)), m_Sampler(other.m_Sampler) {
   other.m_Context = VK_NULL_HANDLE;
-
-  other.m_Image = VK_NULL_HANDLE;
-  other.m_Memory = VK_NULL_HANDLE;
-  other.m_Offset = 0;
-  other.m_ImageView = VK_NULL_HANDLE;
   other.m_Sampler = VK_NULL_HANDLE;
-  other.m_Width = 0;
-  other.m_Height = 0;
-  other.m_MipLevels = 0;
-  other.m_Format = VK_FORMAT_UNDEFINED;
 }
 
 Texture &Texture::operator=(Texture &&other) {
@@ -36,35 +28,17 @@ Texture &Texture::operator=(Texture &&other) {
   CleanUp();
 
   m_Context = other.m_Context;
-
-  m_Image = other.m_Image;
-  m_Memory = other.m_Memory;
-  m_Offset = other.m_Offset;
-  m_ImageView = other.m_ImageView;
+  m_Image = std::move(other.m_Image);
   m_Sampler = other.m_Sampler;
 
-  m_Width = other.m_Width;
-  m_Height = other.m_Height;
-  m_MipLevels = other.m_MipLevels;
-  m_Format = other.m_Format;
-
-  other.m_Context = VK_NULL_HANDLE;
-
-  other.m_Image = VK_NULL_HANDLE;
-  other.m_Memory = VK_NULL_HANDLE;
-  other.m_Offset = 0;
-  other.m_ImageView = VK_NULL_HANDLE;
+  other.m_Context = nullptr;
   other.m_Sampler = VK_NULL_HANDLE;
-  other.m_Width = 0;
-  other.m_Height = 0;
-  other.m_MipLevels = 0;
-  other.m_Format = VK_FORMAT_UNDEFINED;
 
   return *this;
 }
 
 bool Texture::DoLoad() {
-  // std::string filePath = "textures/" + GetID() + ".ktx";
+  // TODO: Create canonical path
   std::string filePath = "textures/" + GetID() + ".ktx";
 
   LoadFromKTX2(filePath);
@@ -84,10 +58,12 @@ void Texture::LoadFromKTX2(const std::string &filePath) {
   if (result != KTX_SUCCESS || !kTexture)
     throw std::runtime_error("Failed to load KTX2: " + filePath);
 
+  /*
   m_Width = kTexture->baseWidth;
   m_Height = kTexture->baseHeight;
   m_MipLevels = kTexture->numLevels;
   m_Format = static_cast<VkFormat>(kTexture->vkFormat);
+  */
 
   // ---- Vulkan upload (modern KTX path) ----
   ktxVulkanDeviceInfo deviceInfo;
@@ -107,45 +83,102 @@ void Texture::LoadFromKTX2(const std::string &filePath) {
     throw std::runtime_error("KTX Vulkan upload failed: " + filePath);
   }
 
-  VkImageViewCreateInfo viewInfo{};
-  viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-  viewInfo.image = texture.image;
-  viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-  viewInfo.format = static_cast<VkFormat>(kTexture->vkFormat);
-
-  viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-  viewInfo.subresourceRange.baseMipLevel = 0;
-  viewInfo.subresourceRange.levelCount = kTexture->numLevels;
-  viewInfo.subresourceRange.baseArrayLayer = 0;
-  viewInfo.subresourceRange.layerCount = 1;
-
-  VkImageView imageView;
-  vkCreateImageView(m_Context->Device, &viewInfo, nullptr, &imageView);
-
   // Store GPU objects
+  /*
   m_Image = texture.image;
   m_Memory = texture.deviceMemory;
   m_ImageView = imageView;
+  */
 
   // Cleanup CPU KTX immediately (IMPORTANT)
   ktxTexture_Destroy(reinterpret_cast<ktxTexture *>(kTexture));
 }
 
-bool Texture::DoUnLoad() {
-  if (!IsLoaded()) {
-    return false;
+void Texture::LoadFromFile(const std::string &filePath) {
+  int width, height, channels;
+  stbi_uc *pixels =
+      stbi_load(filePath.c_str(), &width, &height, &channels, STBI_rgb_alpha);
+
+  VkDeviceSize imageSize =
+      static_cast<uint32_t>(width) * static_cast<uint32_t>(height) * 4;
+
+  if (!pixels) {
+    throw std::runtime_error("Failed to load Texture from file: " + filePath);
   }
 
+  Buffer stagingBuffer(m_Context, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                           VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+  void *data;
+  vkMapMemory(m_Context->Device, stagingBuffer.GetMemory(), 0,
+              stagingBuffer.GetSize(), 0, &data);
+  memcpy(data, pixels, static_cast<size_t>(imageSize));
+  vkUnmapMemory(m_Context->Device, stagingBuffer.GetMemory());
+
+  stbi_image_free(pixels);
+
+  // Create Image
+  ImageSpec spec{};
+  spec.Width = static_cast<uint32_t>(width);
+  spec.Height = static_cast<uint32_t>(height);
+  spec.Format = VK_FORMAT_R8G8B8A8_SRGB;
+  spec.Tiling = VK_IMAGE_TILING_OPTIMAL;
+  spec.Usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+  spec.Properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+  spec.Aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+
+  m_Image = Image(m_Context, spec);
+
+  VulkanUtils::TransitionImageLayout(
+      m_Context, m_Image.GetImage(), m_Image.GetFormat(),
+      VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+  VulkanUtils::CopyBufferToImage(m_Context, stagingBuffer.Get(),
+                                 m_Image.GetImage(), m_Image.GetWidth(),
+                                 m_Image.GetHeight());
+  VulkanUtils::TransitionImageLayout(m_Context, m_Image.GetImage(),
+                                     m_Image.GetFormat(),
+                                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+  // Create Sampler
+  VkSamplerCreateInfo samplerInfo{};
+  samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+  samplerInfo.magFilter = VK_FILTER_LINEAR;
+  samplerInfo.minFilter = VK_FILTER_LINEAR;
+  samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+  samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+  samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+  samplerInfo.anisotropyEnable = VK_TRUE;
+  samplerInfo.maxAnisotropy =
+      VulkanUtils::GetPhysicalDeviceProps(m_Context->PhysicalDevice)
+          .limits.maxSamplerAnisotropy;
+  samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+  samplerInfo.unnormalizedCoordinates = VK_FALSE;
+  samplerInfo.compareEnable = VK_FALSE;
+  samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+  samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+  samplerInfo.mipLodBias = 0.0f;
+  samplerInfo.minLod = 0.0f;
+  samplerInfo.maxLod = static_cast<float>(m_Image.GetMipLevels());
+
+  if (vkCreateSampler(m_Context->Device, &samplerInfo, nullptr, &m_Sampler) !=
+      VK_SUCCESS) {
+    throw std::runtime_error("Failed to Create Sampler");
+  }
+}
+
+bool Texture::DoUnLoad() {
   CleanUp();
 
   return true;
 }
 
 void Texture::CleanUp() {
-  vkDestroySampler(m_Context->Device, m_Sampler, nullptr);
-  vkDestroyImageView(m_Context->Device, m_ImageView, nullptr);
-  vkDestroyImage(m_Context->Device, m_Image, nullptr);
-  vkFreeMemory(m_Context->Device, m_Memory, nullptr);
+  if (m_Sampler != VK_NULL_HANDLE) {
+    vkDestroySampler(m_Context->Device, m_Sampler, nullptr);
+    m_Sampler = VK_NULL_HANDLE;
+  }
 }
 
 } // namespace Inferno

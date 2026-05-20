@@ -12,7 +12,7 @@ class Texture : public Resource {
 public:
   explicit Texture(const std::string &id, const DeviceContext *context)
       : Resource(id), m_Context(context) {}
-  ~Texture() { DoUnLoad(); };
+  ~Texture() = default;
 
   Texture(Texture &) = delete;
   Texture &operator=(Texture &) = delete;

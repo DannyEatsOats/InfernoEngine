@@ -27,7 +27,11 @@ public:
   explicit Mesh(const std::string &id) : Resource(id) {}
   ~Mesh() = default;
 
-  //TODO: MOVE STUFF
+  Mesh(const Mesh &) = delete;
+  Mesh &operator=(const Mesh &) = delete;
+
+  Mesh(Mesh &&other);
+  Mesh &operator=(Mesh &&other);
 
   VertexBuffer<MeshVertex> *GetVertexBuffer() const {
     return m_VertexBuffer.get();
@@ -45,6 +49,11 @@ private:
   bool LoadMeshData(std::string &filePath,
                     std::vector<MeshVertex> &vertexBuffer,
                     std::vector<uint32_t> indexBuffer);
+
+  void CleanUp() {
+    m_IndexBuffer.reset();
+    m_VertexBuffer.reset();
+  }
 
 private:
   const DeviceContext *m_Context;

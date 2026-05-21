@@ -14,8 +14,8 @@ public:
       : Resource(id), m_Context(context) {}
   ~Texture() = default;
 
-  Texture(Texture &) = delete;
-  Texture &operator=(Texture &) = delete;
+  Texture(const Texture &) = delete;
+  Texture &operator=(const Texture &) = delete;
 
   Texture(Texture &&other);
   Texture &operator=(Texture &&other);
@@ -33,9 +33,7 @@ private:
 
   void LoadFromKTX2(const std::string &filePath);
   void LoadFromFile(const std::string &filePath);
-  void FreeImage(unsigned char *data);
-  void CreateVulkanImage(unsigned char *data, uint32_t width, uint32_t height,
-                         uint32_t channels);
+  void CreateVulkanImage(VkBuffer srcBuffer, uint32_t width, uint32_t height);
 
 private:
   const DeviceContext *m_Context = nullptr;

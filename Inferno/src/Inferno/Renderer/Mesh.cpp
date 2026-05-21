@@ -1,8 +1,33 @@
 #include <pch.h>
 
+#include "Inferno/Resource/Resource.h"
 #include "Mesh.h"
 
 namespace Inferno {
+
+Mesh::Mesh(Mesh &&other)
+    : Resource(std::move(other)), m_Context(other.m_Context),
+      m_VertexBuffer(std::move(other.m_VertexBuffer)),
+      m_IndexBuffer(std::move(other.m_IndexBuffer)),
+      m_VertexCount(other.m_VertexCount), m_IndexCount(other.m_IndexCount) {
+  other.m_Context = nullptr;
+  other.m_VertexCount = 0;
+  other.m_IndexCount = 0;
+}
+
+Mesh &Mesh::operator=(Mesh &&other) {
+  if (this == &other) {
+    return *this;
+  }
+
+  CleanUp();
+
+  m_Context = other.m_Context;
+  m_VertexBuffer = std::move(other.m_VertexBuffer);
+  m_IndexBuffer = std::move(other.m_IndexBuffer);
+
+  return *this;
+}
 
 bool Mesh::DoLoad() {
   // TODO: Create canonical path
@@ -32,8 +57,7 @@ bool Mesh::DoLoad() {
 
 bool Mesh::DoUnLoad() {
   if (IsLoaded()) {
-    m_IndexBuffer.reset();
-    m_VertexBuffer.reset();
+    CleanUp();
   }
 
   return true;

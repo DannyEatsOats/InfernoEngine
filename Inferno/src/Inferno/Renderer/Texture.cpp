@@ -41,7 +41,9 @@ bool Texture::DoLoad() {
   // TODO: Create canonical path
   std::string filePath = "textures/" + GetID() + ".ktx";
 
-  LoadFromKTX2(filePath);
+  LoadFromFile(filePath);
+
+  // LoadFromKTX2(filePath);
 
   // CreateVulkanImage(data, m_Width, m_Height, m_Channels);
   // FreeImage(data);
@@ -49,6 +51,7 @@ bool Texture::DoLoad() {
   return true;
 }
 
+/*
 void Texture::LoadFromKTX2(const std::string &filePath) {
   ktxTexture2 *kTexture = nullptr;
 
@@ -58,12 +61,10 @@ void Texture::LoadFromKTX2(const std::string &filePath) {
   if (result != KTX_SUCCESS || !kTexture)
     throw std::runtime_error("Failed to load KTX2: " + filePath);
 
-  /*
   m_Width = kTexture->baseWidth;
   m_Height = kTexture->baseHeight;
   m_MipLevels = kTexture->numLevels;
   m_Format = static_cast<VkFormat>(kTexture->vkFormat);
-  */
 
   // ---- Vulkan upload (modern KTX path) ----
   ktxVulkanDeviceInfo deviceInfo;
@@ -84,15 +85,14 @@ void Texture::LoadFromKTX2(const std::string &filePath) {
   }
 
   // Store GPU objects
-  /*
   m_Image = texture.image;
   m_Memory = texture.deviceMemory;
   m_ImageView = imageView;
-  */
 
   // Cleanup CPU KTX immediately (IMPORTANT)
   ktxTexture_Destroy(reinterpret_cast<ktxTexture *>(kTexture));
 }
+*/
 
 void Texture::LoadFromFile(const std::string &filePath) {
   int width, height, channels;
@@ -117,8 +117,13 @@ void Texture::LoadFromFile(const std::string &filePath) {
   vkUnmapMemory(m_Context->Device, stagingBuffer.GetMemory());
 
   stbi_image_free(pixels);
-
   // Create Image
+  CreateVulkanImage(stagingBuffer.Get(), static_cast<uint32_t>(width),
+                    static_cast<uint32_t>(height));
+}
+
+void Texture::CreateVulkanImage(VkBuffer srcBuffer, uint32_t width,
+                                uint32_t height) {
   ImageSpec spec{};
   spec.Width = static_cast<uint32_t>(width);
   spec.Height = static_cast<uint32_t>(height);
@@ -133,9 +138,8 @@ void Texture::LoadFromFile(const std::string &filePath) {
   VulkanUtils::TransitionImageLayout(
       m_Context, m_Image.GetImage(), m_Image.GetFormat(),
       VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-  VulkanUtils::CopyBufferToImage(m_Context, stagingBuffer.Get(),
-                                 m_Image.GetImage(), m_Image.GetWidth(),
-                                 m_Image.GetHeight());
+  VulkanUtils::CopyBufferToImage(m_Context, srcBuffer, m_Image.GetImage(),
+                                 m_Image.GetWidth(), m_Image.GetHeight());
   VulkanUtils::TransitionImageLayout(m_Context, m_Image.GetImage(),
                                      m_Image.GetFormat(),
                                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,

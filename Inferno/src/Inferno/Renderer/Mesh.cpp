@@ -34,7 +34,7 @@ bool Mesh::DoLoad() {
   std::string filePath = "models/" + GetID() + ".gltf";
 
   std::vector<MeshVertex> vertices;
-  std::vector<uint32_t> indices;
+  std::vector<uint16_t> indices;
   if (!LoadMeshData(filePath, vertices, indices)) {
     return false;
   }

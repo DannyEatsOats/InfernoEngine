@@ -29,6 +29,8 @@ add_library(Inferno
         src/Inferno/Renderer/Image.cpp
         src/Inferno/Renderer/Mesh.h
         src/Inferno/Renderer/Mesh.cpp
+        src/Inferno/Renderer/Shader.h
+        src/Inferno/Renderer/Shader.cpp
         src/Inferno/Renderer/Texture.h
         src/Inferno/Renderer/Texture.cpp
         src/Inferno/Renderer/VulkanUtils.h

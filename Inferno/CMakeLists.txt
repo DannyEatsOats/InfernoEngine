@@ -21,7 +21,18 @@ add_library(Inferno
         src/Inferno/ECS/Component.cpp
         src/Inferno/ECS/Entity.h
         src/Inferno/ECS/Entity.cpp
-        #Renderer
+        # RENDERER
+        src/Inferno/Renderer/Buffer.h
+        src/Inferno/Renderer/Buffer.cpp
+        src/Inferno/Renderer/DeviceContext.h
+        src/Inferno/Renderer/Image.h
+        src/Inferno/Renderer/Image.cpp
+        src/Inferno/Renderer/Mesh.h
+        src/Inferno/Renderer/Mesh.cpp
+        src/Inferno/Renderer/Texture.h
+        src/Inferno/Renderer/Texture.cpp
+        src/Inferno/Renderer/VulkanUtils.h
+        src/Inferno/Renderer/VulkanUtils.cpp
         # EVENTS
         src/Inferno/Events/Event.h
         src/Inferno/Events/ApplicationEvent.h

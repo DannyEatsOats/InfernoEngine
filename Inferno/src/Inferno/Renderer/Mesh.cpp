@@ -63,4 +63,10 @@ bool Mesh::DoUnLoad() {
 
   return true;
 }
+
+bool Mesh::LoadMeshData(std::string &filePath,
+                        std::vector<MeshVertex> &vertexBuffer,
+                        std::vector<uint16_t> indexBuffer) {
+  return true;
+}
 } // namespace Inferno

@@ -22,13 +22,19 @@ add_library(Inferno
         src/Inferno/ECS/Entity.h
         src/Inferno/ECS/Entity.cpp
         # RENDERER
+        src/Inferno/Renderer/BoundingBox.h
         src/Inferno/Renderer/Buffer.h
         src/Inferno/Renderer/Buffer.cpp
+        src/Inferno/Renderer/Camera.h
+        src/Inferno/Renderer/CullingSystem.h
+        src/Inferno/Renderer/CullingSystem.cpp
         src/Inferno/Renderer/DeviceContext.h
         src/Inferno/Renderer/Image.h
         src/Inferno/Renderer/Image.cpp
         src/Inferno/Renderer/Mesh.h
         src/Inferno/Renderer/Mesh.cpp
+        src/Inferno/Renderer/RenderGraph.h
+        src/Inferno/Renderer/RenderGraph.cpp
         src/Inferno/Renderer/Shader.h
         src/Inferno/Renderer/Shader.cpp
         src/Inferno/Renderer/Texture.h

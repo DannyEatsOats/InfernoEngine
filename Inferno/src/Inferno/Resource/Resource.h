@@ -10,7 +10,6 @@ public:
 
   Resource(Resource &&other)
       : m_ResourceID(std::move(other.m_ResourceID)), m_Loaded(other.m_Loaded) {
-    other.m_ResourceID = "";
     other.m_Loaded = false;
   }
 
@@ -18,7 +17,7 @@ public:
     if (this == &other) {
       return *this;
     }
-    m_ResourceID = other.m_ResourceID;
+    m_ResourceID = std::move(other.m_ResourceID);
     m_Loaded = other.m_Loaded;
 
     other.m_ResourceID = "";

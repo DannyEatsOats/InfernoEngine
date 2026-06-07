@@ -22,6 +22,7 @@ Mesh &Mesh::operator=(Mesh &&other) {
 
   CleanUp();
 
+  Resource::operator=(std::move(other));
   m_Context = other.m_Context;
   m_VertexBuffer = std::move(other.m_VertexBuffer);
   m_IndexBuffer = std::move(other.m_IndexBuffer);

@@ -4,6 +4,7 @@
 #include <pch.h>
 #include <stb_image.h>
 #include <stdexcept>
+#include <utility>
 #include <vulkan/vulkan_core.h>
 
 #include "Inferno/Renderer/Buffer.h"
@@ -16,7 +17,7 @@ namespace Inferno {
 Texture::Texture(Texture &&other)
     : Resource(std::move(other)), m_Context(other.m_Context),
       m_Image(std::move(other.m_Image)), m_Sampler(other.m_Sampler) {
-  other.m_Context = VK_NULL_HANDLE;
+  other.m_Context = nullptr;
   other.m_Sampler = VK_NULL_HANDLE;
 }
 
@@ -25,8 +26,10 @@ Texture &Texture::operator=(Texture &&other) {
     return *this;
   }
 
+
   CleanUp();
 
+  Resource::operator=(std::move(other));
   m_Context = other.m_Context;
   m_Image = std::move(other.m_Image);
   m_Sampler = other.m_Sampler;

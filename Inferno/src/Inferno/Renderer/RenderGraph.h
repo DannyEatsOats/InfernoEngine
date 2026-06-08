@@ -9,27 +9,7 @@
 namespace Inferno {
 class RenderGraph {
 public:
-  explicit RenderGraph(const DeviceContext *context) : m_Context(context) {}
-
-  RenderGraph(const RenderGraph &) = delete;
-  RenderGraph(RenderGraph &&) = delete;
-
-  // TODO: Implement these
-  RenderGraph &operator=(const RenderGraph &);
-  RenderGraph &operator=(RenderGraph &&);
-
-  void AddResource(const std::string &name, VkFormat format, VkExtent2D extent,
-                   VkImageUsageFlags usage, VkImageLayout initialLayout,
-                   VkImageLayout finalLayout);
-
-  void AddPass(const std::string &name, const std::vector<std::string> &inputs,
-               const std::vector<std::string> &outputs,
-               std::function<void(VkCommandBuffer &)> executeFunc);
-
-  void Compile();
-
-private:
-  // Internal structs
+  // RenderGraph Specific Structs
   struct Resource {
     std::string Name;
     VkFormat Format;
@@ -48,6 +28,32 @@ private:
     std::function<void(VkCommandBuffer &)> ExecuteFunc;
   };
   //=============================================
+
+public:
+  explicit RenderGraph(const DeviceContext *context) : m_Context(context) {}
+
+  RenderGraph(const RenderGraph &) = delete;
+  RenderGraph(RenderGraph &&) = delete;
+
+  RenderGraph &operator=(const RenderGraph &other) = delete;
+  RenderGraph &operator=(RenderGraph &&other) = delete;
+
+  const Resource *GetResource(std::string &name) const {
+    auto it = m_Resources.find(name);
+    return it != m_Resources.end() ? &it->second : nullptr;
+  }
+
+  void AddResource(const std::string &name, VkFormat format, VkExtent2D extent,
+                   VkImageUsageFlags usage, VkImageLayout initialLayout,
+                   VkImageLayout finalLayout);
+
+  void AddPass(const std::string &name, const std::vector<std::string> &inputs,
+               const std::vector<std::string> &outputs,
+               std::function<void(VkCommandBuffer &)> executeFunc);
+
+  void Compile();
+  void Execute(VkCommandBuffer commandBuffer, VkQueue queue);
+
 private:
   const DeviceContext *m_Context = nullptr;
 

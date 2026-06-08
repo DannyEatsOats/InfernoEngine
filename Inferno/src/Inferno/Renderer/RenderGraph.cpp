@@ -1,4 +1,5 @@
 #include <pch.h>
+#include <ranges>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -8,6 +9,22 @@
 #include "RenderGraph.h"
 
 namespace Inferno {
+RenderGraph::~RenderGraph() {
+  if (!m_CommandBuffers.empty()) {
+    vkFreeCommandBuffers(m_Context->Device, m_Context->CommandPool,
+                         static_cast<uint32_t>(m_CommandBuffers.size()),
+                         m_CommandBuffers.data());
+  }
+
+  for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+    vkDestroySemaphore(m_Context->Device, m_ImagesAvailableSemaphores[i],
+                       nullptr);
+    vkDestroySemaphore(m_Context->Device, m_RenderFinishedSemaphores[i],
+                       nullptr);
+    vkDestroyFence(m_Context->Device, m_InFlightFences[i], nullptr);
+  }
+}
+
 void RenderGraph::AddResource(const std::string &name, VkFormat format,
                               VkExtent2D extent, VkImageUsageFlags usage,
                               VkImageLayout initialLayout,
@@ -19,6 +36,24 @@ void RenderGraph::AddResource(const std::string &name, VkFormat format,
   resource.Usage = usage;
   resource.InitialLayout = initialLayout;
   resource.FinalLayout = finalLayout;
+  resource.IsExternal = false;
+
+  m_Resources.emplace(name, std::move(resource));
+}
+
+void RenderGraph::ImportSwapchainResources(
+    const std::string &name, const std::vector<VkImage> &swapchainImages,
+    VkFormat format, VkExtent2D extent, VkImageUsageFlags usage,
+    VkImageLayout finalLayout) {
+  Resource resource{};
+  resource.Name = name;
+  resource.Format = format;
+  resource.Extent = extent;
+  resource.Usage = usage;
+  resource.InitialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  resource.FinalLayout = finalLayout;
+  resource.ExternalImages = swapchainImages;
+  resource.IsExternal = true;
 
   m_Resources.emplace(name, std::move(resource));
 }
@@ -37,10 +72,9 @@ void RenderGraph::AddPass(const std::string &name,
 }
 
 void RenderGraph::Compile() {
+  // Topological Sorting ==================================================
   m_ExecutionOrder.clear();
   std::vector<std::vector<size_t>> dependencies(m_Passes.size());
-  std::vector<std::vector<size_t>> dependents(m_Passes.size());
-
   std::unordered_map<std::string, size_t> resourceWriters;
 
   for (size_t i = 0; i < m_Passes.size(); ++i) {
@@ -50,7 +84,6 @@ void RenderGraph::Compile() {
       auto it = resourceWriters.find(input);
       if (it != resourceWriters.end()) {
         dependencies[i].push_back(it->second);
-        dependents[it->second].push_back(i);
       }
     }
 
@@ -64,7 +97,7 @@ void RenderGraph::Compile() {
 
   std::function<void(size_t)> visit = [&](size_t node) {
     if (inStack[node]) {
-      throw std::runtime_error("Cycle detected in RenderGrpah!");
+      throw std::runtime_error("Cycle detected in RenderGraph!");
     }
 
     if (visited[node]) {
@@ -87,18 +120,48 @@ void RenderGraph::Compile() {
       visit(i);
     }
   }
+  // ==============================================================
 
-  // creating sync objects
-  for (size_t i = 0; i < m_Passes.size(); ++i) {
-    for (auto dependency : dependencies[i]) {
-      VkSemaphore semaphore{};
-      vkCreateSemaphore(m_Context->Device, {}, nullptr, &semaphore);
-      m_Semaphores.emplace_back(semaphore);
-      m_SemaphoreSignalWaitPairs.emplace_back(dependency, i);
+  m_CommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+  m_ImagesAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+  m_RenderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+  m_InFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+
+  VkCommandBufferAllocateInfo allocInfo{};
+  allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+  allocInfo.commandPool = m_Context->CommandPool;
+  allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+  allocInfo.commandBufferCount = MAX_FRAMES_IN_FLIGHT;
+
+  if (vkAllocateCommandBuffers(m_Context->Device, &allocInfo,
+                               m_CommandBuffers.data()) != VK_SUCCESS) {
+    throw std::runtime_error("Failed to allocate RenderGraph command buffers");
+  }
+
+  VkSemaphoreCreateInfo semaphoreInfo{};
+  semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+  VkFenceCreateInfo fenceInfo{};
+  fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+  fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+  for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+    if (vkCreateSemaphore(m_Context->Device, &semaphoreInfo, nullptr,
+                          &m_ImagesAvailableSemaphores[i]) != VK_SUCCESS ||
+        vkCreateSemaphore(m_Context->Device, &semaphoreInfo, nullptr,
+                          &m_RenderFinishedSemaphores[i]) != VK_SUCCESS ||
+        vkCreateFence(m_Context->Device, &fenceInfo, nullptr,
+                      &m_InFlightFences[i]) != VK_SUCCESS) {
+      throw std::runtime_error(
+          "Failed to create RenderGraph synchronization objects!");
     }
   }
 
   for (auto &[name, resource] : m_Resources) {
+    if (resource.IsExternal) {
+      continue;
+    }
+
     ImageSpec imageSpec{};
     imageSpec.Format = resource.Format;
     imageSpec.Width = resource.Extent.width;
@@ -106,112 +169,205 @@ void RenderGraph::Compile() {
     imageSpec.Tiling = VK_IMAGE_TILING_OPTIMAL;
     imageSpec.Usage = resource.Usage;
 
-    resource.Image = Image(m_Context, imageSpec);
+    resource.FrameImages.emplace_back(m_Context, imageSpec);
   }
 }
 
-void RenderGraph::Execute(VkCommandBuffer commandBuffer, VkQueue queue) {
-  std::vector<VkCommandBuffer> cmdBuffer;
-  std::vector<VkSemaphore> waitSemaphores;
-  std::vector<VkPipelineStageFlags> waitStages;
-  std::vector<VkSemaphore> signalSemaphores;
+void RenderGraph::Execute(uint32_t imageIndex) {
+  VkCommandBuffer commandBuffer = m_CommandBuffers[m_CurrentFrame];
+
+  std::unordered_map<std::string, VkImageLayout> currentLayouts;
+  for (const auto &[name, resource] : m_Resources) {
+    currentLayouts[name] = resource.InitialLayout;
+  }
+
+  VkCommandBufferBeginInfo beginInfo{};
+  beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+  if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
+    throw std::runtime_error("Failed to begin RenderGraph command buffer!");
+  }
 
   for (auto passIdx : m_ExecutionOrder) {
     const auto &pass = m_Passes[passIdx];
 
-    waitSemaphores.clear();
-    waitStages.clear();
-
-    for (size_t i = 0; i < m_SemaphoreSignalWaitPairs.size(); ++i) {
-      if (m_SemaphoreSignalWaitPairs[i].second == passIdx) {
-        waitSemaphores.push_back(m_Semaphores[i]);
-        waitStages.push_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
-      }
-    }
-
-    signalSemaphores.clear();
-    for (size_t i = 0; i < m_SemaphoreSignalWaitPairs.size(); ++i) {
-      if (m_SemaphoreSignalWaitPairs[i].first == passIdx) {
-        signalSemaphores.push_back(m_Semaphores[i]);
-      }
-    }
-
-    vkBeginCommandBuffer(commandBuffer, {});
-
     for (const auto &input : pass.Inputs) {
       auto &resource = m_Resources[input];
+      VkImageLayout oldLayout = currentLayouts[input];
+      VkImageLayout newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+      if (oldLayout == newLayout)
+        continue;
+
+      VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+      if (resource.Usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) {
+        aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+      }
 
       VkImageMemoryBarrier barrier{};
-      barrier.oldLayout = resource.InitialLayout;
-      barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+      barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+      barrier.oldLayout = oldLayout;
+      barrier.newLayout = newLayout;
       barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
       barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-      barrier.image = resource.Image.GetImage();
-      barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+      barrier.image = resource.GetVkImage(m_CurrentFrame, imageIndex);
+      barrier.subresourceRange = {aspectMask, 0, 1, 0, 1};
       barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
       barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
       vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                           VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                            VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 0, nullptr,
                            1, &barrier);
+
+      currentLayouts[input] = newLayout;
     }
 
     for (const auto &output : pass.Outputs) {
       auto &resource = m_Resources[output];
+      VkImageLayout oldLayout = currentLayouts[output];
+
+      VkImageLayout newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+      VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+      VkAccessFlags dstAccess = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+      VkPipelineStageFlags dstStage =
+          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+      if (resource.Usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) {
+        newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        dstAccess = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        dstStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
+                   VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+      }
 
       VkImageMemoryBarrier barrier{};
-      barrier.oldLayout = resource.InitialLayout;
-      barrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+      barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+      barrier.oldLayout = oldLayout;
+      barrier.newLayout = newLayout;
       barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
       barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-      barrier.image = resource.Image.GetImage();
-      barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-      barrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-      barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+      barrier.image = resource.GetVkImage(m_CurrentFrame, imageIndex);
+      barrier.subresourceRange = {aspectMask, 0, 1, 0, 1};
+      barrier.srcAccessMask =
+          VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+      barrier.dstAccessMask = dstAccess;
 
       vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                           VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                           VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 0, nullptr,
-                           1, &barrier);
+                           dstStage, VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 0,
+                           nullptr, 1, &barrier);
+
+      currentLayouts[output] = newLayout;
     }
 
     pass.ExecuteFunc(commandBuffer);
 
     for (const auto &output : pass.Outputs) {
       auto &resource = m_Resources[output];
+      VkImageLayout oldLayout = currentLayouts[output];
+      VkImageLayout newLayout = resource.FinalLayout;
+
+      if (oldLayout == newLayout)
+        continue;
+
+      VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+      VkPipelineStageFlags srcStage =
+          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+      VkAccessFlags srcAccess = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+      if (resource.Usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) {
+        aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        srcStage = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+        srcAccess = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+      }
 
       VkImageMemoryBarrier barrier{};
-      barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-      barrier.newLayout = resource.FinalLayout;
+      barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+      barrier.oldLayout = oldLayout;
+      barrier.newLayout = newLayout;
       barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
       barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-      barrier.image = resource.Image.GetImage();
-      barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-      barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-      barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+      barrier.image = resource.GetVkImage(m_CurrentFrame, imageIndex);
+      barrier.subresourceRange = {aspectMask, 0, 1, 0, 1};
+      barrier.srcAccessMask = srcAccess;
+      barrier.dstAccessMask = (newLayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
+                                  ? 0
+                                  : VK_ACCESS_MEMORY_READ_BIT;
 
       vkCmdPipelineBarrier(
-          commandBuffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_DEPENDENCY_BY_REGION_BIT, 0,
-          nullptr, 0, nullptr, 1, &barrier);
+          commandBuffer, srcStage, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+          VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 0, nullptr, 1, &barrier);
+
+      currentLayouts[output] = newLayout;
     }
+  }
 
-    vkEndCommandBuffer(commandBuffer);
-
-    VkSubmitInfo submitInfo{};
-    submitInfo.waitSemaphoreCount =
-        static_cast<uint32_t>(waitSemaphores.size());
-    submitInfo.pWaitSemaphores = waitSemaphores.data();
-    submitInfo.pWaitDstStageMask = waitStages.data();
-    submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &commandBuffer;
-    submitInfo.signalSemaphoreCount =
-        static_cast<uint32_t>(signalSemaphores.size());
-    submitInfo.pSignalSemaphores = signalSemaphores.data();
-
-    vkQueueSubmit(queue, 1, &submitInfo, nullptr);
+  if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
+    throw std::runtime_error("Failed to end RenderGraph command buffer");
   }
 }
 
+void RenderGraph::RenderFrame(VkSwapchainKHR swapchain, VkQueue graphicsQueue,
+                              VkQueue presentQueue) {
+  vkWaitForFences(m_Context->Device, 1, &m_InFlightFences[m_CurrentFrame],
+                  VK_TRUE, UINT64_MAX);
+
+  uint32_t imageIndex;
+  VkResult result = vkAcquireNextImageKHR(
+      m_Context->Device, swapchain, UINT64_MAX,
+      m_ImagesAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &imageIndex);
+
+  if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+    return;
+  } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+    throw std::runtime_error("Failed to acquire swapchain image!");
+  }
+
+  vkResetFences(m_Context->Device, 1, &m_InFlightFences[m_CurrentFrame]);
+
+  Execute(imageIndex);
+
+  VkSubmitInfo submitInfo{};
+  submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+  VkSemaphore waitSemaphores[] = {m_ImagesAvailableSemaphores[m_CurrentFrame]};
+  VkPipelineStageFlags waitStages[] = {
+      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+  submitInfo.waitSemaphoreCount = 1;
+  submitInfo.pWaitSemaphores = waitSemaphores;
+  submitInfo.pWaitDstStageMask = waitStages;
+
+  submitInfo.commandBufferCount = 1;
+  submitInfo.pCommandBuffers = &m_CommandBuffers[m_CurrentFrame];
+
+  VkSemaphore signalSemaphores[] = {m_RenderFinishedSemaphores[m_CurrentFrame]};
+  submitInfo.signalSemaphoreCount = 1;
+  submitInfo.pSignalSemaphores = signalSemaphores;
+
+  if (vkQueueSubmit(graphicsQueue, 1, &submitInfo,
+                    m_InFlightFences[m_CurrentFrame]) != VK_SUCCESS) {
+    throw std::runtime_error(
+        "Failed to submit RenderGraph to execution queue!");
+  }
+
+  VkPresentInfoKHR presentInfo{};
+  presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+  presentInfo.waitSemaphoreCount = 1;
+  presentInfo.pWaitSemaphores = signalSemaphores;
+
+  VkSwapchainKHR swapchains[] = {swapchain};
+  presentInfo.swapchainCount = 1;
+  presentInfo.pSwapchains = swapchains;
+  presentInfo.pImageIndices = &imageIndex;
+
+  result = vkQueuePresentKHR(presentQueue, &presentInfo);
+  if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+    // Swapchain recreation flag would typically be toggled here
+  } else if (result != VK_SUCCESS) {
+    throw std::runtime_error("Failed to present rendered swapchain image!");
+  }
+
+  m_CurrentFrame = (m_CurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+}
 } // namespace Inferno

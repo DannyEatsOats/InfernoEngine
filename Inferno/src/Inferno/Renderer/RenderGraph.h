@@ -9,6 +9,8 @@
 namespace Inferno {
 class RenderGraph {
 public:
+  static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
+
   // RenderGraph Specific Structs
   struct Resource {
     std::string Name;
@@ -18,7 +20,14 @@ public:
     VkImageLayout InitialLayout;
     VkImageLayout FinalLayout;
 
-    Image Image;
+    std::vector<Image> FrameImages;
+    std::vector<VkImage> ExternalImages;
+    bool IsExternal = false;
+
+    VkImage GetVkImage(uint32_t frameIndex, uint32_t imageIndex) const {
+      return IsExternal ? ExternalImages[imageIndex]
+                        : FrameImages[frameIndex].GetImage();
+    }
   };
 
   struct Pass {
@@ -31,6 +40,7 @@ public:
 
 public:
   explicit RenderGraph(const DeviceContext *context) : m_Context(context) {}
+  ~RenderGraph();
 
   RenderGraph(const RenderGraph &) = delete;
   RenderGraph(RenderGraph &&) = delete;
@@ -47,12 +57,21 @@ public:
                    VkImageUsageFlags usage, VkImageLayout initialLayout,
                    VkImageLayout finalLayout);
 
+  void ImportSwapchainResources(const std::string &name,
+                                const std::vector<VkImage> &swapchainImages,
+                                VkFormat format, VkExtent2D extent,
+                                VkImageUsageFlags usage,
+                                VkImageLayout finalLayout);
+
   void AddPass(const std::string &name, const std::vector<std::string> &inputs,
                const std::vector<std::string> &outputs,
                std::function<void(VkCommandBuffer &)> executeFunc);
 
   void Compile();
-  void Execute(VkCommandBuffer commandBuffer, VkQueue queue);
+  void Execute(uint32_t imageIndex);
+
+  void RenderFrame(VkSwapchainKHR swapchain, VkQueue graphicsQueue,
+                   VkQueue presentQueue);
 
 private:
   const DeviceContext *m_Context = nullptr;
@@ -61,7 +80,10 @@ private:
   std::vector<Pass> m_Passes;
   std::vector<size_t> m_ExecutionOrder;
 
-  std::vector<VkSemaphore> m_Semaphores;
-  std::vector<std::pair<size_t, size_t>> m_SemaphoreSignalWaitPairs;
+  uint32_t m_CurrentFrame = 0;
+  std::vector<VkCommandBuffer> m_CommandBuffers;
+  std::vector<VkSemaphore> m_ImagesAvailableSemaphores;
+  std::vector<VkSemaphore> m_RenderFinishedSemaphores;
+  std::vector<VkFence> m_InFlightFences;
 };
 } // namespace Inferno

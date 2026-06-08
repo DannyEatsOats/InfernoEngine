@@ -43,8 +43,8 @@ void RenderGraph::AddResource(const std::string &name, VkFormat format,
 
 void RenderGraph::ImportSwapchainResources(
     const std::string &name, const std::vector<VkImage> &swapchainImages,
-    VkFormat format, VkExtent2D extent, VkImageUsageFlags usage,
-    VkImageLayout finalLayout) {
+    const std::vector<VkImageView> &swapchainImageViews, VkFormat format,
+    VkExtent2D extent, VkImageUsageFlags usage, VkImageLayout finalLayout) {
   Resource resource{};
   resource.Name = name;
   resource.Format = format;
@@ -53,6 +53,7 @@ void RenderGraph::ImportSwapchainResources(
   resource.InitialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
   resource.FinalLayout = finalLayout;
   resource.ExternalImages = swapchainImages;
+  resource.ExternalImageViews = swapchainImageViews;
   resource.IsExternal = true;
 
   m_Resources.emplace(name, std::move(resource));
@@ -169,11 +170,15 @@ void RenderGraph::Compile() {
     imageSpec.Tiling = VK_IMAGE_TILING_OPTIMAL;
     imageSpec.Usage = resource.Usage;
 
-    resource.FrameImages.emplace_back(m_Context, imageSpec);
+    resource.FrameImages.reserve(MAX_FRAMES_IN_FLIGHT);
+    for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+      resource.FrameImages.emplace_back(m_Context, imageSpec);
+    }
   }
 }
 
 void RenderGraph::Execute(uint32_t imageIndex) {
+  m_ActiveImageIndex = imageIndex;
   VkCommandBuffer commandBuffer = m_CommandBuffers[m_CurrentFrame];
 
   std::unordered_map<std::string, VkImageLayout> currentLayouts;
@@ -196,9 +201,6 @@ void RenderGraph::Execute(uint32_t imageIndex) {
       auto &resource = m_Resources[input];
       VkImageLayout oldLayout = currentLayouts[input];
       VkImageLayout newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-      if (oldLayout == newLayout)
-        continue;
 
       VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
       if (resource.Usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) {
@@ -267,9 +269,6 @@ void RenderGraph::Execute(uint32_t imageIndex) {
       auto &resource = m_Resources[output];
       VkImageLayout oldLayout = currentLayouts[output];
       VkImageLayout newLayout = resource.FinalLayout;
-
-      if (oldLayout == newLayout)
-        continue;
 
       VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
       VkPipelineStageFlags srcStage =

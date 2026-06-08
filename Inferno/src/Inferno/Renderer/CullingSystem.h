@@ -10,10 +10,11 @@ class CullingSystem {
 public:
   explicit CullingSystem(Camera *camera) : m_Camera(camera) {}
 
-  CullingSystem(const CullingSystem &) = default;
+  CullingSystem() = default;
+  CullingSystem(const CullingSystem &) = delete;
   CullingSystem(CullingSystem &&) = default;
 
-  CullingSystem &operator=(const CullingSystem &) = default;
+  CullingSystem &operator=(const CullingSystem &) = delete;
   CullingSystem &operator=(CullingSystem &&) = default;
 
   void SetCamera(Camera *camera) { m_Camera = camera; }

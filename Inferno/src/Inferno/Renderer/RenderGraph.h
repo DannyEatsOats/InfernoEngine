@@ -22,6 +22,7 @@ public:
 
     std::vector<Image> FrameImages;
     std::vector<VkImage> ExternalImages;
+    std::vector<VkImageView> ExternalImageViews;
     bool IsExternal = false;
 
     VkImage GetVkImage(uint32_t frameIndex, uint32_t imageIndex) const {
@@ -57,16 +58,29 @@ public:
                    VkImageUsageFlags usage, VkImageLayout initialLayout,
                    VkImageLayout finalLayout);
 
-  void ImportSwapchainResources(const std::string &name,
-                                const std::vector<VkImage> &swapchainImages,
-                                VkFormat format, VkExtent2D extent,
-                                VkImageUsageFlags usage,
-                                VkImageLayout finalLayout);
+  void ImportSwapchainResources(
+      const std::string &name, const std::vector<VkImage> &swapchainImages,
+      const std::vector<VkImageView> &swapchainImageViews, VkFormat format,
+      VkExtent2D extent, VkImageUsageFlags usage, VkImageLayout finalLayout);
 
   void AddPass(const std::string &name, const std::vector<std::string> &inputs,
                const std::vector<std::string> &outputs,
                std::function<void(VkCommandBuffer &)> executeFunc);
 
+  VkImageView GetActiveImageView(const std::string &name) {
+    auto it = m_Resources.find(name);
+    if (it == m_Resources.end()) {
+      throw std::runtime_error("RenderGraph resource not found: " + name);
+    }
+
+    const auto &resource = it->second;
+    if (resource.IsExternal) {
+      // Safely indexing into the active swapchain image acquired for this frame
+      return resource.ExternalImageViews[m_ActiveImageIndex];
+    } else { // <-- Added missing 'else' keyword
+      return resource.FrameImages[m_CurrentFrame].GetView();
+    }
+  }
   void Compile();
   void Execute(uint32_t imageIndex);
 
@@ -81,6 +95,7 @@ private:
   std::vector<size_t> m_ExecutionOrder;
 
   uint32_t m_CurrentFrame = 0;
+  uint32_t m_ActiveImageIndex = 0;
   std::vector<VkCommandBuffer> m_CommandBuffers;
   std::vector<VkSemaphore> m_ImagesAvailableSemaphores;
   std::vector<VkSemaphore> m_RenderFinishedSemaphores;

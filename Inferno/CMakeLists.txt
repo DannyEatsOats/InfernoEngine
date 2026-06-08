@@ -35,6 +35,9 @@ add_library(Inferno
         src/Inferno/Renderer/Mesh.cpp
         src/Inferno/Renderer/RenderGraph.h
         src/Inferno/Renderer/RenderGraph.cpp
+        src/Inferno/Resource/Resource.h
+        src/Inferno/Resource/ResourceHandle.h
+        src/Inferno/Resource/ResourceManager.h
         src/Inferno/Renderer/Shader.h
         src/Inferno/Renderer/Shader.cpp
         src/Inferno/Renderer/Texture.h

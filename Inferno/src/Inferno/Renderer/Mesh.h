@@ -39,7 +39,7 @@ public:
   }
   IndexBuffer *GetIndexBuffer() const { return m_IndexBuffer.get(); }
 
-  const BoundingBox &GetBoundingBox() const { return m_BoundingBox; }
+  const BoundingBox &GetBoundingBox() const { return *m_BoundingBox.get(); }
 
   uint32_t GetVertexCount() const { return m_VertexCount; }
   uint32_t GetIndexCount() const { return m_IndexCount; }
@@ -67,7 +67,7 @@ private:
   Scope<VertexBuffer<MeshVertex>> m_VertexBuffer;
   Scope<IndexBuffer> m_IndexBuffer;
 
-  BoundingBox m_BoundingBox;
+  std::unique_ptr<BoundingBox> m_BoundingBox;
 
   uint32_t m_VertexCount = 0;
   uint32_t m_IndexCount = 0;

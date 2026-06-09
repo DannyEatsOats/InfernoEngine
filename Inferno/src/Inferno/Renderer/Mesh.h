@@ -14,7 +14,7 @@ struct MeshVertex {
   glm::vec3 Color;
   glm::vec2 TexCoord;
 
-  static BufferLayout<Vertex> GetLayout() {
+  static BufferLayout<MeshVertex> GetLayout() {
     return {
         {"a_Position", ShaderDataType::Float3, offsetof(Vertex, Position)},
         {"a_Color", ShaderDataType::Float3, offsetof(Vertex, Color)},
@@ -25,7 +25,7 @@ struct MeshVertex {
 
 class Mesh : public Resource {
 public:
-  explicit Mesh(const std::string &id) : Resource(id) {}
+  explicit Mesh(const std::string &id, const DeviceContext* context) : Resource(id), m_Context(context) {}
   ~Mesh() = default;
 
   Mesh(const Mesh &) = delete;
@@ -52,7 +52,7 @@ protected:
 private:
   bool LoadMeshData(std::string &filePath,
                     std::vector<MeshVertex> &vertexBuffer,
-                    std::vector<uint16_t> indexBuffer);
+                    std::vector<uint16_t>& indexBuffer);
 
   void CleanUp() {
     m_Context = nullptr;

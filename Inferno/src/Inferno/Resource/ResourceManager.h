@@ -7,16 +7,15 @@
 #include <unordered_map>
 #include <utility>
 
+#include "Inferno/Core/Memory.h"
 #include "Inferno/Resource/Resource.h"
 
 namespace Inferno {
-template <typename T> class ResourceHandle;
-
 class ResourceManager {
 public:
   // Loading
   template <typename T, typename... Args>
-  ResourceHandle<T> Load(const std::string &resourceID, Args &&...args) {
+  Ref<T> Load(const std::string &resourceID, Args &&...args) {
     static_assert(std::is_base_of<Resource, T>::value,
                   "ResourceManager: T must derive from Resource");
 
@@ -28,7 +27,7 @@ public:
     // If Resource is cached - inc and return handle
     if (resourceIt != typeResources.end()) {
       ++m_RefCounts[typeIdx][resourceID].RefCount;
-      return ResourceHandle<T>(resourceID, this);
+      return std::static_pointer_cast<T>(resourceIt->second);
     }
 
     // Create new Resource and try loading
@@ -36,13 +35,13 @@ public:
         std::make_shared<T>(resourceID, std::forward<Args>(args)...);
     if (!resource->Load()) {
       // Loading failed - return invalid handle
-      return ResourceHandle<T>();
+      return nullptr;
     }
 
     typeResources.emplace(resourceID, resource);
     m_RefCounts[typeIdx].emplace(resourceID, ResourceData{resource, 1});
 
-    return ResourceHandle<T>(resourceID, this);
+    return resource;
   }
 
   // Accessing
@@ -95,7 +94,7 @@ public:
     --resourceRefCountsIt->second.RefCount;
 
     if (resourceRefCountsIt->second.RefCount <= 0) {
-      auto resourcePtr = resourceRefCountsIt->second.Resource;
+      auto resourcePtr = resourceRefCountsIt->second.ResourceHandle;
       if (resourcePtr) {
         resourcePtr->UnLoad();
       }
@@ -134,7 +133,7 @@ private:
       m_Resources;
 
   struct ResourceData {
-    std::shared_ptr<Resource> Resource;
+    std::shared_ptr<Resource> ResourceHandle;
     int RefCount = 0;
   };
 

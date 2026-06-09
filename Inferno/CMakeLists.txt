@@ -29,10 +29,13 @@ add_library(Inferno
         src/Inferno/Renderer/CullingSystem.h
         src/Inferno/Renderer/CullingSystem.cpp
         src/Inferno/Renderer/DeviceContext.h
+        src/Inferno/Renderer/DeviceContext.cpp
         src/Inferno/Renderer/Image.h
         src/Inferno/Renderer/Image.cpp
         src/Inferno/Renderer/Mesh.h
         src/Inferno/Renderer/Mesh.cpp
+        src/Inferno/Renderer/Renderer.h
+        src/Inferno/Renderer/Renderer.cpp
         src/Inferno/Renderer/RenderGraph.h
         src/Inferno/Renderer/RenderGraph.cpp
         src/Inferno/Resource/Resource.h
@@ -49,6 +52,7 @@ add_library(Inferno
         src/Inferno/Events/ApplicationEvent.h
         src/Inferno/Events/KeyEvent.h
         src/Inferno/Events/MouseEvent.h
+        src/Inferno/Events/KeyCodes.h
         # CORE UTILS
         src/Inferno/Utils/DeltaTime.h
         # VENDOR

@@ -7,7 +7,7 @@
 namespace Inferno {
 class Shader : public Resource {
 public:
-  Shader(const std::string &id, DeviceContext* context)
+  Shader(const std::string &id, const DeviceContext* context)
       : Resource(id), m_Context(context) {}
   ~Shader() = default;
 

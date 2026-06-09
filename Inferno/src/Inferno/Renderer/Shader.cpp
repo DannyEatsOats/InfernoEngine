@@ -1,3 +1,4 @@
+#include <filesystem>
 #include <fstream>
 #include <pch.h>
 #include <stdexcept>
@@ -39,8 +40,8 @@ Shader &Shader::operator=(Shader &&other) {
 bool Shader::DoLoad() {
   std::string extension;
 
-  std::string vertexFilePath = "shaders/" + GetID() + ".vert" + ".spv";
-  std::string fragmentFilePath = "shaders/" + GetID() + ".frag" + ".spv";
+  std::string vertexFilePath = "assets/shaders/" + GetID() + ".vert" + ".spv";
+  std::string fragmentFilePath = "assets/shaders/" + GetID() + ".frag" + ".spv";
 
   auto vertexShaderCode = ReadFile(vertexFilePath);
 
@@ -61,11 +62,15 @@ bool Shader::DoUnLoad() {
 }
 
 std::vector<uint32_t> Shader::ReadFile(const std::string &filePath) {
+  std::filesystem::path exePath =
+      std::filesystem::canonical("/proc/self/exe").parent_path();
+  std::filesystem::path fullPath = exePath / filePath;
 
-  std::ifstream file(filePath, std::ios::ate | std::ios::binary);
+  std::ifstream file(fullPath, std::ios::ate | std::ios::binary);
 
   if (!file.is_open()) {
-    throw std::runtime_error("Failed to Open File: " + filePath);
+    std::string msg = fullPath;
+    throw std::runtime_error("Failed to Open File: " + msg);
   }
 
   size_t fileSize = static_cast<size_t>(file.tellg());

@@ -1,11 +1,20 @@
+#include "Inferno/ECS/Entity.h"
+#include "glm/ext.hpp"
+#include "glm/ext/matrix_float4x4.hpp"
+#include "glm/ext/vector_float3.hpp"
+#include <vector>
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <GLFW/glfw3.h>
 #include <pch.h>
 #include <stdexcept>
 #include <vulkan/vulkan_core.h>
 
+#include "Inferno/ECS/Component.h"
 #include "Inferno/Renderer/CullingSystem.h"
 #include "Inferno/Renderer/Mesh.h"
 #include "Inferno/Renderer/RenderGraph.h"
+#include "Inferno/Renderer/Shader.h"
+#include "Inferno/Resource/ResourceManager.h"
 #include "Renderer.h"
 
 #include <glm/glm.hpp>
@@ -15,13 +24,12 @@ struct MeshPushConstants {
   glm::mat4 mvp;
 };
 
-void Renderer::StartUp() {
+void Renderer::StartUp(ResourceManager *resourceManager) {
   m_RenderGraph = new RenderGraph(m_Context);
   m_CullingSystem = new CullingSystem();
-  m_ResourceManager->Load<Shader>("test", m_Context);
+  m_ResourceManager = resourceManager;
 
   // TODO: SET CAMERA
-  CreateSurfaceAndSwapchain();
   CreateTestPipeline();
   SetupDeferredPipeline();
 }
@@ -30,8 +38,6 @@ void Renderer::ShutDown() {
   if (m_Context && m_Context->Device != VK_NULL_HANDLE) {
     vkDeviceWaitIdle(m_Context->Device);
   }
-
-  CleanUpPresentation();
 
   if (m_Pipeline != VK_NULL_HANDLE) {
     vkDestroyPipeline(m_Context->Device, m_Pipeline, nullptr);
@@ -50,99 +56,37 @@ void Renderer::ShutDown() {
   m_CullingSystem = nullptr;
 }
 
-void Renderer::CreateSurfaceAndSwapchain() {
-  GLFWwindow *window = static_cast<GLFWwindow *>(m_Context->WindowHandle);
-  if (glfwCreateWindowSurface(m_Context->Instance, window, nullptr,
-                              &m_Surface) != VK_SUCCESS) {
-    throw std::runtime_error("Failed To Create Window Surface");
-  }
-
-  int width = 0, height = 0;
-  glfwGetFramebufferSize(window, &width, &height);
-  m_SwapchainExtent = {static_cast<uint32_t>(width),
-                       static_cast<uint32_t>(height)};
-  vkGetDeviceQueue(m_Context->Device, 0, 0, &m_PresentQueue);
-
-  VkSwapchainCreateInfoKHR createInfo{};
-  createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-  createInfo.surface = m_Surface;
-  createInfo.minImageCount = 3;
-  createInfo.imageFormat = VK_FORMAT_B8G8R8A8_UNORM;
-  createInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-  createInfo.imageExtent = m_SwapchainExtent;
-  createInfo.imageArrayLayers = 1;
-  createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-  createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-  createInfo.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
-  createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-  createInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR;
-  createInfo.clipped = VK_TRUE;
-
-  m_SwapchainFormat = createInfo.imageFormat;
-
-  if (vkCreateSwapchainKHR(m_Context->Device, &createInfo, nullptr,
-                           &m_Swapchain) != VK_SUCCESS) {
-    throw std::runtime_error("Failed to create swapchain!");
-  }
-
-  uint32_t imageCount = 0;
-  vkGetSwapchainImagesKHR(m_Context->Device, m_Swapchain, &imageCount, nullptr);
-  m_SwapchainImages.resize(imageCount);
-  vkGetSwapchainImagesKHR(m_Context->Device, m_Swapchain, &imageCount,
-                          m_SwapchainImages.data());
-
-  m_SwapchainImageViews.resize(m_SwapchainImages.size());
-  for (size_t i = 0; i < m_SwapchainImages.size(); i++) {
-    VkImageViewCreateInfo createViewInfo{};
-    createViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    createViewInfo.image = m_SwapchainImages[i];
-    createViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    createViewInfo.format = m_SwapchainFormat;
-    createViewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-    createViewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-    createViewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-    createViewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-    createViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    createViewInfo.subresourceRange.baseMipLevel = 0;
-    createViewInfo.subresourceRange.levelCount = 1;
-    createViewInfo.subresourceRange.baseArrayLayer = 0;
-    createViewInfo.subresourceRange.layerCount = 1;
-
-    if (vkCreateImageView(m_Context->Device, &createViewInfo, nullptr,
-                          &m_SwapchainImageViews[i]) != VK_SUCCESS) {
-      throw std::runtime_error(
-          "Failed to create image views for swapchain images!");
-    }
-  }
-}
-
 void Renderer::SetupDeferredPipeline() {
   m_RenderGraph->ImportSwapchainResources(
-      "SwapchainOutput", m_SwapchainImages, m_SwapchainImageViews,
-      m_SwapchainFormat, m_SwapchainExtent, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+      "SwapchainOutput", m_Context->Swapchain.Images,
+      m_Context->Swapchain.ImageViews, m_Context->Swapchain.Format,
+      m_Context->Swapchain.Extent, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
       VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
   // Resources Allocations
   m_RenderGraph->AddResource(
-      "GBuffer_Position", VK_FORMAT_R16G16B16A16_SFLOAT, m_SwapchainExtent,
+      "GBuffer_Position", VK_FORMAT_R16G16B16A16_SFLOAT,
+      m_Context->Swapchain.Extent,
       VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
       VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
   m_RenderGraph->AddResource(
-      "GBuffer_Normal", VK_FORMAT_R16G16B16A16_SFLOAT, m_SwapchainExtent,
+      "GBuffer_Normal", VK_FORMAT_R16G16B16A16_SFLOAT,
+      m_Context->Swapchain.Extent,
       VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
       VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
   m_RenderGraph->AddResource(
-      "GBuffer_Albedo", VK_FORMAT_R16G16B16A16_SFLOAT, m_SwapchainExtent,
+      "GBuffer_Albedo", VK_FORMAT_R16G16B16A16_SFLOAT,
+      m_Context->Swapchain.Extent,
       VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
       VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-  m_RenderGraph->AddResource("Depth", VK_FORMAT_D32_SFLOAT, m_SwapchainExtent,
-                             VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
-                                 VK_IMAGE_USAGE_SAMPLED_BIT,
-                             VK_IMAGE_LAYOUT_UNDEFINED,
-                             VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+  m_RenderGraph->AddResource(
+      "Depth", VK_FORMAT_D32_SFLOAT, m_Context->Swapchain.Extent,
+      VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+      VK_IMAGE_LAYOUT_UNDEFINED,
+      VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
   // ==============================================================
   // TEMPORARY FORWARD PASS (Bypassing G-Buffers)
@@ -176,7 +120,7 @@ void Renderer::SetupDeferredPipeline() {
 
         VkRenderingInfo renderingInfo{};
         renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-        renderingInfo.renderArea = {{0, 0}, m_SwapchainExtent};
+        renderingInfo.renderArea = {{0, 0}, m_Context->Swapchain.Extent};
         renderingInfo.layerCount = 1;
         renderingInfo.colorAttachmentCount = 1; // Only 1 attachment now
         renderingInfo.pColorAttachments = &colorAttachment;
@@ -184,16 +128,69 @@ void Renderer::SetupDeferredPipeline() {
 
         vkCmdBeginRendering(cmd, &renderingInfo);
 
-        const auto &visibleItems = m_CullingSystem->GetVisibleEntities();
+        // Bind your rendering pipeline
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_Pipeline);
+        VkViewport viewport{0.0f,
+                            0.0f,
+                            (float)m_Context->Swapchain.Extent.width,
+                            (float)m_Context->Swapchain.Extent.height,
+                            0.0f,
+                            1.0f};
+        VkRect2D scissor{{0, 0}, m_Context->Swapchain.Extent};
+        vkCmdSetViewport(cmd, 0, 1, &viewport);
+        vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-        // Per-Object Drawing Loop
-        for (const auto *entity : visibleItems) {
-          // Your drawing code goes here:
-          // vkCmdBindPipeline(cmd, ...);
-          // vkCmdBindVertexBuffers(cmd, ...);
-          // vkCmdDrawIndexed(cmd, ...);
+        // const auto &visibleItems = m_CullingSystem->GetVisibleEntities();
+        const auto &visibleItems = m_VisibleEntites;
+
+        // Setup mock Camera Matrices for testing (Rotate slightly over time to
+        // see depth)
+        float time = (float)glfwGetTime();
+        glm::mat4 proj =
+            glm::perspective(glm::radians(45.0f),
+                             (float)m_Context->Swapchain.Extent.width /
+                                 (float)m_Context->Swapchain.Extent.height,
+                             0.1f, 10.0f);
+        proj[1][1] *= -1; // Correct for Vulkan's inverted Y axis
+
+        // Loop through and draw each object
+        for (auto *entity : visibleItems) {
+          // Assuming entity provides access to your Mesh resource class
+          MeshComponent *meshComponent = entity->GetComponent<MeshComponent>();
+          if (!meshComponent)
+            continue;
+
+          glm::mat4 model = entity->GetComponent<TransformComponent>()->GetTransformmatrix();
+          model = glm::rotate(model, time * glm::radians(90.0f) * model[0][0] * 10, 
+                              glm::vec3(0.0f, 1.0f, 0.0f));
+          glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 1.0f, 3.0f),
+                                       glm::vec3(0.0f, 0.0f, 0.0f),
+                                       glm::vec3(0.0f, 1.0f, 0.0f));
+
+          MeshPushConstants push{};
+          push.mvp = proj * view * model;
+
+          // Push the transformation data instantly to the GPU
+          vkCmdPushConstants(cmd, m_PipelineLayout, VK_SHADER_STAGE_VERTEX_BIT,
+                             0, sizeof(MeshPushConstants), &push);
+
+          // Bind Vertex Buffers
+          // Note: Adjust .GetVulkanHandle() to match whatever method returns
+          // your raw VkBuffer from your wrapper
+          VkBuffer vertexBuffers[] = {
+              meshComponent->GetMesh()->GetVertexBuffer()->Get()};
+          VkDeviceSize offsets[] = {0};
+          vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
+
+          // Bind Index Buffer
+          vkCmdBindIndexBuffer(
+              cmd, meshComponent->GetMesh()->GetIndexBuffer()->Get(), 0,
+              VK_INDEX_TYPE_UINT16);
+
+          // Issue Draw Call
+          vkCmdDrawIndexed(cmd, meshComponent->GetMesh()->GetIndexCount(), 1, 0,
+                           0, 0);
         }
-
         vkCmdEndRendering(cmd);
       });
 
@@ -263,11 +260,7 @@ void Renderer::SetupDeferredPipeline() {
 
         vkCmdEndRendering(cmd);
       });
-    */
 
-  // ==========================================
-  // STEP 2: THE LIGHTING PASS
-  // ==========================================
   m_RenderGraph->AddPass(
       "LightingPass",
       {"GBuffer_Position", "GBuffer_Normal", "GBuffer_Albedo", "Depth"},
@@ -304,33 +297,33 @@ void Renderer::SetupDeferredPipeline() {
 
         vkCmdEndRendering(cmd);
       });
+*/
 
   m_RenderGraph->Compile();
 }
 
 void Renderer::Render(const std::vector<Entity *> &entities) {
-  m_CullingSystem->CullScene(entities);
-  m_RenderGraph->RenderFrame(m_Swapchain, m_Context->GraphicsQueue,
-                             m_PresentQueue);
-}
+  // TODO: Enable once we have a Camera
+  // m_CullingSystem->CullScene(entities);
+  m_VisibleEntites = entities;
+  bool success = m_RenderGraph->RenderFrame(m_Context->Swapchain.Handle,
+                                            m_Context->GraphicsQueue,
+                                            m_Context->PresentQueue);
 
-void Renderer::CleanUpPresentation() {
-  for (auto imageView : m_SwapchainImageViews) {
-    vkDestroyImageView(m_Context->Device, imageView, nullptr);
-  }
-  m_SwapchainImageViews.clear();
+  if (!success) {
+    vkDeviceWaitIdle(m_Context->Device);
+    m_Context->RecreateSwapchain();
 
-  if (m_Swapchain != VK_NULL_HANDLE) {
-    vkDestroySwapchainKHR(m_Context->Device, m_Swapchain, nullptr);
-    m_Swapchain = VK_NULL_HANDLE;
-  }
-  if (m_Surface != VK_NULL_HANDLE) {
-    vkDestroySurfaceKHR(m_Context->Instance, m_Surface, nullptr);
-    m_Surface = VK_NULL_HANDLE;
+    m_RenderGraph->UpdateSwapchainResources(
+        "SwapchainOutput", m_Context->Swapchain.Images,
+        m_Context->Swapchain.ImageViews, m_Context->Swapchain.Extent);
+
+    m_RenderGraph->Resize(m_Context->Swapchain.Extent);
   }
 }
 
 void Renderer::CreateTestPipeline() {
+  auto testShader = m_ResourceManager->Load<Shader>("test", m_Context);
   // 1. Setup Push Constant Range
   VkPushConstantRange pushConstantRange{};
   pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
@@ -385,19 +378,12 @@ void Renderer::CreateTestPipeline() {
       VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
   inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
-  VkViewport viewport{0.0f,
-                      0.0f,
-                      (float)m_SwapchainExtent.width,
-                      (float)m_SwapchainExtent.height,
-                      0.0f,
-                      1.0f};
-  VkRect2D scissor{{0, 0}, m_SwapchainExtent};
   VkPipelineViewportStateCreateInfo viewportState{};
   viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
   viewportState.viewportCount = 1;
-  viewportState.pViewports = &viewport;
+  viewportState.pViewports = nullptr;
   viewportState.scissorCount = 1;
-  viewportState.pScissors = &scissor;
+  viewportState.pScissors = nullptr;
 
   VkPipelineRasterizationStateCreateInfo rasterizer{};
   rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
@@ -447,13 +433,21 @@ void Renderer::CreateTestPipeline() {
   renderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
   renderingCreateInfo.colorAttachmentCount = 1;
   renderingCreateInfo.pColorAttachmentFormats =
-      &m_SwapchainFormat; // VK_FORMAT_B8G8R8A8_UNORM
+      &m_Context->Swapchain.Format; // VK_FORMAT_B8G8R8A8_UNORM
   renderingCreateInfo.depthAttachmentFormat = VK_FORMAT_D32_SFLOAT;
+
+  std::vector<VkDynamicState> dynamicStates = {VK_DYNAMIC_STATE_VIEWPORT,
+                                               VK_DYNAMIC_STATE_SCISSOR};
+
+  VkPipelineDynamicStateCreateInfo dynamicState{};
+  dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+  dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
+  dynamicState.pDynamicStates = dynamicStates.data();
 
   VkGraphicsPipelineCreateInfo pipelineInfo{};
   pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
   pipelineInfo.pNext =
-      &renderingCreateInfo; // Link dynamic rendering configuration here
+      &renderingCreateInfo;
   pipelineInfo.stageCount = 2;
   pipelineInfo.pStages = shaderStages;
   pipelineInfo.pVertexInputState = &vertexInputInfo;
@@ -464,6 +458,7 @@ void Renderer::CreateTestPipeline() {
   pipelineInfo.pDepthStencilState = &depthStencil;
   pipelineInfo.pColorBlendState = &colorBlending;
   pipelineInfo.layout = m_PipelineLayout;
+  pipelineInfo.pDynamicState = &dynamicState;
 
   if (vkCreateGraphicsPipelines(m_Context->Device, VK_NULL_HANDLE, 1,
                                 &pipelineInfo, nullptr,

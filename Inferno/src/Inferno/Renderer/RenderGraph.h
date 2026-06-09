@@ -63,6 +63,12 @@ public:
       const std::vector<VkImageView> &swapchainImageViews, VkFormat format,
       VkExtent2D extent, VkImageUsageFlags usage, VkImageLayout finalLayout);
 
+  void
+  UpdateSwapchainResources(const std::string &name,
+                           const std::vector<VkImage> &swapchainImages,
+                           const std::vector<VkImageView> &swapchainImageViews,
+                           VkExtent2D newExtent);
+
   void AddPass(const std::string &name, const std::vector<std::string> &inputs,
                const std::vector<std::string> &outputs,
                std::function<void(VkCommandBuffer &)> executeFunc);
@@ -81,11 +87,14 @@ public:
       return resource.FrameImages[m_CurrentFrame].GetView();
     }
   }
+
   void Compile();
   void Execute(uint32_t imageIndex);
 
-  void RenderFrame(VkSwapchainKHR swapchain, VkQueue graphicsQueue,
+  bool RenderFrame(VkSwapchainKHR swapchain, VkQueue graphicsQueue,
                    VkQueue presentQueue);
+
+  void Resize(VkExtent2D newExtent);
 
 private:
   const DeviceContext *m_Context = nullptr;

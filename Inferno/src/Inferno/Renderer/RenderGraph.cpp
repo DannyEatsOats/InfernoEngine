@@ -19,9 +19,11 @@ RenderGraph::~RenderGraph() {
   for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
     vkDestroySemaphore(m_Context->Device, m_ImagesAvailableSemaphores[i],
                        nullptr);
-    vkDestroySemaphore(m_Context->Device, m_RenderFinishedSemaphores[i],
-                       nullptr);
     vkDestroyFence(m_Context->Device, m_InFlightFences[i], nullptr);
+  }
+
+  for (VkSemaphore semaphore : m_RenderFinishedSemaphores) {
+    vkDestroySemaphore(m_Context->Device, semaphore, nullptr);
   }
 }
 
@@ -57,6 +59,34 @@ void RenderGraph::ImportSwapchainResources(
   resource.IsExternal = true;
 
   m_Resources.emplace(name, std::move(resource));
+}
+
+void RenderGraph::UpdateSwapchainResources(
+    const std::string &name, const std::vector<VkImage> &swapchainImages,
+    const std::vector<VkImageView> &swapchainImageViews, VkExtent2D newExtent) {
+
+  auto it = m_Resources.find(name);
+  if (it != m_Resources.end() && it->second.IsExternal) {
+    it->second.ExternalImages = swapchainImages;
+    it->second.ExternalImageViews = swapchainImageViews;
+    it->second.Extent = newExtent;
+
+    for (VkSemaphore semaphore : m_RenderFinishedSemaphores) {
+      vkDestroySemaphore(m_Context->Device, semaphore, nullptr);
+    }
+    m_RenderFinishedSemaphores.clear();
+
+    m_RenderFinishedSemaphores.resize(swapchainImages.size());
+    VkSemaphoreCreateInfo semaphoreInfo{
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+    for (size_t i = 0; i < swapchainImages.size(); ++i) {
+      if (vkCreateSemaphore(m_Context->Device, &semaphoreInfo, nullptr,
+                            &m_RenderFinishedSemaphores[i]) != VK_SUCCESS) {
+        throw std::runtime_error(
+            "Failed to recreate RenderGraph render finished semaphores!");
+      }
+    }
+  }
 }
 
 void RenderGraph::AddPass(const std::string &name,
@@ -125,8 +155,17 @@ void RenderGraph::Compile() {
 
   m_CommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
   m_ImagesAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-  m_RenderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
   m_InFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+
+  uint32_t swapchainImageCount = MAX_FRAMES_IN_FLIGHT;
+  for (const auto &[name, resource] : m_Resources) {
+    if (resource.IsExternal) {
+      swapchainImageCount =
+          static_cast<uint32_t>(resource.ExternalImages.size());
+      break;
+    }
+  }
+  m_RenderFinishedSemaphores.resize(swapchainImageCount);
 
   VkCommandBufferAllocateInfo allocInfo{};
   allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -149,12 +188,18 @@ void RenderGraph::Compile() {
   for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
     if (vkCreateSemaphore(m_Context->Device, &semaphoreInfo, nullptr,
                           &m_ImagesAvailableSemaphores[i]) != VK_SUCCESS ||
-        vkCreateSemaphore(m_Context->Device, &semaphoreInfo, nullptr,
-                          &m_RenderFinishedSemaphores[i]) != VK_SUCCESS ||
         vkCreateFence(m_Context->Device, &fenceInfo, nullptr,
                       &m_InFlightFences[i]) != VK_SUCCESS) {
       throw std::runtime_error(
           "Failed to create RenderGraph synchronization objects!");
+    }
+  }
+
+  for (uint32_t i = 0; i < swapchainImageCount; ++i) {
+    if (vkCreateSemaphore(m_Context->Device, &semaphoreInfo, nullptr,
+                          &m_RenderFinishedSemaphores[i]) != VK_SUCCESS) {
+      throw std::runtime_error(
+          "Failed to create RenderGraph render finished semaphores!");
     }
   }
 
@@ -169,6 +214,10 @@ void RenderGraph::Compile() {
     imageSpec.Height = resource.Extent.height;
     imageSpec.Tiling = VK_IMAGE_TILING_OPTIMAL;
     imageSpec.Usage = resource.Usage;
+
+    if (imageSpec.Usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) {
+      imageSpec.Aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
+    }
 
     resource.FrameImages.reserve(MAX_FRAMES_IN_FLIGHT);
     for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
@@ -307,7 +356,7 @@ void RenderGraph::Execute(uint32_t imageIndex) {
   }
 }
 
-void RenderGraph::RenderFrame(VkSwapchainKHR swapchain, VkQueue graphicsQueue,
+bool RenderGraph::RenderFrame(VkSwapchainKHR swapchain, VkQueue graphicsQueue,
                               VkQueue presentQueue) {
   vkWaitForFences(m_Context->Device, 1, &m_InFlightFences[m_CurrentFrame],
                   VK_TRUE, UINT64_MAX);
@@ -318,7 +367,7 @@ void RenderGraph::RenderFrame(VkSwapchainKHR swapchain, VkQueue graphicsQueue,
       m_ImagesAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &imageIndex);
 
   if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-    return;
+    return false;
   } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
     throw std::runtime_error("Failed to acquire swapchain image!");
   }
@@ -340,7 +389,7 @@ void RenderGraph::RenderFrame(VkSwapchainKHR swapchain, VkQueue graphicsQueue,
   submitInfo.commandBufferCount = 1;
   submitInfo.pCommandBuffers = &m_CommandBuffers[m_CurrentFrame];
 
-  VkSemaphore signalSemaphores[] = {m_RenderFinishedSemaphores[m_CurrentFrame]};
+  VkSemaphore signalSemaphores[] = {m_RenderFinishedSemaphores[imageIndex]};
   submitInfo.signalSemaphoreCount = 1;
   submitInfo.pSignalSemaphores = signalSemaphores;
 
@@ -362,11 +411,36 @@ void RenderGraph::RenderFrame(VkSwapchainKHR swapchain, VkQueue graphicsQueue,
 
   result = vkQueuePresentKHR(presentQueue, &presentInfo);
   if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-    // Swapchain recreation flag would typically be toggled here
+    return false;
   } else if (result != VK_SUCCESS) {
     throw std::runtime_error("Failed to present rendered swapchain image!");
   }
 
   m_CurrentFrame = (m_CurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+  return true;
+}
+
+void RenderGraph::Resize(VkExtent2D newExtent) {
+  for (auto &[name, resource] : m_Resources) {
+    if (resource.IsExternal) {
+      continue;
+    }
+
+    resource.Extent = newExtent;
+
+    resource.FrameImages.clear();
+
+    ImageSpec imageSpec{};
+    imageSpec.Format = resource.Format;
+    imageSpec.Width = resource.Extent.width;
+    imageSpec.Height = resource.Extent.height;
+    imageSpec.Tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageSpec.Usage = resource.Usage;
+
+    resource.FrameImages.reserve(MAX_FRAMES_IN_FLIGHT);
+    for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+      resource.FrameImages.emplace_back(m_Context, imageSpec);
+    }
+  }
 }
 } // namespace Inferno

@@ -1,10 +1,39 @@
 #pragma once
 
 #include "Inferno/Renderer/DeviceContext.h"
+#include <optional>
 #include <vulkan/vulkan_core.h>
 namespace Inferno {
 class VulkanUtils {
 public:
+  struct QueueFamilyIndices {
+    std::optional<uint32_t> graphicsFamily;
+    std::optional<uint32_t> presentFamily;
+
+    bool IsComplete() const {
+      return graphicsFamily.has_value() && presentFamily.has_value();
+    }
+  };
+  static QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device,
+                                              VkSurfaceKHR surface);
+
+  struct SwapChainSupportDetails {
+    VkSurfaceCapabilitiesKHR capabilities;
+    std::vector<VkSurfaceFormatKHR> formats;
+    std::vector<VkPresentModeKHR> presentModes;
+  };
+  static SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device,
+                                                       VkSurfaceKHR surface);
+
+  static VkSurfaceFormatKHR ChooseSwapSurfaceFormat(
+      const std::vector<VkSurfaceFormatKHR> &availableFormats);
+
+  static VkPresentModeKHR ChooseSwapPresentMode(
+      const std::vector<VkPresentModeKHR> &availablePresentationModes);
+
+  static VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities,
+                              GLFWwindow *window);
+
   static VkPhysicalDeviceProperties
   GetPhysicalDeviceProps(VkPhysicalDevice device);
 

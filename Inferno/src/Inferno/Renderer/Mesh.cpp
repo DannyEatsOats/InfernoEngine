@@ -47,6 +47,8 @@ bool Mesh::DoLoad() {
   // Buffers
   m_VertexBuffer = MakeScope<VertexBuffer<MeshVertex>>(
       m_Context, sizeof(MeshVertex) * m_VertexCount);
+  m_VertexBuffer->SetLayout(MeshVertex::GetLayout());
+
   m_IndexBuffer = MakeScope<IndexBuffer>(
       m_Context, sizeof(indices[0]) * m_IndexCount, VK_INDEX_TYPE_UINT16);
 
@@ -66,7 +68,55 @@ bool Mesh::DoUnLoad() {
 
 bool Mesh::LoadMeshData(std::string &filePath,
                         std::vector<MeshVertex> &vertexBuffer,
-                        std::vector<uint16_t> indexBuffer) {
+                        std::vector<uint16_t> &indexBuffer) {
+  // TODO: TEMP FOR TESTING
+  //  Hardcoded 24 vertices for a standard unit cube centered at (0,0,0)
+  vertexBuffer = {// Front Face (Z = 0.5f) - Red
+                  {{-0.5f, -0.5f, 0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+                  {{0.5f, -0.5f, 0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
+                  {{0.5f, 0.5f, 0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}},
+                  {{-0.5f, 0.5f, 0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f}},
+
+                  // Back Face (Z = -0.5f) - Green
+                  {{-0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+                  {{-0.5f, 0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f}},
+                  {{0.5f, 0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}},
+                  {{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+
+                  // Top Face (Y = 0.5f) - Blue
+                  {{-0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+                  {{-0.5f, 0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}},
+                  {{0.5f, 0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 0.0f}},
+                  {{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+
+                  // Bottom Face (Y = -0.5f) - Yellow
+                  {{-0.5f, -0.5f, -0.5f}, {1.0f, 1.0f, 0.0f}, {1.0f, 1.0f}},
+                  {{0.5f, -0.5f, -0.5f}, {1.0f, 1.0f, 0.0f}, {0.0f, 1.0f}},
+                  {{0.5f, -0.5f, 0.5f}, {1.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+                  {{-0.5f, -0.5f, 0.5f}, {1.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+
+                  // Right Face (X = 0.5f) - Magenta
+                  {{0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 1.0f}, {1.0f, 0.0f}},
+                  {{0.5f, 0.5f, -0.5f}, {1.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+                  {{0.5f, 0.5f, 0.5f}, {1.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+                  {{0.5f, -0.5f, 0.5f}, {1.0f, 0.0f, 1.0f}, {0.0f, 0.0f}},
+
+                  // Left Face (X = -0.5f) - Cyan
+                  {{-0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 1.0f}, {0.0f, 0.0f}},
+                  {{-0.5f, -0.5f, 0.5f}, {0.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
+                  {{-0.5f, 0.5f, 0.5f}, {0.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
+                  {{-0.5f, 0.5f, -0.5f}, {0.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}};
+
+  // 12 Triangles (2 per cube face) using standard counter-clockwise rendering
+  // layout
+  indexBuffer = {
+      0,  1,  2,  2,  3,  0,  // Front
+      4,  5,  6,  6,  7,  4,  // Back
+      8,  9,  10, 10, 11, 8,  // Top
+      12, 13, 14, 14, 15, 12, // Bottom
+      16, 17, 18, 18, 19, 16, // Right
+      20, 21, 22, 22, 23, 20  // Left
+  };
   return true;
 }
 } // namespace Inferno

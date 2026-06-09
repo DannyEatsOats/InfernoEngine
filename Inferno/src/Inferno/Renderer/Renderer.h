@@ -24,6 +24,12 @@ public:
 
 private:
   void SetupDeferredPipeline();
+  void CreateGeometryPipeline();
+  void CreateLightingPipeline();
+  void CreateLightingDescriptorSet();
+  void UpdateLightingDescriptorSet();
+
+  // TEST
   void CreateTestPipeline();
 
 private:
@@ -31,10 +37,22 @@ private:
 
   CullingSystem *m_CullingSystem = nullptr;
   RenderGraph *m_RenderGraph = nullptr;
-
-  // TEST
   ResourceManager *m_ResourceManager = nullptr;
 
+  // G-Buffer Geometry Pass
+  VkPipeline m_GeometryPipeline = VK_NULL_HANDLE;
+  VkPipelineLayout m_GeometryPipelineLayout = VK_NULL_HANDLE;
+
+  // Deffered Shading Lighting Pass
+  VkPipeline m_LightingPipeline = VK_NULL_HANDLE;
+  VkPipelineLayout m_LightingPipelineLayout = VK_NULL_HANDLE;
+
+  VkDescriptorSetLayout m_LightingDescriptorLayout = VK_NULL_HANDLE;
+  VkDescriptorPool m_DescriptorPool = VK_NULL_HANDLE;
+  VkDescriptorSet m_LightingDescriptorSet = VK_NULL_HANDLE;
+  VkSampler m_GBufferSampler = VK_NULL_HANDLE;
+
+  // TEST
   VkPipeline m_Pipeline;
   VkPipelineLayout m_PipelineLayout;
 

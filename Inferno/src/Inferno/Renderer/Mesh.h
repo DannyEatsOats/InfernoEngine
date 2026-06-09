@@ -11,21 +11,24 @@
 namespace Inferno {
 struct MeshVertex {
   glm::vec3 Position;
+  glm::vec3 Normal;
   glm::vec3 Color;
   glm::vec2 TexCoord;
 
   static BufferLayout<MeshVertex> GetLayout() {
     return {
-        {"a_Position", ShaderDataType::Float3, offsetof(Vertex, Position)},
-        {"a_Color", ShaderDataType::Float3, offsetof(Vertex, Color)},
-        {"a_TexCoord", ShaderDataType::Float2, offsetof(Vertex, TexCoord)},
+        {"a_Position", ShaderDataType::Float3, offsetof(MeshVertex, Position)},
+        {"a_Normal", ShaderDataType::Float3, offsetof(MeshVertex, Normal)},
+        {"a_Color", ShaderDataType::Float3, offsetof(MeshVertex, Color)},
+        {"a_TexCoord", ShaderDataType::Float2, offsetof(MeshVertex, TexCoord)},
     };
   }
 };
 
 class Mesh : public Resource {
 public:
-  explicit Mesh(const std::string &id, const DeviceContext* context) : Resource(id), m_Context(context) {}
+  explicit Mesh(const std::string &id, const DeviceContext *context)
+      : Resource(id), m_Context(context) {}
   ~Mesh() = default;
 
   Mesh(const Mesh &) = delete;
@@ -52,7 +55,7 @@ protected:
 private:
   bool LoadMeshData(std::string &filePath,
                     std::vector<MeshVertex> &vertexBuffer,
-                    std::vector<uint16_t>& indexBuffer);
+                    std::vector<uint16_t> &indexBuffer);
 
   void CleanUp() {
     m_Context = nullptr;

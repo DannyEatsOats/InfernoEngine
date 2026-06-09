@@ -32,6 +32,25 @@ void Application::StartUp() {
 
   // TEMP
 
+  for (int i = 0; i < 10; ++i) {
+    for (int j = 0; j < 10; ++j) {
+      for (int k = 0; k < 1; ++k) {
+        Entity *testEntity =
+            new Entity("test" + std::to_string(i) + std::to_string(j));
+        testEntity->AddComponent<TransformComponent>();
+        testEntity->GetComponent<TransformComponent>()->SetPosition(glm::vec3(
+            -1.0f + (i * 1.0f), 0.5f - (j * 1.0f), -1.0f - (k * 0.1f)));
+        testEntity->GetComponent<TransformComponent>()->SetScale(
+            glm::vec3(0.5f, 0.5f, 0.5f));
+        auto mesh =
+            m_ResourceManager->Load<Mesh>("testMesh", m_RenderingContext.get());
+        testEntity->AddComponent<MeshComponent>(mesh.get(), nullptr);
+        m_Entities.push_back(testEntity);
+      }
+    }
+  }
+
+  /*
   for (int i = 0; i < 100; ++i) {
     for (int j = 0; j < 50; ++j) {
       for (int k = 0; k < 1; ++k) {
@@ -49,6 +68,7 @@ void Application::StartUp() {
       }
     }
   }
+  */
 }
 
 void Application::ShutDown() {

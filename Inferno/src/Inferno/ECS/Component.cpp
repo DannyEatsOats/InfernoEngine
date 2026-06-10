@@ -92,7 +92,7 @@ glm::mat4 CameraComponent::GetProjectionMatrix() const {
 
 // -------- MESH COMPONENT --------
 void MeshComponent::Render() {
-  if (!m_Mesh || !m_Material) {
+  if (!m_Mesh || !/*m_Material*/ m_Texture) {
     INFERNO_LOG_WARN("Entity {} with MeshComponent has no Mesh or Material!",
                      GetEntity()->GetName());
     return;

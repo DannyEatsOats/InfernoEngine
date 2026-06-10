@@ -1,7 +1,9 @@
 #pragma once
 
+#include "Inferno/Renderer/Texture.h"
 #include "Inferno/Utils/DeltaTime.h"
 #include "glm/ext/matrix_float4x4.hpp"
+#include "glm/geometric.hpp"
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
@@ -71,7 +73,7 @@ public:
   }
 
   void SetRotation(const glm::quat &rot) {
-    m_Rotation = rot;
+    m_Rotation = glm::normalize(rot);
     m_TransformDirty = true;
   }
 
@@ -115,19 +117,22 @@ class Mesh;
 class Material;
 class MeshComponent : public Component {
 public:
-  MeshComponent(Mesh *mesh, Material *material)
-      : m_Mesh(mesh), m_Material(material) {}
+  MeshComponent(const Mesh *mesh, const Texture *texture)
+      : m_Mesh(mesh), m_Texture(texture) {}
 
   void SetMesh(Mesh *mesh) { m_Mesh = mesh; }
-  void SetMaterial(Material *material) { m_Material = material; }
+  // void SetMaterial(Material *material) { m_Material = material; }
+  void SetTexture(const Texture *texture) { m_Texture = texture; }
 
-  Mesh *GetMesh() const { return m_Mesh; }
-  Material *GetMaterial() const { return m_Material; }
+  const Mesh *GetMesh() const { return m_Mesh; }
+  // Material *GetMaterial() const { return m_Material; }
+  const Texture *GetTexture() const { return m_Texture; }
 
   virtual void Render() override;
 
 private:
-  Mesh *m_Mesh = nullptr;
-  Material *m_Material = nullptr;
+  const Mesh *m_Mesh = nullptr;
+  // Material *m_Material = nullptr;
+  const Texture *m_Texture = nullptr;
 };
 } // namespace Inferno

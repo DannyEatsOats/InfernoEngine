@@ -1,4 +1,10 @@
+#include <filesystem>
 #include <pch.h>
+#include <stdexcept>
+#include <vector>
+
+#define TINYOBJLOADER_IMPLEMENTATION
+#include <tiny_obj_loader.h>
 
 #include "Inferno/Resource/Resource.h"
 #include "Mesh.h"
@@ -32,7 +38,8 @@ Mesh &Mesh::operator=(Mesh &&other) {
 
 bool Mesh::DoLoad() {
   // TODO: Create canonical path
-  std::string filePath = "models/" + GetID() + ".gltf";
+  // std::string filePath = "models/" + GetID() + ".gltf";
+  std::string filePath = "assets/models/" + GetID() + ".obj";
 
   std::vector<MeshVertex> vertices;
   std::vector<uint16_t> indices;
@@ -69,7 +76,72 @@ bool Mesh::DoUnLoad() {
 bool Mesh::LoadMeshData(std::string &filePath,
                         std::vector<MeshVertex> &vertexBuffer,
                         std::vector<uint16_t> &indexBuffer) {
-  // TODO: TEMP FOR TESTING
+  std::filesystem::path exePath =
+      std::filesystem::canonical("/proc/self/exe").parent_path();
+  std::filesystem::path fullPath = exePath / filePath;
+
+  tinyobj::attrib_t attrib;
+  std::vector<tinyobj::shape_t> shapes;
+  std::vector<tinyobj::material_t> materials;
+  std::string warn, err;
+
+  if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err,
+                        fullPath.string().c_str())) {
+    throw std::runtime_error("OBJ LOADING ERROR: " + warn + " " + err);
+  }
+
+  for (const auto &shape : shapes) {
+    for (const auto &index : shape.mesh.indices) {
+      MeshVertex vertex{};
+
+float rawX = attrib.vertices[3 * index.vertex_index + 0];
+  float rawY = attrib.vertices[3 * index.vertex_index + 1];
+  float rawZ = attrib.vertices[3 * index.vertex_index + 2];
+
+  float currentX = rawX;
+  float currentY = rawZ;
+  float currentZ = -rawY;
+
+  vertex.Position = {
+      -currentZ, 
+       currentY,
+       currentX 
+  };
+
+  if (!attrib.normals.empty() && index.normal_index >= 0) {
+    float nX = attrib.normals[3 * index.normal_index + 0];
+    float nY = attrib.normals[3 * index.normal_index + 1];
+    float nZ = attrib.normals[3 * index.normal_index + 2];
+
+    float currentNX = nX;
+    float currentNY = nZ;
+    float currentNZ = -nY;
+
+    vertex.Normal = {
+        -currentNZ,
+         currentNY,
+         currentNX
+    };
+  } else {
+    vertex.Normal = {0.0f, 1.0f, 0.0f};
+  }
+      vertex.Color = {0.5f, 0.5f, 0.5f};
+
+      vertex.TexCoord = {
+          attrib.texcoords[2 * index.texcoord_index + 0],
+          1.0f - attrib.texcoords[2 * index.texcoord_index + 1],
+      };
+
+      vertex.Color = {1.0f, 1.0f, 1.0f};
+
+      vertexBuffer.push_back(vertex);
+      indexBuffer.push_back(indexBuffer.size());
+    }
+  }
+
+  //===========================================================
+
+  /*
   vertexBuffer = {
       // Front Face (Z = 0.5f) - Normal pointing straight out at +Z
       {{-0.5f, -0.5f, 0.5f},
@@ -188,6 +260,7 @@ bool Mesh::LoadMeshData(std::string &filePath,
       16, 17, 18, 18, 19, 16, // Right
       20, 21, 22, 22, 23, 20  // Left
   };
+  */
   return true;
 }
 } // namespace Inferno

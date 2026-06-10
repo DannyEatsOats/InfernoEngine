@@ -1,4 +1,5 @@
 #include <cstring>
+#include <filesystem>
 #include <ktx.h>
 #include <ktxvulkan.h>
 #include <pch.h>
@@ -42,7 +43,8 @@ Texture &Texture::operator=(Texture &&other) {
 
 bool Texture::DoLoad() {
   // TODO: Create canonical path
-  std::string filePath = "textures/" + GetID() + ".ktx";
+  //std::string filePath = "textures/" + GetID() + ".ktx";
+  std::string filePath = "assets/textures/" + GetID() + ".png";
 
   LoadFromFile(filePath);
 
@@ -98,15 +100,19 @@ void Texture::LoadFromKTX2(const std::string &filePath) {
 */
 
 void Texture::LoadFromFile(const std::string &filePath) {
+  std::filesystem::path exePath =
+      std::filesystem::canonical("/proc/self/exe").parent_path();
+  std::filesystem::path fullPath = exePath / filePath;
+
   int width, height, channels;
   stbi_uc *pixels =
-      stbi_load(filePath.c_str(), &width, &height, &channels, STBI_rgb_alpha);
+      stbi_load(fullPath.string().c_str(), &width, &height, &channels, STBI_rgb_alpha);
 
   VkDeviceSize imageSize =
       static_cast<uint32_t>(width) * static_cast<uint32_t>(height) * 4;
 
   if (!pixels) {
-    throw std::runtime_error("Failed to load Texture from file: " + filePath);
+    throw std::runtime_error("Failed to load Texture from file: " + fullPath.string());
   }
 
   Buffer stagingBuffer(m_Context, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,

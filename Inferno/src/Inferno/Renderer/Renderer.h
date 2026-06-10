@@ -3,7 +3,9 @@
 #include "Inferno/Renderer/CullingSystem.h"
 #include "Inferno/Renderer/DeviceContext.h"
 #include "Inferno/Renderer/RenderGraph.h"
+#include "Inferno/Renderer/Texture.h"
 #include "Inferno/Resource/ResourceManager.h"
+#include <unordered_map>
 #include <vulkan/vulkan_core.h>
 
 namespace Inferno {
@@ -25,6 +27,7 @@ public:
 private:
   void SetupDeferredPipeline();
   void CreateGeometryPipeline();
+  VkDescriptorSet GetOrCreateTextureDescriptorSet(const Texture *texture);
   void CreateLightingPipeline();
   void CreateLightingDescriptorSet();
   void UpdateLightingDescriptorSet();
@@ -42,6 +45,10 @@ private:
   // G-Buffer Geometry Pass
   VkPipeline m_GeometryPipeline = VK_NULL_HANDLE;
   VkPipelineLayout m_GeometryPipelineLayout = VK_NULL_HANDLE;
+
+  VkDescriptorSetLayout m_GeometryDescriptorSetLayout = VK_NULL_HANDLE;
+  VkDescriptorPool m_TextureDescriptorPool = VK_NULL_HANDLE;
+  std::unordered_map<std::string, VkDescriptorSet> m_TextureDescroptiorSets;
 
   // Deffered Shading Lighting Pass
   VkPipeline m_LightingPipeline = VK_NULL_HANDLE;

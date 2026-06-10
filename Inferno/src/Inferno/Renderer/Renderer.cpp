@@ -1,5 +1,5 @@
+#include "Inferno/Core/Log.h"
 #include "Inferno/ECS/Entity.h"
-#include "glm/ext.hpp"
 #include "glm/ext/matrix_float4x4.hpp"
 #include "glm/ext/vector_float3.hpp"
 #include <vector>
@@ -42,6 +42,12 @@ void Renderer::ShutDown() {
     vkDeviceWaitIdle(m_Context->Device);
   }
 
+  if (m_GeometryDescriptorSetLayout != VK_NULL_HANDLE) {
+    vkDestroyDescriptorSetLayout(m_Context->Device,
+                                 m_GeometryDescriptorSetLayout, nullptr);
+    m_GeometryDescriptorSetLayout = VK_NULL_HANDLE;
+  }
+
   if (m_GeometryPipeline != VK_NULL_HANDLE) {
     vkDestroyPipeline(m_Context->Device, m_GeometryPipeline, nullptr);
     m_GeometryPipeline = VK_NULL_HANDLE;
@@ -61,6 +67,13 @@ void Renderer::ShutDown() {
                             nullptr);
     m_LightingPipelineLayout = VK_NULL_HANDLE;
   }
+
+  if (m_TextureDescriptorPool != VK_NULL_HANDLE) {
+    vkDestroyDescriptorPool(m_Context->Device, m_TextureDescriptorPool,
+                            nullptr);
+    m_TextureDescriptorPool = VK_NULL_HANDLE;
+  }
+  m_TextureDescroptiorSets.clear();
 
   if (m_LightingDescriptorLayout != VK_NULL_HANDLE) {
     vkDestroyDescriptorSetLayout(m_Context->Device, m_LightingDescriptorLayout,
@@ -83,6 +96,24 @@ void Renderer::ShutDown() {
 void Renderer::CreateGeometryPipeline() {
   auto gbufferShader = m_ResourceManager->Load<Shader>("gbuffer", m_Context);
 
+  VkDescriptorSetLayoutBinding samplerLayoutBinding{};
+  samplerLayoutBinding.binding = 0;
+  samplerLayoutBinding.descriptorType =
+      VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+  samplerLayoutBinding.descriptorCount = 1;
+  samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+  samplerLayoutBinding.pImmutableSamplers = nullptr;
+
+  VkDescriptorSetLayoutCreateInfo layoutInfo{};
+  layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+  layoutInfo.bindingCount = 1;
+  layoutInfo.pBindings = &samplerLayoutBinding;
+
+  if (vkCreateDescriptorSetLayout(m_Context->Device, &layoutInfo, nullptr,
+                                  &m_GeometryDescriptorSetLayout)) {
+    throw std::runtime_error("Failed to create Geometry descriptor set layout");
+  }
+
   VkPushConstantRange pushConstantRange{};
   pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
   pushConstantRange.offset = 0;
@@ -90,6 +121,8 @@ void Renderer::CreateGeometryPipeline() {
 
   VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
   pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+  pipelineLayoutInfo.setLayoutCount = 1;
+  pipelineLayoutInfo.pSetLayouts = &m_GeometryDescriptorSetLayout;
   pipelineLayoutInfo.pushConstantRangeCount = 1;
   pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
 
@@ -219,6 +252,62 @@ void Renderer::CreateGeometryPipeline() {
                                 &m_GeometryPipeline) != VK_SUCCESS) {
     throw std::runtime_error("Failed to create geometry graphics pipeline!");
   }
+}
+
+VkDescriptorSet
+Renderer::GetOrCreateTextureDescriptorSet(const Texture *texture) {
+  auto it = m_TextureDescroptiorSets.find(texture->GetID());
+  if (it != m_TextureDescroptiorSets.end()) {
+    return it->second;
+  }
+
+  if (m_TextureDescriptorPool == VK_NULL_HANDLE) {
+    VkDescriptorPoolSize poolSize{};
+    poolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    poolSize.descriptorCount = 100;
+
+    VkDescriptorPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    poolInfo.poolSizeCount = 1;
+    poolInfo.pPoolSizes = &poolSize;
+    poolInfo.maxSets = 100;
+
+    if (vkCreateDescriptorPool(m_Context->Device, &poolInfo, nullptr,
+                               &m_TextureDescriptorPool) != VK_SUCCESS) {
+      throw std::runtime_error("Failed to create texture descriptor pool");
+    }
+  }
+
+  VkDescriptorSetAllocateInfo allocInfo{};
+  allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+  allocInfo.descriptorPool = m_TextureDescriptorPool;
+  allocInfo.descriptorSetCount = 1;
+  allocInfo.pSetLayouts = &m_GeometryDescriptorSetLayout;
+
+  VkDescriptorSet descriptorSet;
+  if (vkAllocateDescriptorSets(m_Context->Device, &allocInfo, &descriptorSet) !=
+      VK_SUCCESS) {
+    throw std::runtime_error("Failed to allocate texture descriptor set");
+  }
+
+  VkDescriptorImageInfo imageInfo{};
+  imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  imageInfo.imageView = texture->GetImageView();
+  imageInfo.sampler = texture->GetSampler();
+
+  VkWriteDescriptorSet descriptorWrite{};
+  descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+  descriptorWrite.dstSet = descriptorSet;
+  descriptorWrite.dstBinding = 0;
+  descriptorWrite.dstArrayElement = 0;
+  descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+  descriptorWrite.descriptorCount = 1;
+  descriptorWrite.pImageInfo = &imageInfo;
+
+  vkUpdateDescriptorSets(m_Context->Device, 1, &descriptorWrite, 0, nullptr);
+
+  m_TextureDescroptiorSets[texture->GetID()] = descriptorSet;
+  return descriptorSet;
 }
 
 void Renderer::CreateLightingPipeline() {
@@ -524,18 +613,13 @@ void Renderer::SetupDeferredPipeline() {
                                      glm::vec3(0.0f, 0.0f, 0.0f),
                                      glm::vec3(0.0f, 1.0f, 0.0f));
 
-        // Loop through and draw each object
         for (auto *entity : visibleItems) {
-          // Assuming entity provides access to your Mesh resource class
           MeshComponent *meshComponent = entity->GetComponent<MeshComponent>();
           if (!meshComponent)
             continue;
 
           glm::mat4 model =
               entity->GetComponent<TransformComponent>()->GetTransformmatrix();
-          model =
-              glm::rotate(model, time * glm::radians(90.0f),
-                          glm::vec3(0.0f, 1.0f, 0.0f));
 
           MeshPushConstants push{};
           push.mvp = proj * view * model;
@@ -553,11 +637,18 @@ void Renderer::SetupDeferredPipeline() {
               meshComponent->GetMesh()->GetVertexBuffer()->Get()};
           VkDeviceSize offsets[] = {0};
           vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
-
-          // Bind Index Buffer
           vkCmdBindIndexBuffer(
               cmd, meshComponent->GetMesh()->GetIndexBuffer()->Get(), 0,
               VK_INDEX_TYPE_UINT16);
+
+          const auto *texture = meshComponent->GetTexture();
+          if (texture) {
+            VkDescriptorSet textureSet =
+                GetOrCreateTextureDescriptorSet(texture);
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    m_GeometryPipelineLayout, 0, 1, &textureSet,
+                                    0, nullptr);
+          }
 
           // Issue Draw Call
           vkCmdDrawIndexed(cmd, meshComponent->GetMesh()->GetIndexCount(), 1, 0,

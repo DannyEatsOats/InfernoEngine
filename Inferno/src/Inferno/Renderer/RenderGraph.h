@@ -81,12 +81,13 @@ public:
 
     const auto &resource = it->second;
     if (resource.IsExternal) {
-      // Safely indexing into the active swapchain image acquired for this frame
       return resource.ExternalImageViews[m_ActiveImageIndex];
-    } else { // <-- Added missing 'else' keyword
+    } else {
       return resource.FrameImages[m_CurrentFrame].GetView();
     }
   }
+
+  uint32_t GetGetCurrentFrameIndex() const { return m_CurrentFrame; }
 
   void Compile();
   void Execute(uint32_t imageIndex);

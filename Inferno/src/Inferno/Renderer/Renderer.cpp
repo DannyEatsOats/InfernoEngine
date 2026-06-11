@@ -1,4 +1,3 @@
-#include "Inferno/Core/Log.h"
 #include "Inferno/ECS/Entity.h"
 #include "glm/ext/matrix_float4x4.hpp"
 #include "glm/ext/vector_float3.hpp"
@@ -183,8 +182,6 @@ void Renderer::CreateGeometryPipeline() {
       VK_TRUE,
       VK_COMPARE_OP_LESS};
 
-  // CRITICAL: We need THREE identical color blend attachments because we write
-  // to 3 outputs simultaneously
   std::array<VkPipelineColorBlendAttachmentState, 3> blendAttachments{};
   for (auto &attachment : blendAttachments) {
     attachment.colorWriteMask =
@@ -217,7 +214,7 @@ void Renderer::CreateGeometryPipeline() {
                      nullptr};
 
   // Formats mapping layout configuration
-  std::array<VkFormat, 3> gbufferFormats = {VK_FORMAT_R16G16B16A16_SFLOAT,
+  std::array<VkFormat, 3> gbufferFormats = {VK_FORMAT_R32G32B32A32_SFLOAT,
                                             VK_FORMAT_R16G16B16A16_SFLOAT,
                                             VK_FORMAT_R16G16B16A16_SFLOAT};
   VkPipelineRenderingCreateInfo renderingCreateInfo{};
@@ -455,32 +452,35 @@ void Renderer::CreateLightingDescriptorSet() {
 
   VkDescriptorPoolSize poolSize{};
   poolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-  poolSize.descriptorCount = 4;
+  poolSize.descriptorCount = 8;
 
   VkDescriptorPoolCreateInfo poolInfo{};
   poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
   poolInfo.poolSizeCount = 1;
   poolInfo.pPoolSizes = &poolSize;
-  poolInfo.maxSets = 1;
+  poolInfo.maxSets = 2;
 
   if (vkCreateDescriptorPool(m_Context->Device, &poolInfo, nullptr,
                              &m_DescriptorPool) != VK_SUCCESS) {
     throw std::runtime_error("Failed to create descriptor pool!");
   }
 
+  m_LightingDescriptorSets.resize(2);
+  std::vector<VkDescriptorSetLayout> layouts(2, m_LightingDescriptorLayout);
+
   VkDescriptorSetAllocateInfo allocInfo{};
   allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
   allocInfo.descriptorPool = m_DescriptorPool;
-  allocInfo.descriptorSetCount = 1;
-  allocInfo.pSetLayouts = &m_LightingDescriptorLayout;
+  allocInfo.descriptorSetCount = 2;
+  allocInfo.pSetLayouts = layouts.data();
 
   if (vkAllocateDescriptorSets(m_Context->Device, &allocInfo,
-                               &m_LightingDescriptorSet) != VK_SUCCESS) {
+                               m_LightingDescriptorSets.data()) != VK_SUCCESS) {
     throw std::runtime_error("Failed to allocate lighting descriptor set!");
   }
 }
 
-void Renderer::UpdateLightingDescriptorSet() {
+void Renderer::UpdateLightingDescriptorSet(uint32_t frameIdx) {
   std::array<std::string, 4> targetNames = {
       "GBuffer_Position", "GBuffer_Normal", "GBuffer_Albedo", "Depth"};
   std::array<VkDescriptorImageInfo, 4> imageInfos{};
@@ -494,7 +494,7 @@ void Renderer::UpdateLightingDescriptorSet() {
                  : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
     descriptorWrites[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    descriptorWrites[i].dstSet = m_LightingDescriptorSet;
+    descriptorWrites[i].dstSet = m_LightingDescriptorSets[frameIdx];
     descriptorWrites[i].dstBinding = i;
     descriptorWrites[i].dstArrayElement = 0;
     descriptorWrites[i].descriptorType =
@@ -517,7 +517,7 @@ void Renderer::SetupDeferredPipeline() {
 
   // Resources Allocations
   m_RenderGraph->AddResource(
-      "GBuffer_Position", VK_FORMAT_R16G16B16A16_SFLOAT,
+      "GBuffer_Position", VK_FORMAT_R32G32B32A32_SFLOAT,
       m_Context->Swapchain.Extent,
       VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
       VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
@@ -691,9 +691,12 @@ void Renderer::SetupDeferredPipeline() {
         vkCmdSetViewport(cmd, 0, 1, &viewport);
         vkCmdSetScissor(cmd, 0, 1, &scissor);
 
+        uint32_t frameIdx = m_RenderGraph->GetGetCurrentFrameIndex();
+        UpdateLightingDescriptorSet(frameIdx);
+
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                 m_LightingPipelineLayout, 0, 1,
-                                &m_LightingDescriptorSet, 0, nullptr);
+                                &m_LightingDescriptorSets[frameIdx], 0, nullptr);
 
         vkCmdDraw(cmd, 3, 1, 0, 0);
 
@@ -701,7 +704,6 @@ void Renderer::SetupDeferredPipeline() {
       });
 
   m_RenderGraph->Compile();
-  UpdateLightingDescriptorSet();
 }
 
 void Renderer::Render(const std::vector<Entity *> &entities) {
@@ -726,7 +728,8 @@ void Renderer::Resize() {
       m_Context->Swapchain.ImageViews, m_Context->Swapchain.Extent);
 
   m_RenderGraph->Resize(m_Context->Swapchain.Extent);
-  UpdateLightingDescriptorSet();
+  UpdateLightingDescriptorSet(0);
+  UpdateLightingDescriptorSet(1);
   m_Resized = false;
 }
 

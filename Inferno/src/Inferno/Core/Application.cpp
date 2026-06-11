@@ -45,7 +45,7 @@ void Application::StartUp() {
     auto texture = m_ResourceManager->Load<Texture>("viking_room",
                                                     m_RenderingContext.get());
     testEntity->AddComponent<MeshComponent>(mesh.get(), texture.get());
-    // m_Entities.push_back(testEntity);
+    //m_Entities.push_back(testEntity);
   }
 
   {

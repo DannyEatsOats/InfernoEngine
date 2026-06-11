@@ -9,6 +9,11 @@ layout(binding = 2) uniform sampler2D gBufferAlbedo;
 layout(binding = 3) uniform sampler2D gBufferDepth;
 
 void main() {
+    float depth = texture(gBufferDepth, inUV).r;
+    if (depth >= 0.999) {
+        discard;
+    }
+
     vec3 worldPos = texture(gBufferPosition, inUV).rgb;
     vec3 normal = texture(gBufferNormal, inUV).rgb;
     vec3 albedo = texture(gBufferAlbedo, inUV).rgb;

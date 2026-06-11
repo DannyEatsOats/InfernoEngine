@@ -1,3 +1,4 @@
+#include "glm/geometric.hpp"
 #include <filesystem>
 #include <pch.h>
 #include <stdexcept>
@@ -94,44 +95,41 @@ bool Mesh::LoadMeshData(std::string &filePath,
     for (const auto &index : shape.mesh.indices) {
       MeshVertex vertex{};
 
-float rawX = attrib.vertices[3 * index.vertex_index + 0];
-  float rawY = attrib.vertices[3 * index.vertex_index + 1];
-  float rawZ = attrib.vertices[3 * index.vertex_index + 2];
+      float rawX = attrib.vertices[3 * index.vertex_index + 0];
+      float rawY = attrib.vertices[3 * index.vertex_index + 1];
+      float rawZ = attrib.vertices[3 * index.vertex_index + 2];
 
-  float currentX = rawX;
-  float currentY = rawZ;
-  float currentZ = -rawY;
+      float currentX = rawX;
+      float currentY = rawZ;
+      float currentZ = -rawY;
 
-  vertex.Position = {
-      -currentZ, 
-       currentY,
-       currentX 
-  };
+      vertex.Position = {-currentZ, currentY, currentX};
 
-  if (!attrib.normals.empty() && index.normal_index >= 0) {
-    float nX = attrib.normals[3 * index.normal_index + 0];
-    float nY = attrib.normals[3 * index.normal_index + 1];
-    float nZ = attrib.normals[3 * index.normal_index + 2];
+      if (!attrib.normals.empty() && index.normal_index >= 0) {
+        float nX = attrib.normals[3 * index.normal_index + 0];
+        float nY = attrib.normals[3 * index.normal_index + 1];
+        float nZ = attrib.normals[3 * index.normal_index + 2];
 
-    float currentNX = nX;
-    float currentNY = nZ;
-    float currentNZ = -nY;
+        float currentNX = nX;
+        float currentNY = nZ;
+        float currentNZ = -nY;
 
-    vertex.Normal = {
-        -currentNZ,
-         currentNY,
-         currentNX
-    };
-  } else {
-    vertex.Normal = {0.0f, 1.0f, 0.0f};
-  }
+        vertex.Normal =
+            glm::normalize(glm::vec3(-currentNZ, currentNY, currentNX));
+
+      } else {
+        vertex.Normal = {0.0f, 1.0f, 0.0f};
+      }
       vertex.Color = {0.5f, 0.5f, 0.5f};
 
-      vertex.TexCoord = {
-          attrib.texcoords[2 * index.texcoord_index + 0],
-          1.0f - attrib.texcoords[2 * index.texcoord_index + 1],
-      };
-
+      if (!attrib.texcoords.empty() && index.texcoord_index >= 0) {
+        vertex.TexCoord = {
+            attrib.texcoords[2 * index.texcoord_index + 0],
+            1.0f - attrib.texcoords[2 * index.texcoord_index + 1],
+        };
+      } else {
+        vertex.TexCoord = {0.0f, 0.0f};
+      }
       vertex.Color = {1.0f, 1.0f, 1.0f};
 
       vertexBuffer.push_back(vertex);

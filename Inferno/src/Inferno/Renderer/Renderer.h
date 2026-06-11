@@ -32,7 +32,7 @@ private:
   VkDescriptorSet GetOrCreateTextureDescriptorSet(const Texture *texture);
   void CreateLightingPipeline();
   void CreateLightingDescriptorSet();
-  void UpdateLightingDescriptorSet();
+  void UpdateLightingDescriptorSet(uint32_t frameIdx);
 
   void Resize();
 
@@ -60,7 +60,7 @@ private:
 
   VkDescriptorSetLayout m_LightingDescriptorLayout = VK_NULL_HANDLE;
   VkDescriptorPool m_DescriptorPool = VK_NULL_HANDLE;
-  VkDescriptorSet m_LightingDescriptorSet = VK_NULL_HANDLE;
+  std::vector<VkDescriptorSet> m_LightingDescriptorSets;
   VkSampler m_GBufferSampler = VK_NULL_HANDLE;
 
   bool m_Resized = false;

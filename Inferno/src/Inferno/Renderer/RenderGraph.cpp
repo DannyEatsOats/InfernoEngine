@@ -10,6 +10,23 @@
 #include "RenderGraph.h"
 
 namespace Inferno {
+static VkImageAspectFlags GetAspectMaskFromFormat(VkFormat format) {
+  switch (format) {
+  case VK_FORMAT_D16_UNORM:
+  case VK_FORMAT_X8_D24_UNORM_PACK32:
+  case VK_FORMAT_D32_SFLOAT:
+    return VK_IMAGE_ASPECT_DEPTH_BIT;
+  case VK_FORMAT_S8_UINT:
+    return VK_IMAGE_ASPECT_STENCIL_BIT;
+  case VK_FORMAT_D16_UNORM_S8_UINT:
+  case VK_FORMAT_D24_UNORM_S8_UINT:
+  case VK_FORMAT_D32_SFLOAT_S8_UINT:
+    return VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+  default:
+    return VK_IMAGE_ASPECT_COLOR_BIT;
+  }
+}
+
 RenderGraph::~RenderGraph() {
   if (!m_CommandBuffers.empty()) {
     vkFreeCommandBuffers(m_Context->Device, m_Context->CommandPool,
@@ -215,10 +232,7 @@ void RenderGraph::Compile() {
     imageSpec.Height = resource.Extent.height;
     imageSpec.Tiling = VK_IMAGE_TILING_OPTIMAL;
     imageSpec.Usage = resource.Usage;
-
-    if (imageSpec.Usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) {
-      imageSpec.Aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
-    }
+    imageSpec.Aspect = GetAspectMaskFromFormat(resource.Format);
 
     resource.FrameImages.reserve(MAX_FRAMES_IN_FLIGHT);
     for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
@@ -252,10 +266,7 @@ void RenderGraph::Execute(uint32_t imageIndex) {
       VkImageLayout oldLayout = currentLayouts[input];
       VkImageLayout newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-      VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-      if (resource.Usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) {
-        aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-      }
+      VkImageAspectFlags aspectMask = GetAspectMaskFromFormat(resource.Format);
 
       VkImageMemoryBarrier barrier{};
       barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -437,6 +448,7 @@ void RenderGraph::Resize(VkExtent2D newExtent) {
     imageSpec.Height = resource.Extent.height;
     imageSpec.Tiling = VK_IMAGE_TILING_OPTIMAL;
     imageSpec.Usage = resource.Usage;
+    imageSpec.Aspect = GetAspectMaskFromFormat(resource.Format);
 
     resource.FrameImages.reserve(MAX_FRAMES_IN_FLIGHT);
     for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {

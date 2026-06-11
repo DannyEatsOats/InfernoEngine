@@ -5,6 +5,7 @@
 #include <vector>
 #include <vulkan/vulkan_core.h>
 
+#include "Inferno/Core/Log.h"
 #include "Inferno/Renderer/Image.h"
 #include "RenderGraph.h"
 
@@ -366,9 +367,9 @@ bool RenderGraph::RenderFrame(VkSwapchainKHR swapchain, VkQueue graphicsQueue,
       m_Context->Device, swapchain, UINT64_MAX,
       m_ImagesAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &imageIndex);
 
-  if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+  if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
     return false;
-  } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+  } else if (result != VK_SUCCESS) {
     throw std::runtime_error("Failed to acquire swapchain image!");
   }
 

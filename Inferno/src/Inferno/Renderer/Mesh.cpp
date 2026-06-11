@@ -42,7 +42,7 @@ bool Mesh::DoLoad() {
   std::string filePath = "assets/models/" + GetID() + ".obj";
 
   std::vector<MeshVertex> vertices;
-  std::vector<uint16_t> indices;
+  std::vector<uint32_t> indices;
   if (!LoadMeshData(filePath, vertices, indices)) {
     return false;
   }
@@ -57,7 +57,7 @@ bool Mesh::DoLoad() {
   m_VertexBuffer->SetLayout(MeshVertex::GetLayout());
 
   m_IndexBuffer = MakeScope<IndexBuffer>(
-      m_Context, sizeof(indices[0]) * m_IndexCount, VK_INDEX_TYPE_UINT16);
+      m_Context, sizeof(indices[0]) * m_IndexCount, VK_INDEX_TYPE_UINT32);
 
   m_VertexBuffer->Upload(vertices.data());
   m_IndexBuffer->Upload(indices.data());
@@ -75,7 +75,7 @@ bool Mesh::DoUnLoad() {
 
 bool Mesh::LoadMeshData(std::string &filePath,
                         std::vector<MeshVertex> &vertexBuffer,
-                        std::vector<uint16_t> &indexBuffer) {
+                        std::vector<uint32_t> &indexBuffer) {
   std::filesystem::path exePath =
       std::filesystem::canonical("/proc/self/exe").parent_path();
   std::filesystem::path fullPath = exePath / filePath;

@@ -35,22 +35,33 @@ void Application::StartUp() {
 
   // TEMP
 
-  for (int i = 0; i < 1; ++i) {
-    for (int j = 0; j < 1; ++j) {
-      for (int k = 0; k < 1; ++k) {
-        Entity *testEntity =
-            new Entity("test" + std::to_string(i) + std::to_string(j));
-        testEntity->AddComponent<TransformComponent>();
-        // testEntity->GetComponent<TransformComponent>()->SetRotation(
-        //    glm::angleAxis(glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f)));
-        auto mesh = m_ResourceManager->Load<Mesh>("viking_room",
-                                                  m_RenderingContext.get());
-        auto texture = m_ResourceManager->Load<Texture>(
-            "viking_room", m_RenderingContext.get());
-        testEntity->AddComponent<MeshComponent>(mesh.get(), texture.get());
-        m_Entities.push_back(testEntity);
-      }
-    }
+  {
+    Entity *testEntity = new Entity("test");
+    testEntity->AddComponent<TransformComponent>();
+    // testEntity->GetComponent<TransformComponent>()->SetRotation(
+    //    glm::angleAxis(glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f)));
+    auto mesh =
+        m_ResourceManager->Load<Mesh>("viking_room", m_RenderingContext.get());
+    auto texture = m_ResourceManager->Load<Texture>("viking_room",
+                                                    m_RenderingContext.get());
+    testEntity->AddComponent<MeshComponent>(mesh.get(), texture.get());
+    // m_Entities.push_back(testEntity);
+  }
+
+  {
+    Entity *knight = new Entity("knight");
+    auto *transform = knight->AddComponent<TransformComponent>();
+    // transform->SetRotation(glm::angleAxis(glm::radians(90.0f),
+    // glm::vec3(0.0f, 0.0f, 1.0f)));
+    // transform->SetRotation(glm::angleAxis(glm::radians(-90.0f),
+    // glm::vec3(0.0f, 1.0f, 0.0f)));
+
+    auto mesh =
+        m_ResourceManager->Load<Mesh>("knight", m_RenderingContext.get());
+    auto texture =
+        m_ResourceManager->Load<Texture>("knight", m_RenderingContext.get());
+    knight->AddComponent<MeshComponent>(mesh.get(), texture.get());
+    m_Entities.push_back(knight);
   }
 
   /*
@@ -134,14 +145,35 @@ void Application::OnEvent(Event &event) {
       } else if (event.GetKeyCode() == ENGINE_KEY_DOWN) {
         position = position + glm::vec3(0.0f, -0.1f, 0.0f);
         entity->GetComponent<TransformComponent>()->SetPosition(position);
+
+      } else if (event.GetKeyCode() == ENGINE_KEY_F) {
+        glm::quat rotationInc =
+            glm::angleAxis(glm::radians(-5.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+        glm::quat newRotation = rotationInc * rotation;
+        entity->GetComponent<TransformComponent>()->SetRotation(newRotation);
+      } else if (event.GetKeyCode() == ENGINE_KEY_G) {
+        glm::quat rotationInc =
+            glm::angleAxis(glm::radians(5.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+        glm::quat newRotation = rotationInc * rotation;
+        entity->GetComponent<TransformComponent>()->SetRotation(newRotation);
       } else if (event.GetKeyCode() == ENGINE_KEY_H) {
         glm::quat rotationInc =
             glm::angleAxis(glm::radians(-5.0f), glm::vec3(0.0f, 1.0f, 0.0f));
         glm::quat newRotation = rotationInc * rotation;
         entity->GetComponent<TransformComponent>()->SetRotation(newRotation);
-      } else if (event.GetKeyCode() == ENGINE_KEY_L) {
+      } else if (event.GetKeyCode() == ENGINE_KEY_J) {
         glm::quat rotationInc =
             glm::angleAxis(glm::radians(5.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::quat newRotation = rotationInc * rotation;
+        entity->GetComponent<TransformComponent>()->SetRotation(newRotation);
+      } else if (event.GetKeyCode() == ENGINE_KEY_K) {
+        glm::quat rotationInc =
+            glm::angleAxis(glm::radians(5.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+        glm::quat newRotation = rotationInc * rotation;
+        entity->GetComponent<TransformComponent>()->SetRotation(newRotation);
+      } else if (event.GetKeyCode() == ENGINE_KEY_L) {
+        glm::quat rotationInc =
+            glm::angleAxis(glm::radians(-5.0f), glm::vec3(0.0f, 0.0f, 1.0f));
         glm::quat newRotation = rotationInc * rotation;
         entity->GetComponent<TransformComponent>()->SetRotation(newRotation);
       }
@@ -179,7 +211,7 @@ bool Application::OnWindowResize(WindowResizeEvent &event) {
     return false;
   }
   m_Minimized = false;
-  // m_Renderer->OnWindowResize(event.GetWidth(), event.GetHeight());
+  m_Renderer->SignalResize();
 
   return false;
 }

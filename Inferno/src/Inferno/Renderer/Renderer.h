@@ -24,6 +24,8 @@ public:
 
   void Render(const std::vector<Entity *> &entities);
 
+  void SignalResize() { m_Resized = true; }
+
 private:
   void SetupDeferredPipeline();
   void CreateGeometryPipeline();
@@ -31,6 +33,8 @@ private:
   void CreateLightingPipeline();
   void CreateLightingDescriptorSet();
   void UpdateLightingDescriptorSet();
+
+  void Resize();
 
   // TEST
   void CreateTestPipeline();
@@ -58,6 +62,8 @@ private:
   VkDescriptorPool m_DescriptorPool = VK_NULL_HANDLE;
   VkDescriptorSet m_LightingDescriptorSet = VK_NULL_HANDLE;
   VkSampler m_GBufferSampler = VK_NULL_HANDLE;
+
+  bool m_Resized = false;
 
   // TEST
   VkPipeline m_Pipeline;

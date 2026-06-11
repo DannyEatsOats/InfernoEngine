@@ -600,15 +600,16 @@ void Renderer::SetupDeferredPipeline() {
         // const auto &visibleItems = m_CullingSystem->GetVisibleEntities();
         const auto &visibleItems = m_VisibleEntites;
 
-        // Setup mock Camera Matrices for testing (Rotate slightly over time to
-        // see depth)
-        float time = (float)glfwGetTime();
+        // Mock Camera
         glm::mat4 proj =
             glm::perspective(glm::radians(45.0f),
                              (float)m_Context->Swapchain.Extent.width /
                                  (float)m_Context->Swapchain.Extent.height,
                              0.1f, 10.0f);
-        proj[1][1] *= -1; // Correct for Vulkan's inverted Y axis
+        // INFERNO_LOG_ERROR("Swapchain Extent width:
+        // {}",m_Context->Swapchain.Extent.width); INFERNO_LOG_ERROR("Swapchain
+        // Extent height: {}", m_Context->Swapchain.Extent.height);
+        proj[1][1] *= -1;
         glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 1.0f, 3.0f),
                                      glm::vec3(0.0f, 0.0f, 0.0f),
                                      glm::vec3(0.0f, 1.0f, 0.0f));
@@ -630,16 +631,13 @@ void Renderer::SetupDeferredPipeline() {
                              VK_SHADER_STAGE_VERTEX_BIT, 0,
                              sizeof(MeshPushConstants), &push);
 
-          // Bind Vertex Buffers
-          // Note: Adjust .GetVulkanHandle() to match whatever method returns
-          // your raw VkBuffer from your wrapper
           VkBuffer vertexBuffers[] = {
               meshComponent->GetMesh()->GetVertexBuffer()->Get()};
           VkDeviceSize offsets[] = {0};
           vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
           vkCmdBindIndexBuffer(
               cmd, meshComponent->GetMesh()->GetIndexBuffer()->Get(), 0,
-              VK_INDEX_TYPE_UINT16);
+              meshComponent->GetMesh()->GetIndexBuffer()->GetIndexType());
 
           const auto *texture = meshComponent->GetTexture();
           if (texture) {
@@ -714,17 +712,22 @@ void Renderer::Render(const std::vector<Entity *> &entities) {
                                             m_Context->GraphicsQueue,
                                             m_Context->PresentQueue);
 
-  if (!success) {
-    vkDeviceWaitIdle(m_Context->Device);
-    m_Context->RecreateSwapchain();
-
-    m_RenderGraph->UpdateSwapchainResources(
-        "SwapchainOutput", m_Context->Swapchain.Images,
-        m_Context->Swapchain.ImageViews, m_Context->Swapchain.Extent);
-
-    m_RenderGraph->Resize(m_Context->Swapchain.Extent);
-    UpdateLightingDescriptorSet();
+  if (!success || m_Resized) {
+    Resize();
   }
+}
+
+void Renderer::Resize() {
+  vkDeviceWaitIdle(m_Context->Device);
+  m_Context->RecreateSwapchain();
+
+  m_RenderGraph->UpdateSwapchainResources(
+      "SwapchainOutput", m_Context->Swapchain.Images,
+      m_Context->Swapchain.ImageViews, m_Context->Swapchain.Extent);
+
+  m_RenderGraph->Resize(m_Context->Swapchain.Extent);
+  UpdateLightingDescriptorSet();
+  m_Resized = false;
 }
 
 void Renderer::CreateTestPipeline() {}

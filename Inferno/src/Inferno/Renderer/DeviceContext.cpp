@@ -366,6 +366,8 @@ void DeviceContext::CleanupSwapchain() {
 }
 
 void DeviceContext::RecreateSwapchain() {
+  vkDeviceWaitIdle(Device);
+
   CleanupSwapchain();
   CreateSwapchain();
   CreateSwapchainImageViews();

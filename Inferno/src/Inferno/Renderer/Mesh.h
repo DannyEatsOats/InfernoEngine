@@ -55,7 +55,7 @@ protected:
 private:
   bool LoadMeshData(std::string &filePath,
                     std::vector<MeshVertex> &vertexBuffer,
-                    std::vector<uint16_t> &indexBuffer);
+                    std::vector<uint32_t> &indexBuffer);
 
   void CleanUp() {
     m_Context = nullptr;

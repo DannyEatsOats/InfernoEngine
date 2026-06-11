@@ -15,7 +15,7 @@ void main() {
 
     vec3 lightDir = normalize(vec3(0.5, 1.0, 0.5));
     vec3 lightColor = vec3(0.78, 0.65, 0.5);
-    float lightIntensity = 2.5;
+    float lightIntensity = 3.5;
     float ambientIntensity = 0.15;
 
     vec3 ambient = albedo * ambientIntensity;

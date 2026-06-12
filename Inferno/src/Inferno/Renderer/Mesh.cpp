@@ -1,3 +1,4 @@
+#include "Inferno/Core/Log.h"
 #include "glm/geometric.hpp"
 #include <filesystem>
 #include <pch.h>
@@ -91,6 +92,8 @@ bool Mesh::LoadMeshData(std::string &filePath,
     throw std::runtime_error("OBJ LOADING ERROR: " + warn + " " + err);
   }
 
+  std::unordered_map<MeshVertex, uint32_t> uniqueVertices{};
+
   for (const auto &shape : shapes) {
     for (const auto &index : shape.mesh.indices) {
       MeshVertex vertex{};
@@ -132,10 +135,18 @@ bool Mesh::LoadMeshData(std::string &filePath,
       }
       vertex.Color = {1.0f, 1.0f, 1.0f};
 
-      vertexBuffer.push_back(vertex);
-      indexBuffer.push_back(indexBuffer.size());
+      auto [it, inserted] = uniqueVertices.insert(
+          {vertex, static_cast<uint32_t>(vertexBuffer.size())});
+
+      if (inserted) {
+        vertexBuffer.push_back(vertex);
+      }
+
+      indexBuffer.push_back(it->second);
     }
   }
+
+  INFERNO_LOG_INFO("Mesh {} VERTEX COUNT: {}", filePath, vertexBuffer.size());
 
   //===========================================================
 

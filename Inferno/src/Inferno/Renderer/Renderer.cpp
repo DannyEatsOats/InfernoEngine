@@ -489,9 +489,7 @@ void Renderer::UpdateLightingDescriptorSet(uint32_t frameIdx) {
   for (uint32_t i = 0; i < 4; ++i) {
     imageInfos[i].sampler = m_GBufferSampler;
     imageInfos[i].imageView = m_RenderGraph->GetActiveImageView(targetNames[i]);
-    imageInfos[i].imageLayout =
-        (i == 3) ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
-                 : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    imageInfos[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
     descriptorWrites[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     descriptorWrites[i].dstSet = m_LightingDescriptorSets[frameIdx];
@@ -694,9 +692,9 @@ void Renderer::SetupDeferredPipeline() {
         uint32_t frameIdx = m_RenderGraph->GetGetCurrentFrameIndex();
         UpdateLightingDescriptorSet(frameIdx);
 
-        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                m_LightingPipelineLayout, 0, 1,
-                                &m_LightingDescriptorSets[frameIdx], 0, nullptr);
+        vkCmdBindDescriptorSets(
+            cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_LightingPipelineLayout, 0,
+            1, &m_LightingDescriptorSets[frameIdx], 0, nullptr);
 
         vkCmdDraw(cmd, 3, 1, 0, 0);
 

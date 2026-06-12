@@ -33,7 +33,9 @@ private:
 
   void LoadFromKTX2(const std::string &filePath);
   void LoadFromFile(const std::string &filePath);
-  void CreateVulkanImage(VkBuffer srcBuffer, uint32_t width, uint32_t height);
+  void CreateVulkanImage(VkBuffer srcBuffer, uint32_t width, uint32_t height,
+                         uint32_t mipLevels);
+  void GenerateMipmaps();
 
 private:
   const DeviceContext *m_Context = nullptr;

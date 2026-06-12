@@ -57,32 +57,12 @@ void Application::StartUp() {
     // glm::vec3(0.0f, 1.0f, 0.0f)));
 
     auto mesh =
-        m_ResourceManager->Load<Mesh>("knight", m_RenderingContext.get());
+        m_ResourceManager->Load<Mesh>("zsamo", m_RenderingContext.get());
     auto texture =
-        m_ResourceManager->Load<Texture>("knight", m_RenderingContext.get());
+        m_ResourceManager->Load<Texture>("zsamo", m_RenderingContext.get());
     knight->AddComponent<MeshComponent>(mesh.get(), texture.get());
     m_Entities.push_back(knight);
   }
-
-  /*
-  for (int i = 0; i < 100; ++i) {
-    for (int j = 0; j < 50; ++j) {
-      for (int k = 0; k < 1; ++k) {
-        Entity *testEntity =
-            new Entity("test" + std::to_string(i) + std::to_string(j));
-        testEntity->AddComponent<TransformComponent>();
-        testEntity->GetComponent<TransformComponent>()->SetPosition(glm::vec3(
-            -4.0f + (i * 0.1f), 1.2f - (j * 0.1f), -3.0f - (k * 0.1f)));
-        testEntity->GetComponent<TransformComponent>()->SetScale(
-            glm::vec3(0.05f, 0.05f, 0.05f));
-        auto mesh =
-            m_ResourceManager->Load<Mesh>("testMesh", m_RenderingContext.get());
-        testEntity->AddComponent<MeshComponent>(mesh.get(), nullptr);
-        m_Entities.push_back(testEntity);
-      }
-    }
-  }
-  */
 }
 
 void Application::ShutDown() {

@@ -15,7 +15,7 @@ Image::Image(const DeviceContext *context, const ImageSpec &spec)
   createInfo.extent.width = spec.Width;
   createInfo.extent.height = spec.Height;
   createInfo.extent.depth = 1;
-  createInfo.mipLevels = 1;
+  createInfo.mipLevels = spec.MipLevels;
   createInfo.arrayLayers = 1;
   createInfo.format = spec.Format;
   createInfo.tiling = spec.Tiling;
@@ -56,6 +56,7 @@ Image::Image(const DeviceContext *context, const ImageSpec &spec)
   m_Width = spec.Width;
   m_Height = spec.Height;
   m_Format = spec.Format;
+  m_MipLevels = spec.MipLevels;
 
   // Create Image View
   VkImageViewCreateInfo viewInfo{};
@@ -68,7 +69,7 @@ Image::Image(const DeviceContext *context, const ImageSpec &spec)
 
   viewInfo.subresourceRange.aspectMask = spec.Aspect;
   viewInfo.subresourceRange.baseMipLevel = 0;
-  viewInfo.subresourceRange.levelCount = 1;
+  viewInfo.subresourceRange.levelCount = spec.MipLevels;
   viewInfo.subresourceRange.baseArrayLayer = 0;
   viewInfo.subresourceRange.layerCount = 1;
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Inferno/Renderer/DeviceContext.h"
+#include "Inferno/Renderer/Image.h"
 #include <optional>
 #include <vulkan/vulkan_core.h>
 namespace Inferno {
@@ -48,8 +49,7 @@ public:
   static void EndSingleTimeCommands(const DeviceContext *context,
                                     VkCommandBuffer commandBuffer);
 
-  static void TransitionImageLayout(const DeviceContext *context, VkImage image,
-                                    VkFormat format, VkImageLayout oldLayout,
+  static void TransitionImageLayout(const DeviceContext *context, const Image& image, VkImageLayout oldLayout,
                                     VkImageLayout newLayout);
 
   static void CopyBufferToImage(const DeviceContext *context, VkBuffer buffer,

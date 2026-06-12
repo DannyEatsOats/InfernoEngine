@@ -195,7 +195,7 @@ void VulkanUtils::CopyBuffer(const DeviceContext *context, VkBuffer srcBuffer,
 }
 
 void VulkanUtils::TransitionImageLayout(const DeviceContext *context,
-                                        VkImage image, VkFormat format,
+                                        const Image& image,
                                         VkImageLayout oldLayout,
                                         VkImageLayout newLayout) {
   VkCommandBuffer commandBuffer = BeginSingleTimeCommands(context);
@@ -206,11 +206,11 @@ void VulkanUtils::TransitionImageLayout(const DeviceContext *context,
   barrier.newLayout = newLayout;
   barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  barrier.image = image;
+  barrier.image = image.GetImage();
 
   barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   barrier.subresourceRange.baseMipLevel = 0;
-  barrier.subresourceRange.levelCount = 1;
+  barrier.subresourceRange.levelCount = image.GetMipLevels();
   barrier.subresourceRange.baseArrayLayer = 0;
   barrier.subresourceRange.layerCount = 1;
 

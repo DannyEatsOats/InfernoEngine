@@ -8,12 +8,20 @@
 #include <vector>
 #include <vulkan/vulkan_core.h>
 
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/hash.hpp>
+
 namespace Inferno {
 struct MeshVertex {
   glm::vec3 Position;
   glm::vec3 Normal;
   glm::vec3 Color;
   glm::vec2 TexCoord;
+
+  bool operator==(const MeshVertex &other) const {
+    return Position == other.Position && Normal == other.Normal &&
+           Color == other.Color && TexCoord == other.TexCoord;
+  }
 
   static BufferLayout<MeshVertex> GetLayout() {
     return {
@@ -76,3 +84,23 @@ private:
   uint32_t m_IndexCount = 0;
 };
 } // namespace Inferno
+
+namespace std {
+
+template <> struct hash<Inferno::MeshVertex> {
+  size_t operator()(Inferno::MeshVertex const &vertex) const {
+    size_t seed = 0;
+
+    auto hash_combine = [](size_t &s, size_t v) {
+      s ^= v + 0x9e3779b9 + (s << 6) + (s >> 2);
+    };
+
+    hash_combine(seed, std::hash<glm::vec3>()(vertex.Position));
+    hash_combine(seed, std::hash<glm::vec3>()(vertex.Normal));
+    hash_combine(seed, std::hash<glm::vec3>()(vertex.Color));
+    hash_combine(seed, std::hash<glm::vec2>()(vertex.TexCoord));
+
+    return seed;
+  }
+};
+} // namespace std

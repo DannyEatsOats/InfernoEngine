@@ -7,6 +7,7 @@ namespace Inferno {
 struct ImageSpec {
   uint32_t Width = 0;
   uint32_t Height = 0;
+  uint32_t MipLevels = 1;
   VkFormat Format = VK_FORMAT_R8G8B8A8_SRGB;
   VkImageTiling Tiling = VK_IMAGE_TILING_OPTIMAL;
   VkImageUsageFlags Usage =

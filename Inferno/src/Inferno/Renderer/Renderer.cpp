@@ -39,6 +39,9 @@ void Renderer::StartUp(ResourceManager *resourceManager) {
   CreateGeometryPipeline();
   CreateLightingPipeline();
   SetupDeferredRendering();
+
+  UpdateLightingDescriptorSet(0);
+  UpdateLightingDescriptorSet(1);
 }
 
 void Renderer::ShutDown() {
@@ -491,7 +494,8 @@ void Renderer::UpdateLightingDescriptorSet(uint32_t frameIdx) {
 
   for (uint32_t i = 0; i < 4; ++i) {
     imageInfos[i].sampler = m_GBufferSampler;
-    imageInfos[i].imageView = m_RenderGraph->GetActiveImageView(targetNames[i]);
+    imageInfos[i].imageView =
+        m_RenderGraph->GetImageView(targetNames[i], frameIdx);
     imageInfos[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
     descriptorWrites[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -555,11 +559,12 @@ void Renderer::SetupDeferredRendering() {
         std::array<std::string, 3> gBufferNames = {
             "GBuffer_Position", "GBuffer_Normal", "GBuffer_Albedo"};
 
+        uint32_t frameIdx = m_RenderGraph->GetGetCurrentFrameIndex();
         for (int i = 0; i < 3; ++i) {
           colorAttachments[i].sType =
               VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
           colorAttachments[i].imageView =
-              m_RenderGraph->GetActiveImageView(gBufferNames[i]);
+              m_RenderGraph->GetImageView(gBufferNames[i], frameIdx);
           colorAttachments[i].imageLayout =
               VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
           colorAttachments[i].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -569,7 +574,7 @@ void Renderer::SetupDeferredRendering() {
 
         VkRenderingAttachmentInfo depthAttachment{};
         depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        depthAttachment.imageView = m_RenderGraph->GetActiveImageView("Depth");
+        depthAttachment.imageView = m_RenderGraph->GetImageView("Depth", frameIdx);
         depthAttachment.imageLayout =
             VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -645,7 +650,6 @@ void Renderer::SetupDeferredRendering() {
                                     0, nullptr);
           }
 
-          // Issue Draw Call
           vkCmdDrawIndexed(cmd, meshComponent->GetMesh()->GetIndexCount(), 1, 0,
                            0, 0);
         }
@@ -657,10 +661,12 @@ void Renderer::SetupDeferredRendering() {
       {"GBuffer_Position", "GBuffer_Normal", "GBuffer_Albedo", "Depth"},
       {"SwapchainOutput"}, [this](VkCommandBuffer &cmd) {
         // Target the screen swapchain backbuffer directly
+        uint32_t frameIdx = m_RenderGraph->GetGetCurrentFrameIndex();
+
         VkRenderingAttachmentInfo swapchainAttachment{};
         swapchainAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
         swapchainAttachment.imageView =
-            m_RenderGraph->GetActiveImageView("SwapchainOutput");
+            m_RenderGraph->GetImageView("SwapchainOutput", frameIdx);
         swapchainAttachment.imageLayout =
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         swapchainAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -688,8 +694,7 @@ void Renderer::SetupDeferredRendering() {
         vkCmdSetViewport(cmd, 0, 1, &viewport);
         vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-        uint32_t frameIdx = m_RenderGraph->GetGetCurrentFrameIndex();
-        UpdateLightingDescriptorSet(frameIdx);
+        //UpdateLightingDescriptorSet(frameIdx);
 
         vkCmdBindDescriptorSets(
             cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_LightingPipelineLayout, 0,

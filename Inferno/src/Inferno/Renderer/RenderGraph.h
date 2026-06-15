@@ -74,7 +74,7 @@ public:
                const std::vector<std::string> &outputs,
                std::function<void(VkCommandBuffer &)> executeFunc);
 
-  VkImageView GetActiveImageView(const std::string &name);
+  VkImageView GetImageView(const std::string &name, uint32_t frameIndex);
 
   uint32_t GetGetCurrentFrameIndex() const { return m_CurrentFrame; }
 

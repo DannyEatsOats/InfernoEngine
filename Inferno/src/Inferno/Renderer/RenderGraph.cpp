@@ -5,7 +5,6 @@
 #include <vector>
 #include <vulkan/vulkan_core.h>
 
-#include "Inferno/Core/Log.h"
 #include "Inferno/Renderer/Image.h"
 #include "RenderGraph.h"
 
@@ -120,7 +119,8 @@ void RenderGraph::AddPass(const std::string &name,
   m_Passes.emplace_back(std::move(pass));
 }
 
-VkImageView RenderGraph::GetActiveImageView(const std::string &name) {
+VkImageView RenderGraph::GetImageView(const std::string &name,
+                                      uint32_t frameIndex) {
   auto it = m_Resources.find(name);
   if (it == m_Resources.end()) {
     throw std::runtime_error("RenderGraph resource not found: " + name);
@@ -130,7 +130,7 @@ VkImageView RenderGraph::GetActiveImageView(const std::string &name) {
   if (resource.IsExternal) {
     return resource.ExternalImageViews[m_ActiveImageIndex];
   } else {
-    return resource.FrameImages[m_CurrentFrame].GetView();
+    return resource.FrameImages[frameIndex].GetView();
   }
 }
 

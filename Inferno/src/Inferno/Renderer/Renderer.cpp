@@ -40,7 +40,7 @@ void Renderer::StartUp(ResourceManager *resourceManager) {
   CreateLightingPipeline();
   SetupDeferredRendering();
 
-  for (uint32_t i = 0; i < m_RenderGraph->GetGetCurrentFrameIndex(); ++i) {
+  for (uint32_t i = 0; i < m_RenderGraph->GetMaxFramesInFlight(); ++i) {
     UpdateLightingDescriptorSet(i);
   }
 }
@@ -737,7 +737,7 @@ void Renderer::Resize() {
       m_Context->Swapchain.ImageViews, m_Context->Swapchain.Extent);
 
   m_RenderGraph->Resize(m_Context->Swapchain.Extent);
-  for (uint32_t i = 0; i < m_RenderGraph->GetGetCurrentFrameIndex(); ++i) {
+  for (uint32_t i = 0; i < m_RenderGraph->GetMaxFramesInFlight(); ++i) {
     UpdateLightingDescriptorSet(i);
   }
   m_Resized = false;

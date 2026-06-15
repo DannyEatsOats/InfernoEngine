@@ -16,6 +16,8 @@ add_library(Inferno
         src/Inferno/Core/LayerStack.cpp
         src/Inferno/Core/Window.h
         src/Inferno/Core/Window.cpp
+        src/Inferno/Events/Input.h
+        src/Inferno/Events/Input.cpp
         # ENTITY COMPONENTS SYSTEMS
         src/Inferno/ECS/Component.h
         src/Inferno/ECS/Component.cpp

@@ -3,6 +3,7 @@
 #include "GLFW/glfw3.h"
 #include "Inferno/Core/Memory.h"
 #include "Inferno/ECS/Entity.h"
+#include "Inferno/Events/Input.h"
 #include "Inferno/Events/KeyCodes.h"
 #include "Inferno/Events/KeyEvent.h"
 #include "Inferno/Renderer/Mesh.h"
@@ -13,6 +14,7 @@
 #include "glm/fwd.hpp"
 #include "glm/trigonometric.hpp"
 #include <algorithm>
+#include <chrono>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -26,6 +28,7 @@ void Application::StartUp() {
 
   m_Window = Window::Create();
   m_Window->SetEventCallback([this](Event &event) { this->OnEvent(event); });
+  Input::SetWindowHandle(m_Window->GetNativeWindow());
   // TODO Init subsystems
   m_ResourceManager = MakeScope<ResourceManager>();
   m_RenderingContext = MakeScope<DeviceContext>();
@@ -45,10 +48,10 @@ void Application::StartUp() {
     auto texture = m_ResourceManager->Load<Texture>("viking_room",
                                                     m_RenderingContext.get());
     testEntity->AddComponent<MeshComponent>(mesh.get(), texture.get());
-    //m_Entities.push_back(testEntity);
+    // m_Entities.push_back(testEntity);
   }
 
-  {
+  for (int i = 0; i < 1; ++i) {
     Entity *knight = new Entity("knight");
     auto *transform = knight->AddComponent<TransformComponent>();
     // transform->SetRotation(glm::angleAxis(glm::radians(90.0f),
@@ -79,6 +82,8 @@ void Application::Run() {
     const DeltaTime deltaTime = time - m_LastFrameTime;
     m_LastFrameTime = time;
 
+    INFERNO_LOG_INFO("FPS: {}", 1.0f / deltaTime.GetSeconds());
+
     if (!m_Minimized) {
       for (Layer *layer : m_LayerStack) {
         layer->OnUpdate(deltaTime);
@@ -86,6 +91,29 @@ void Application::Run() {
 
       for (auto entity : m_Entities) {
       }
+
+      // TODO: TEMP ======================================================
+      if (Input::IsKeyDown(ENGINE_KEY_LEFT_CONTROL) &&
+          Input::IsKeyDown(ENGINE_KEY_GRAVE_ACCENT)) {
+        m_Renderer->SetLightingDebugMode(0);
+      }
+      if (Input::IsKeyDown(ENGINE_KEY_LEFT_CONTROL) &&
+          Input::IsKeyDown(ENGINE_KEY_1)) {
+        m_Renderer->SetLightingDebugMode(1);
+      }
+      if (Input::IsKeyDown(ENGINE_KEY_LEFT_CONTROL) &&
+          Input::IsKeyDown(ENGINE_KEY_2)) {
+        m_Renderer->SetLightingDebugMode(2);
+      }
+      if (Input::IsKeyDown(ENGINE_KEY_LEFT_CONTROL) &&
+          Input::IsKeyDown(ENGINE_KEY_3)) {
+        m_Renderer->SetLightingDebugMode(3);
+      }
+      if (Input::IsKeyDown(ENGINE_KEY_LEFT_CONTROL) &&
+          Input::IsKeyDown(ENGINE_KEY_4)) {
+        m_Renderer->SetLightingDebugMode(4);
+      }
+      // ============================================================7=
 
       // TODO GUI Layer Stuff
       // m_Renderer->DrawFrame();
@@ -128,32 +156,32 @@ void Application::OnEvent(Event &event) {
 
       } else if (event.GetKeyCode() == ENGINE_KEY_F) {
         glm::quat rotationInc =
-            glm::angleAxis(glm::radians(-5.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+            glm::angleAxis(glm::radians(-1.0f), glm::vec3(1.0f, 0.0f, 0.0f));
         glm::quat newRotation = rotationInc * rotation;
         entity->GetComponent<TransformComponent>()->SetRotation(newRotation);
       } else if (event.GetKeyCode() == ENGINE_KEY_G) {
         glm::quat rotationInc =
-            glm::angleAxis(glm::radians(5.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+            glm::angleAxis(glm::radians(1.0f), glm::vec3(1.0f, 0.0f, 0.0f));
         glm::quat newRotation = rotationInc * rotation;
         entity->GetComponent<TransformComponent>()->SetRotation(newRotation);
       } else if (event.GetKeyCode() == ENGINE_KEY_H) {
         glm::quat rotationInc =
-            glm::angleAxis(glm::radians(-5.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+            glm::angleAxis(glm::radians(-1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
         glm::quat newRotation = rotationInc * rotation;
         entity->GetComponent<TransformComponent>()->SetRotation(newRotation);
       } else if (event.GetKeyCode() == ENGINE_KEY_J) {
         glm::quat rotationInc =
-            glm::angleAxis(glm::radians(5.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+            glm::angleAxis(glm::radians(1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
         glm::quat newRotation = rotationInc * rotation;
         entity->GetComponent<TransformComponent>()->SetRotation(newRotation);
       } else if (event.GetKeyCode() == ENGINE_KEY_K) {
         glm::quat rotationInc =
-            glm::angleAxis(glm::radians(5.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+            glm::angleAxis(glm::radians(1.0f), glm::vec3(0.0f, 0.0f, 1.0f));
         glm::quat newRotation = rotationInc * rotation;
         entity->GetComponent<TransformComponent>()->SetRotation(newRotation);
       } else if (event.GetKeyCode() == ENGINE_KEY_L) {
         glm::quat rotationInc =
-            glm::angleAxis(glm::radians(-5.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+            glm::angleAxis(glm::radians(-1.0f), glm::vec3(0.0f, 0.0f, 1.0f));
         glm::quat newRotation = rotationInc * rotation;
         entity->GetComponent<TransformComponent>()->SetRotation(newRotation);
       }

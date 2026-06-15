@@ -8,6 +8,10 @@ layout(binding = 1) uniform sampler2D gBufferNormal;
 layout(binding = 2) uniform sampler2D gBufferAlbedo;
 layout(binding = 3) uniform sampler2D gBufferDepth;
 
+layout(push_constant) uniform PushConstants {
+    int ViewMode;
+} lightingMode;
+
 void main() {
     float depth = texture(gBufferDepth, inUV).r;
     if (depth >= 0.999) {
@@ -18,17 +22,38 @@ void main() {
     vec3 normal = texture(gBufferNormal, inUV).rgb;
     vec3 albedo = texture(gBufferAlbedo, inUV).rgb;
 
-    vec3 lightDir = normalize(vec3(0.5, 1.0, 0.5));
-    vec3 lightColor = vec3(0.78, 0.65, 0.5);
-    float lightIntensity = 3.5;
-    float ambientIntensity = 0.15;
+    switch (lightingMode.ViewMode) {
+        case 0: // Fully Lit Battya
+        vec3 lightDir = normalize(vec3(0.5, 1.0, 0.5));
+        vec3 lightColor = vec3(0.78, 0.65, 0.5);
+        float lightIntensity = 3.5;
+        float ambientIntensity = 0.15;
 
-    vec3 ambient = albedo * ambientIntensity;
+        vec3 ambient = albedo * ambientIntensity;
 
-    vec3 N = normalize(normal);
-    vec3 L = normalize(lightDir);
-    float diffuseFactor = max(dot(N, L), 0.0);
-    vec3 diffuse = albedo * diffuseFactor * lightColor * lightIntensity;
+        vec3 N = normalize(normal);
+        vec3 L = normalize(lightDir);
+        float diffuseFactor = max(dot(N, L), 0.0);
+        vec3 diffuse = albedo * diffuseFactor * lightColor * lightIntensity;
 
-    outFinalColor = vec4(ambient + diffuse, 1.0);
+        outFinalColor = vec4(ambient + diffuse, 1.0);
+        break;
+
+        case 1: // Albedo Modulio
+        outFinalColor = vec4(albedo, 1.0);
+        break;
+
+        case 2: // Normal Map Visualization
+        outFinalColor = vec4(normal * 0.5 + 0.5, 1.0);
+        break;
+
+        case 3: // Position Mode
+        outFinalColor = vec4(abs(worldPos) * 0.8, 1.0);
+        break;
+
+        case 4: // Depth View Mode
+        float linearDepth = (2.0 * 0.1) / (100.0 + 0.1 - depth * (100.0 - 0.1));
+        outFinalColor = vec4(vec3(linearDepth), 1.0);
+        break;
+    }
 }

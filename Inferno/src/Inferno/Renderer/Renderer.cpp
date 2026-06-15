@@ -20,8 +20,13 @@
 
 namespace Inferno {
 struct MeshPushConstants {
-  glm::mat4 mvp;
-  glm::mat4 model;
+  glm::mat4 Mvp;
+  glm::mat4 Model;
+};
+
+struct LightingDebugPushConstants {
+  int ViewMode; // 0 = Fully Lit, 1 = Albedo, 2 = Normals, 3 = Position, 4 =
+                // Depth
 };
 
 void Renderer::StartUp(ResourceManager *resourceManager) {
@@ -33,7 +38,7 @@ void Renderer::StartUp(ResourceManager *resourceManager) {
   CreateLightingDescriptorSet();
   CreateGeometryPipeline();
   CreateLightingPipeline();
-  SetupDeferredPipeline();
+  SetupDeferredRendering();
 }
 
 void Renderer::ShutDown() {
@@ -130,18 +135,12 @@ void Renderer::CreateGeometryPipeline() {
     throw std::runtime_error("Failed to create geometry pipeline layout!");
   }
 
-  VkVertexInputBindingDescription bindingDescription{
-      0, sizeof(MeshVertex), VK_VERTEX_INPUT_RATE_VERTEX};
+  auto meshVertexLayout = MeshVertex::GetLayout();
 
-  std::array<VkVertexInputAttributeDescription, 4> attributeDescriptions{};
-  attributeDescriptions[0] = {0, 0, VK_FORMAT_R32G32B32_SFLOAT,
-                              offsetof(MeshVertex, Position)};
-  attributeDescriptions[1] = {1, 0, VK_FORMAT_R32G32B32_SFLOAT,
-                              offsetof(MeshVertex, Normal)};
-  attributeDescriptions[2] = {2, 0, VK_FORMAT_R32G32B32_SFLOAT,
-                              offsetof(MeshVertex, Color)};
-  attributeDescriptions[3] = {3, 0, VK_FORMAT_R32G32_SFLOAT,
-                              offsetof(MeshVertex, TexCoord)};
+  VkVertexInputBindingDescription bindingDescription =
+      meshVertexLayout.GetBindingDescription();
+  std::vector<VkVertexInputAttributeDescription> attributeDescriptions =
+      meshVertexLayout.GetAttributeDescriptions();
 
   VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
   vertexInputInfo.sType =
@@ -310,10 +309,17 @@ Renderer::GetOrCreateTextureDescriptorSet(const Texture *texture) {
 void Renderer::CreateLightingPipeline() {
   auto lightingShader = m_ResourceManager->Load<Shader>("lighting", m_Context);
 
+  VkPushConstantRange lightingDebugPushConstants{};
+  lightingDebugPushConstants.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+  lightingDebugPushConstants.offset = 0;
+  lightingDebugPushConstants.size = sizeof(LightingDebugPushConstants);
+
   VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
   pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
   pipelineLayoutInfo.setLayoutCount = 1;
   pipelineLayoutInfo.pSetLayouts = &m_LightingDescriptorLayout;
+  pipelineLayoutInfo.pushConstantRangeCount = 1;
+  pipelineLayoutInfo.pPushConstantRanges = &lightingDebugPushConstants;
 
   if (vkCreatePipelineLayout(m_Context->Device, &pipelineLayoutInfo, nullptr,
                              &m_LightingPipelineLayout) != VK_SUCCESS) {
@@ -342,15 +348,12 @@ void Renderer::CreateLightingPipeline() {
   rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
   rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
   rasterizer.lineWidth = 1.0f;
-  rasterizer.cullMode =
-      VK_CULL_MODE_NONE; // Full-screen triangles do not require culling
-                         // optimization checks
+  rasterizer.cullMode = VK_CULL_MODE_NONE;
 
   VkPipelineMultisampleStateCreateInfo multisampling{
       VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO, nullptr, 0,
       VK_SAMPLE_COUNT_1_BIT};
 
-  // No depth tests for painting a 2D composite image over the screen
   VkPipelineDepthStencilStateCreateInfo depthStencil{
       VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
       nullptr,
@@ -506,7 +509,7 @@ void Renderer::UpdateLightingDescriptorSet(uint32_t frameIdx) {
                          descriptorWrites.data(), 0, nullptr);
 }
 
-void Renderer::SetupDeferredPipeline() {
+void Renderer::SetupDeferredRendering() {
   m_RenderGraph->ImportSwapchainResources(
       "SwapchainOutput", m_Context->Swapchain.Images,
       m_Context->Swapchain.ImageViews, m_Context->Swapchain.Format,
@@ -604,9 +607,6 @@ void Renderer::SetupDeferredPipeline() {
                              (float)m_Context->Swapchain.Extent.width /
                                  (float)m_Context->Swapchain.Extent.height,
                              0.1f, 10.0f);
-        // INFERNO_LOG_ERROR("Swapchain Extent width:
-        // {}",m_Context->Swapchain.Extent.width); INFERNO_LOG_ERROR("Swapchain
-        // Extent height: {}", m_Context->Swapchain.Extent.height);
         proj[1][1] *= -1;
         glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 1.0f, 3.0f),
                                      glm::vec3(0.0f, 0.0f, 0.0f),
@@ -621,10 +621,9 @@ void Renderer::SetupDeferredPipeline() {
               entity->GetComponent<TransformComponent>()->GetTransformmatrix();
 
           MeshPushConstants push{};
-          push.mvp = proj * view * model;
-          push.model = model;
+          push.Mvp = proj * view * model;
+          push.Model = model;
 
-          // Push the transformation data instantly to the GPU
           vkCmdPushConstants(cmd, m_GeometryPipelineLayout,
                              VK_SHADER_STAGE_VERTEX_BIT, 0,
                              sizeof(MeshPushConstants), &push);
@@ -695,6 +694,13 @@ void Renderer::SetupDeferredPipeline() {
         vkCmdBindDescriptorSets(
             cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_LightingPipelineLayout, 0,
             1, &m_LightingDescriptorSets[frameIdx], 0, nullptr);
+
+        LightingDebugPushConstants lightinPushConstants{};
+        lightinPushConstants.ViewMode = m_LightinDebugMode;
+
+        vkCmdPushConstants(
+            cmd, m_LightingPipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0,
+            sizeof(LightingDebugPushConstants), &lightinPushConstants);
 
         vkCmdDraw(cmd, 3, 1, 0, 0);
 

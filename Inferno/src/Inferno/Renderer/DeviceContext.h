@@ -12,6 +12,10 @@ struct SwapchainConfig {
   VkExtent2D Extent;
 };
 
+struct PhysicalDeviceProperties {
+  VkSampleCountFlagBits MSAAsamples = VK_SAMPLE_COUNT_1_BIT;
+};
+
 struct DeviceContext {
   VkInstance Instance = VK_NULL_HANDLE;
   VkDevice Device = VK_NULL_HANDLE;
@@ -19,7 +23,8 @@ struct DeviceContext {
   VkPhysicalDevice PhysicalDevice = VK_NULL_HANDLE;
   VkQueue GraphicsQueue = VK_NULL_HANDLE;
   VkQueue PresentQueue = VK_NULL_HANDLE;
-  SwapchainConfig Swapchain;
+  SwapchainConfig Swapchain{};
+  PhysicalDeviceProperties PhysicalDeviceProps{};
   VkCommandPool CommandPool = VK_NULL_HANDLE;
 
   void *WindowHandle = nullptr;

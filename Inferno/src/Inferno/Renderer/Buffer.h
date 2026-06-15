@@ -83,6 +83,85 @@ public:
   const std::vector<BufferElement> &GetElements() const { return m_Elements; }
   uint32_t GetStride() const { return m_Stride; }
 
+  VkVertexInputBindingDescription GetBindingDescription() const {
+    VkVertexInputBindingDescription binding{};
+    binding.binding = 0;
+    binding.stride = m_Stride;
+    binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    return binding;
+  }
+
+  std::vector<VkVertexInputAttributeDescription>
+  GetAttributeDescriptions() const {
+    std::vector<VkVertexInputAttributeDescription> attributes;
+    uint32_t locationCounter = 0;
+
+    for (const auto &e : m_Elements) {
+      VkVertexInputAttributeDescription attr{};
+      attr.binding = 0;
+      attr.location = locationCounter++;
+      attr.offset = e.Offset;
+
+      switch (e.Type) {
+      case ShaderDataType::Float:
+        attr.format = VK_FORMAT_R32_SFLOAT;
+        break;
+      case ShaderDataType::Float2:
+        attr.format = VK_FORMAT_R32G32_SFLOAT;
+        break;
+      case ShaderDataType::Float3:
+        attr.format = VK_FORMAT_R32G32B32_SFLOAT;
+        break;
+      case ShaderDataType::Float4:
+        attr.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+        break;
+      case ShaderDataType::Int:
+        attr.format = VK_FORMAT_R32_SINT;
+        break;
+      case ShaderDataType::Int2:
+        attr.format = VK_FORMAT_R32G32_SINT;
+        break;
+      case ShaderDataType::Int3:
+        attr.format = VK_FORMAT_R32G32B32_SINT;
+        break;
+      case ShaderDataType::Int4:
+        attr.format = VK_FORMAT_R32G32B32A32_SINT;
+        break;
+      case ShaderDataType::Bool:
+        attr.format = VK_FORMAT_R32_UINT;
+        break;
+      case ShaderDataType::Mat3: {
+        locationCounter--;
+        for (uint32_t i = 0; i < 3; ++i) {
+          VkVertexInputAttributeDescription mAttr{};
+          mAttr.binding = 0;
+          mAttr.location = locationCounter++;
+          mAttr.offset = e.Offset + i * sizeof(glm::vec3);
+          mAttr.format = VK_FORMAT_R32G32B32_SFLOAT;
+          attributes.push_back(mAttr);
+        }
+        continue;
+      }
+      case ShaderDataType::Mat4: {
+        locationCounter--;
+        for (uint32_t i = 0; i < 4; ++i) {
+          VkVertexInputAttributeDescription mAttr{};
+          mAttr.binding = 0;
+          mAttr.location = locationCounter++;
+          mAttr.offset = e.Offset + i * sizeof(glm::vec4);
+          mAttr.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+          attributes.push_back(mAttr);
+        }
+        continue;
+      }
+      default:
+        throw std::runtime_error("Unsupported ShaderDataType");
+      }
+      attributes.push_back(attr);
+    }
+    return attributes;
+  }
+
 private:
   std::vector<BufferElement> m_Elements;
   uint32_t m_Stride = 0;
@@ -170,133 +249,6 @@ public:
 
   void SetLayout(const BufferLayout<VertexType> &layout) { m_Layout = layout; }
   const BufferLayout<VertexType> &GetLayout() const { return m_Layout; }
-
-  VkVertexInputBindingDescription GetBindingDescription() const {
-    VkVertexInputBindingDescription binding{};
-    binding.binding = 0;
-    binding.stride = m_Layout.GetStride();
-    binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
-    return binding;
-  }
-
-  std::vector<VkVertexInputAttributeDescription>
-  GetAttributeDescriptions() const {
-    std::vector<VkVertexInputAttributeDescription> attributes;
-    const auto &elements = m_Layout.GetElements();
-    uint32_t locationCounter = 0;
-    for (const auto &e : elements) {
-      switch (e.Type) { // Float types
-      case ShaderDataType::Float: {
-        VkVertexInputAttributeDescription attr{};
-        attr.binding = 0;
-        attr.location = locationCounter++;
-        attr.offset = e.Offset;
-        attr.format = VK_FORMAT_R32_SFLOAT;
-        attributes.push_back(attr);
-        break;
-      }
-      case ShaderDataType::Float2: {
-        VkVertexInputAttributeDescription attr{};
-        attr.binding = 0;
-        attr.location = locationCounter++;
-        attr.offset = e.Offset;
-        attr.format = VK_FORMAT_R32G32_SFLOAT;
-        attributes.push_back(attr);
-        break;
-      }
-      case ShaderDataType::Float3: {
-        VkVertexInputAttributeDescription attr{};
-        attr.binding = 0;
-        attr.location = locationCounter++;
-        attr.offset = e.Offset;
-        attr.format = VK_FORMAT_R32G32B32_SFLOAT;
-        attributes.push_back(attr);
-        break;
-      }
-      case ShaderDataType::Float4: {
-        VkVertexInputAttributeDescription attr{};
-        attr.binding = 0;
-        attr.location = locationCounter++;
-        attr.offset = e.Offset;
-        attr.format = VK_FORMAT_R32G32B32A32_SFLOAT;
-        attributes.push_back(attr);
-        break;
-      }
-        // Integer types
-      case ShaderDataType::Int: {
-        VkVertexInputAttributeDescription attr{};
-        attr.binding = 0;
-        attr.location = locationCounter++;
-        attr.offset = e.Offset;
-        attr.format = VK_FORMAT_R32_SINT;
-        attributes.push_back(attr);
-        break;
-      }
-      case ShaderDataType::Int2: {
-        VkVertexInputAttributeDescription attr{};
-        attr.binding = 0;
-        attr.location = locationCounter++;
-        attr.offset = e.Offset;
-        attr.format = VK_FORMAT_R32G32_SINT;
-        attributes.push_back(attr);
-        break;
-      }
-      case ShaderDataType::Int3: {
-        VkVertexInputAttributeDescription attr{};
-        attr.binding = 0;
-        attr.location = locationCounter++;
-        attr.offset = e.Offset;
-        attr.format = VK_FORMAT_R32G32B32_SINT;
-        attributes.push_back(attr);
-        break;
-      }
-      case ShaderDataType::Int4: {
-        VkVertexInputAttributeDescription attr{};
-        attr.binding = 0;
-        attr.location = locationCounter++;
-        attr.offset = e.Offset;
-        attr.format = VK_FORMAT_R32G32B32A32_SINT;
-        attributes.push_back(attr);
-        break;
-      } // Matrix types (split into columns)
-      case ShaderDataType::Mat3: {
-        for (uint32_t i = 0; i < 3; ++i) {
-          VkVertexInputAttributeDescription attr{};
-          attr.binding = 0;
-          attr.location = locationCounter++;
-          attr.offset = e.Offset + i * sizeof(glm::vec3);
-          attr.format = VK_FORMAT_R32G32B32_SFLOAT;
-          attributes.push_back(attr);
-        }
-        break;
-      }
-      case ShaderDataType::Mat4: {
-        for (uint32_t i = 0; i < 4; ++i) {
-          VkVertexInputAttributeDescription attr{};
-          attr.binding = 0;
-          attr.location = locationCounter++;
-          attr.offset = e.Offset + i * sizeof(glm::vec4);
-          attr.format = VK_FORMAT_R32G32B32A32_SFLOAT;
-          attributes.push_back(attr);
-        }
-        break;
-      }
-      case ShaderDataType::Bool: {
-        VkVertexInputAttributeDescription attr{};
-        attr.binding = 0;
-        attr.location = locationCounter++;
-        attr.offset = e.Offset;
-        attr.format = VK_FORMAT_R32_UINT;
-        attributes.push_back(attr);
-        break;
-      }
-      default:
-        throw std::runtime_error("Unsupported ShaderDataType in VertexBuffer");
-      }
-    }
-    return attributes;
-  }
 
 private:
   const DeviceContext *m_Context;

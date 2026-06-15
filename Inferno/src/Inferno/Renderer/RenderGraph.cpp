@@ -120,6 +120,20 @@ void RenderGraph::AddPass(const std::string &name,
   m_Passes.emplace_back(std::move(pass));
 }
 
+VkImageView RenderGraph::GetActiveImageView(const std::string &name) {
+  auto it = m_Resources.find(name);
+  if (it == m_Resources.end()) {
+    throw std::runtime_error("RenderGraph resource not found: " + name);
+  }
+
+  const auto &resource = it->second;
+  if (resource.IsExternal) {
+    return resource.ExternalImageViews[m_ActiveImageIndex];
+  } else {
+    return resource.FrameImages[m_CurrentFrame].GetView();
+  }
+}
+
 void RenderGraph::Compile() {
   // Topological Sorting ==================================================
   m_ExecutionOrder.clear();
@@ -275,7 +289,9 @@ void RenderGraph::Execute(uint32_t imageIndex) {
       barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
       barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
       barrier.image = resource.GetVkImage(m_CurrentFrame, imageIndex);
-      barrier.subresourceRange = {aspectMask, 0, 1, 0, 1};
+      barrier.subresourceRange = {aspectMask, 0, VK_REMAINING_MIP_LEVELS, 0,
+                                  VK_REMAINING_ARRAY_LAYERS};
+      // barrier.subresourceRange = {aspectMask, 0, 1, 0, 1};
       barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
       barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 

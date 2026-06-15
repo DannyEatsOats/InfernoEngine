@@ -63,6 +63,39 @@ bool CheckDeviceExtensionSupport(VkPhysicalDevice device) {
   return requiredExtensions.empty();
 }
 
+VkSampleCountFlagBits GetMaxUsabelSampleCount(VkPhysicalDevice device) {
+  VkPhysicalDeviceProperties physicalDeviceProps;
+  vkGetPhysicalDeviceProperties(device, &physicalDeviceProps);
+
+  VkSampleCountFlags counts =
+      physicalDeviceProps.limits.framebufferColorSampleCounts &
+      physicalDeviceProps.limits.framebufferDepthSampleCounts;
+
+  if (counts & VK_SAMPLE_COUNT_64_BIT) {
+    return VK_SAMPLE_COUNT_64_BIT;
+  }
+  if (counts & VK_SAMPLE_COUNT_32_BIT) {
+    return VK_SAMPLE_COUNT_32_BIT;
+  }
+  if (counts & VK_SAMPLE_COUNT_32_BIT) {
+    return VK_SAMPLE_COUNT_32_BIT;
+  }
+  if (counts & VK_SAMPLE_COUNT_16_BIT) {
+    return VK_SAMPLE_COUNT_16_BIT;
+  }
+  if (counts & VK_SAMPLE_COUNT_8_BIT) {
+    return VK_SAMPLE_COUNT_8_BIT;
+  }
+  if (counts & VK_SAMPLE_COUNT_4_BIT) {
+    return VK_SAMPLE_COUNT_4_BIT;
+  }
+  if (counts & VK_SAMPLE_COUNT_2_BIT) {
+    return VK_SAMPLE_COUNT_2_BIT;
+  }
+
+  return VK_SAMPLE_COUNT_1_BIT;
+}
+
 bool IsDeviceSuitable(VkPhysicalDevice device, VkSurfaceKHR surface) {
   VulkanUtils::QueueFamilyIndices indices =
       VulkanUtils::FindQueueFamilies(device, surface);
@@ -79,8 +112,20 @@ bool IsDeviceSuitable(VkPhysicalDevice device, VkSurfaceKHR surface) {
   VkPhysicalDeviceFeatures supportedFeatures;
   vkGetPhysicalDeviceFeatures(device, &supportedFeatures);
 
+  VkFormatProperties formatProperties;
+  vkGetPhysicalDeviceFormatProperties(device, VK_FORMAT_R8G8B8A8_SRGB,
+                                      &formatProperties);
+
+  bool formatSupportsBlitting =
+      (formatProperties.optimalTilingFeatures &
+       VK_FORMAT_FEATURE_BLIT_SRC_BIT) &&
+      (formatProperties.optimalTilingFeatures &
+       VK_FORMAT_FEATURE_BLIT_DST_BIT) &&
+      (formatProperties.optimalTilingFeatures &
+       VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT);
+
   return indices.IsComplete() && extensionsSupported && swapChainAdequate &&
-         supportedFeatures.samplerAnisotropy;
+         supportedFeatures.samplerAnisotropy && formatSupportsBlitting;
 }
 
 void DeviceContext::StartUp(void *windowHandle) {
@@ -179,6 +224,7 @@ void DeviceContext::PickPhysicalDevice() {
   for (const auto &device : devices) {
     if (IsDeviceSuitable(device, Surface)) {
       PhysicalDevice = device;
+      PhysicalDeviceProps.MSAAsamples = GetMaxUsabelSampleCount(device);
       break;
     }
   }

@@ -78,17 +78,17 @@ void Window::Init(const WindowProperties &properties) {
         *static_cast<WindowData *>(glfwGetWindowUserPointer(window));
     switch (action) {
     case GLFW_PRESS: {
-      KeyPressedEvent event(key, 0);
+      KeyPressedEvent event(key, mods, 0);
       data.EventCallback(event);
       break;
     }
     case GLFW_RELEASE: {
-      KeyReleasedEvent event(key);
+      KeyReleasedEvent event(key, mods);
       data.EventCallback(event);
       break;
     }
     case GLFW_REPEAT: {
-      KeyPressedEvent event(key, 1);
+      KeyPressedEvent event(key, mods, 1);
       data.EventCallback(event);
       break;
     }

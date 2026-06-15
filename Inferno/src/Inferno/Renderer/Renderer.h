@@ -26,8 +26,10 @@ public:
 
   void SignalResize() { m_Resized = true; }
 
+  void SetLightingDebugMode(int mode) { m_LightinDebugMode = mode; }
+
 private:
-  void SetupDeferredPipeline();
+  void SetupDeferredRendering();
   void CreateGeometryPipeline();
   VkDescriptorSet GetOrCreateTextureDescriptorSet(const Texture *texture);
   void CreateLightingPipeline();
@@ -66,9 +68,7 @@ private:
   bool m_Resized = false;
 
   // TEST
-  VkPipeline m_Pipeline;
-  VkPipelineLayout m_PipelineLayout;
-
   std::vector<Entity *> m_VisibleEntites;
+  int m_LightinDebugMode = 0;
 };
 } // namespace Inferno

@@ -19,6 +19,7 @@ public:
     VkImageUsageFlags Usage;
     VkImageLayout InitialLayout;
     VkImageLayout FinalLayout;
+    VkSampleCountFlagBits Samples = VK_SAMPLE_COUNT_1_BIT;
 
     std::vector<Image> FrameImages;
     std::vector<VkImage> ExternalImages;
@@ -73,19 +74,7 @@ public:
                const std::vector<std::string> &outputs,
                std::function<void(VkCommandBuffer &)> executeFunc);
 
-  VkImageView GetActiveImageView(const std::string &name) {
-    auto it = m_Resources.find(name);
-    if (it == m_Resources.end()) {
-      throw std::runtime_error("RenderGraph resource not found: " + name);
-    }
-
-    const auto &resource = it->second;
-    if (resource.IsExternal) {
-      return resource.ExternalImageViews[m_ActiveImageIndex];
-    } else {
-      return resource.FrameImages[m_CurrentFrame].GetView();
-    }
-  }
+  VkImageView GetActiveImageView(const std::string &name);
 
   uint32_t GetGetCurrentFrameIndex() const { return m_CurrentFrame; }
 

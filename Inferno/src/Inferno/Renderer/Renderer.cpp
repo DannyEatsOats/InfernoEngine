@@ -40,8 +40,9 @@ void Renderer::StartUp(ResourceManager *resourceManager) {
   CreateLightingPipeline();
   SetupDeferredRendering();
 
-  UpdateLightingDescriptorSet(0);
-  UpdateLightingDescriptorSet(1);
+  for (uint32_t i = 0; i < m_RenderGraph->GetGetCurrentFrameIndex(); ++i) {
+    UpdateLightingDescriptorSet(i);
+  }
 }
 
 void Renderer::ShutDown() {
@@ -574,7 +575,8 @@ void Renderer::SetupDeferredRendering() {
 
         VkRenderingAttachmentInfo depthAttachment{};
         depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        depthAttachment.imageView = m_RenderGraph->GetImageView("Depth", frameIdx);
+        depthAttachment.imageView =
+            m_RenderGraph->GetImageView("Depth", frameIdx);
         depthAttachment.imageLayout =
             VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -694,8 +696,6 @@ void Renderer::SetupDeferredRendering() {
         vkCmdSetViewport(cmd, 0, 1, &viewport);
         vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-        //UpdateLightingDescriptorSet(frameIdx);
-
         vkCmdBindDescriptorSets(
             cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_LightingPipelineLayout, 0,
             1, &m_LightingDescriptorSets[frameIdx], 0, nullptr);
@@ -737,8 +737,9 @@ void Renderer::Resize() {
       m_Context->Swapchain.ImageViews, m_Context->Swapchain.Extent);
 
   m_RenderGraph->Resize(m_Context->Swapchain.Extent);
-  UpdateLightingDescriptorSet(0);
-  UpdateLightingDescriptorSet(1);
+  for (uint32_t i = 0; i < m_RenderGraph->GetGetCurrentFrameIndex(); ++i) {
+    UpdateLightingDescriptorSet(i);
+  }
   m_Resized = false;
 }
 

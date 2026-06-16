@@ -49,6 +49,9 @@ add_library(Inferno
         src/Inferno/Renderer/Texture.cpp
         src/Inferno/Renderer/VulkanUtils.h
         src/Inferno/Renderer/VulkanUtils.cpp
+        # TOOLS
+        src/Inferno/Tools/GeometryGenerator.h
+        src/Inferno/Tools/GeometryGenerator.cpp
         # EVENTS
         src/Inferno/Events/Event.h
         src/Inferno/Events/ApplicationEvent.h

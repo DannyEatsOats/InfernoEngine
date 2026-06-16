@@ -12,6 +12,9 @@
 #include <memory>
 #include <vector>
 
+//TODO: TEMPPPPPPP
+#include "Inferno/Renderer/Mesh.h"
+
 namespace Inferno {
 class Application {
 public:
@@ -45,5 +48,7 @@ private:
 
   // TEMP
   std::vector<Entity *> m_Entities;
+  //TODO: THIS IS REAAAAAAAAAAAAAALLY SHIT HERE, LIKE ABSOLUTE FUCK ASS
+  Scope<Mesh> m_CubeMesh;
 };
 } // namespace Inferno

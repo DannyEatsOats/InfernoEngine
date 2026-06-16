@@ -1,4 +1,5 @@
 #include "Inferno/Core/Log.h"
+#include "Inferno/Core/Memory.h"
 #include "glm/geometric.hpp"
 #include <filesystem>
 #include <pch.h>
@@ -34,13 +35,16 @@ Mesh &Mesh::operator=(Mesh &&other) {
   m_Context = other.m_Context;
   m_VertexBuffer = std::move(other.m_VertexBuffer);
   m_IndexBuffer = std::move(other.m_IndexBuffer);
+  m_VertexCount = other.m_VertexCount;
+  m_IndexCount = other.m_IndexCount;
+
+  other.m_VertexCount = 0;
+  other.m_IndexCount = 0;
 
   return *this;
 }
 
 bool Mesh::DoLoad() {
-  // TODO: Create canonical path
-  // std::string filePath = "models/" + GetID() + ".gltf";
   std::string filePath = "assets/models/" + GetID() + ".obj";
 
   std::vector<MeshVertex> vertices;
@@ -148,128 +152,29 @@ bool Mesh::LoadMeshData(std::string &filePath,
 
   INFERNO_LOG_INFO("Mesh {} VERTEX COUNT: {}", filePath, vertexBuffer.size());
 
-  //===========================================================
-
-  /*
-  vertexBuffer = {
-      // Front Face (Z = 0.5f) - Normal pointing straight out at +Z
-      {{-0.5f, -0.5f, 0.5f},
-       {0.0f, 0.0f, 1.0f},
-       {1.0f, 0.0f, 0.0f},
-       {0.0f, 0.0f}},
-      {{0.5f, -0.5f, 0.5f},
-       {0.0f, 0.0f, 1.0f},
-       {1.0f, 0.0f, 0.0f},
-       {1.0f, 0.0f}},
-      {{0.5f, 0.5f, 0.5f},
-       {0.0f, 0.0f, 1.0f},
-       {1.0f, 0.0f, 0.0f},
-       {1.0f, 1.0f}},
-      {{-0.5f, 0.5f, 0.5f},
-       {0.0f, 0.0f, 1.0f},
-       {1.0f, 0.0f, 0.0f},
-       {0.0f, 1.0f}},
-
-      // Back Face (Z = -0.5f) - Normal pointing straight backward at -Z
-      {{-0.5f, -0.5f, -0.5f},
-       {0.0f, 0.0f, -1.0f},
-       {0.0f, 1.0f, 0.0f},
-       {1.0f, 0.0f}},
-      {{-0.5f, 0.5f, -0.5f},
-       {0.0f, 0.0f, -1.0f},
-       {0.0f, 1.0f, 0.0f},
-       {1.0f, 1.0f}},
-      {{0.5f, 0.5f, -0.5f},
-       {0.0f, 0.0f, -1.0f},
-       {0.0f, 1.0f, 0.0f},
-       {0.0f, 1.0f}},
-      {{0.5f, -0.5f, -0.5f},
-       {0.0f, 0.0f, -1.0f},
-       {0.0f, 1.0f, 0.0f},
-       {0.0f, 0.0f}},
-
-      // Top Face (Y = 0.5f) - Normal pointing straight up at +Y
-      {{-0.5f, 0.5f, -0.5f},
-       {0.0f, 1.0f, 0.0f},
-       {0.0f, 0.0f, 1.0f},
-       {0.0f, 1.0f}},
-      {{-0.5f, 0.5f, 0.5f},
-       {0.0f, 1.0f, 0.0f},
-       {0.0f, 0.0f, 1.0f},
-       {0.0f, 0.0f}},
-      {{0.5f, 0.5f, 0.5f},
-       {0.0f, 1.0f, 0.0f},
-       {0.0f, 0.0f, 1.0f},
-       {1.0f, 0.0f}},
-      {{0.5f, 0.5f, -0.5f},
-       {0.0f, 1.0f, 0.0f},
-       {0.0f, 0.0f, 1.0f},
-       {1.0f, 1.0f}},
-
-      // Bottom Face (Y = -0.5f) - Normal pointing straight down at -Y
-      {{-0.5f, -0.5f, -0.5f},
-       {0.0f, -1.0f, 0.0f},
-       {1.0f, 1.0f, 0.0f},
-       {1.0f, 1.0f}},
-      {{0.5f, -0.5f, -0.5f},
-       {0.0f, -1.0f, 0.0f},
-       {1.0f, 1.0f, 0.0f},
-       {0.0f, 1.0f}},
-      {{0.5f, -0.5f, 0.5f},
-       {0.0f, -1.0f, 0.0f},
-       {1.0f, 1.0f, 0.0f},
-       {0.0f, 0.0f}},
-      {{-0.5f, -0.5f, 0.5f},
-       {0.0f, -1.0f, 0.0f},
-       {1.0f, 1.0f, 0.0f},
-       {1.0f, 0.0f}},
-
-      // Right Face (X = 0.5f) - Normal pointing straight right at +X
-      {{0.5f, -0.5f, -0.5f},
-       {1.0f, 0.0f, 0.0f},
-       {1.0f, 0.0f, 1.0f},
-       {1.0f, 0.0f}},
-      {{0.5f, 0.5f, -0.5f},
-       {1.0f, 0.0f, 0.0f},
-       {1.0f, 0.0f, 1.0f},
-       {1.0f, 1.0f}},
-      {{0.5f, 0.5f, 0.5f},
-       {1.0f, 0.0f, 0.0f},
-       {1.0f, 0.0f, 1.0f},
-       {0.0f, 1.0f}},
-      {{0.5f, -0.5f, 0.5f},
-       {1.0f, 0.0f, 0.0f},
-       {1.0f, 0.0f, 1.0f},
-       {0.0f, 0.0f}},
-
-      // Left Face (X = -0.5f) - Normal pointing straight left at -X
-      {{-0.5f, -0.5f, -0.5f},
-       {-1.0f, 0.0f, 0.0f},
-       {0.0f, 1.0f, 1.0f},
-       {0.0f, 0.0f}},
-      {{-0.5f, -0.5f, 0.5f},
-       {-1.0f, 0.0f, 0.0f},
-       {0.0f, 1.0f, 1.0f},
-       {1.0f, 0.0f}},
-      {{-0.5f, 0.5f, 0.5f},
-       {-1.0f, 0.0f, 0.0f},
-       {0.0f, 1.0f, 1.0f},
-       {1.0f, 1.0f}},
-      {{-0.5f, 0.5f, -0.5f},
-       {-1.0f, 0.0f, 0.0f},
-       {0.0f, 1.0f, 1.0f},
-       {0.0f, 1.0f}}};
-  // 12 Triangles (2 per cube face) using standard counter-clockwise rendering
-  // layout
-  indexBuffer = {
-      0,  1,  2,  2,  3,  0,  // Front
-      4,  5,  6,  6,  7,  4,  // Back
-      8,  9,  10, 10, 11, 8,  // Top
-      12, 13, 14, 14, 15, 12, // Bottom
-      16, 17, 18, 18, 19, 16, // Right
-      20, 21, 22, 22, 23, 20  // Left
-  };
-  */
   return true;
+}
+
+void Mesh::SetGeometryData(std::vector<MeshVertex>& vertexBufferData,
+                           std::vector<uint32_t> &indexBufferData) {
+  m_VertexCount = static_cast<uint32_t>(vertexBufferData.size());
+  m_IndexCount = static_cast<uint32_t>(indexBufferData.size());
+
+  if (!m_VertexBuffer) {
+    m_VertexBuffer = MakeScope<VertexBuffer<MeshVertex>>(
+        m_Context, sizeof(MeshVertex) * m_VertexCount);
+    m_VertexBuffer->SetLayout(MeshVertex::GetLayout());
+  }
+
+  if (!m_IndexBuffer) {
+    m_IndexBuffer = MakeScope<IndexBuffer>(
+        m_Context, sizeof(indexBufferData[0]) * indexBufferData.size(),
+        VK_INDEX_TYPE_UINT32);
+  }
+
+  m_VertexBuffer->Upload(vertexBufferData.data());
+  m_IndexBuffer->Upload(indexBufferData.data());
+
+  m_Loaded = true;
 }
 } // namespace Inferno

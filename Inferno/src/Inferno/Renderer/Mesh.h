@@ -12,6 +12,8 @@
 #include <glm/gtx/hash.hpp>
 
 namespace Inferno {
+class GeometryGenerator;
+
 struct MeshVertex {
   glm::vec3 Position;
   glm::vec3 Normal;
@@ -65,6 +67,9 @@ private:
                     std::vector<MeshVertex> &vertexBuffer,
                     std::vector<uint32_t> &indexBuffer);
 
+  void SetGeometryData(std::vector<MeshVertex>& vertexBufferData,
+                       std::vector<uint32_t> &indexBufferData);
+
   void CleanUp() {
     m_Context = nullptr;
 
@@ -75,13 +80,15 @@ private:
 private:
   const DeviceContext *m_Context = nullptr;
 
-  Scope<VertexBuffer<MeshVertex>> m_VertexBuffer;
-  Scope<IndexBuffer> m_IndexBuffer;
+  Scope<VertexBuffer<MeshVertex>> m_VertexBuffer = nullptr;
+  Scope<IndexBuffer> m_IndexBuffer = nullptr;
 
-  std::unique_ptr<BoundingBox> m_BoundingBox;
+  std::unique_ptr<BoundingBox> m_BoundingBox = nullptr;
 
   uint32_t m_VertexCount = 0;
   uint32_t m_IndexCount = 0;
+
+  friend class GeometryGenerator;
 };
 } // namespace Inferno
 

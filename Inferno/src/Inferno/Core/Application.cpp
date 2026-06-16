@@ -7,6 +7,7 @@
 #include "Inferno/Events/KeyCodes.h"
 #include "Inferno/Events/KeyEvent.h"
 #include "Inferno/Renderer/Mesh.h"
+#include "Inferno/Tools/GeometryGenerator.h"
 #include "Inferno/Utils/DeltaTime.h"
 #include "Log.h"
 #include "glm/ext/quaternion_trigonometric.hpp"
@@ -43,21 +44,42 @@ void Application::StartUp() {
     testEntity->AddComponent<TransformComponent>();
     // testEntity->GetComponent<TransformComponent>()->SetRotation(
     //    glm::angleAxis(glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f)));
-    auto mesh =
-        m_ResourceManager->Load<Mesh>("viking_room", m_RenderingContext.get());
+    // auto mesh =
+    // m_ResourceManager->Load<Mesh>("viking_room", m_RenderingContext.get());
+    // auto texture = m_ResourceManager->Load<Texture>("viking_room",
+    // m_RenderingContext.get());
+    // testEntity->AddComponent<MeshComponent>(mesh.get(), texture.get());
+    //  m_Entities.push_back(testEntity);
+  }
+
+  /*
+  {
+    Entity *cube = new Entity("cube");
+    cube->AddComponent<TransformComponent>();
+    m_CubeMesh = GeometryGenerator::GenerateCube(m_RenderingContext.get());
     auto texture = m_ResourceManager->Load<Texture>("viking_room",
                                                     m_RenderingContext.get());
-    testEntity->AddComponent<MeshComponent>(mesh.get(), texture.get());
-    // m_Entities.push_back(testEntity);
+    // TODO: I SHOULD PASS A SHARED PTR HERE I THINK IDKKKKK
+    cube->AddComponent<MeshComponent>(m_CubeMesh.get(), texture.get());
+    m_Entities.push_back(cube);
   }
+  */
 
   for (int i = 0; i < 1; ++i) {
     Entity *knight = new Entity("knight");
     auto *transform = knight->AddComponent<TransformComponent>();
-    // transform->SetRotation(glm::angleAxis(glm::radians(90.0f),
-    // glm::vec3(0.0f, 0.0f, 1.0f)));
-    // transform->SetRotation(glm::angleAxis(glm::radians(-90.0f),
-    // glm::vec3(0.0f, 1.0f, 0.0f)));
+
+    auto rotation = transform->GetRotation();
+    glm::quat rotationInc =
+        glm::angleAxis(glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+    glm::quat newRotation = rotationInc * rotation;
+    transform->SetRotation(newRotation);
+
+    rotation = transform->GetRotation();
+    rotationInc =
+        glm::angleAxis(glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    newRotation = rotationInc * rotation;
+    transform->SetRotation(newRotation);
 
     auto mesh =
         m_ResourceManager->Load<Mesh>("zsamo", m_RenderingContext.get());

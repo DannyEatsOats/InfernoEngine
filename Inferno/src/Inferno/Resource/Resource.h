@@ -52,7 +52,6 @@ protected:
   virtual bool DoLoad() = 0;
   virtual bool DoUnLoad() = 0;
 
-private:
   std::string m_ResourceID; // Unique ID
   bool m_Loaded = false;
 };

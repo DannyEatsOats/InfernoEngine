@@ -1,3 +1,4 @@
+#include "Inferno/Core/Log.h"
 #include "Inferno/ECS/Entity.h"
 #include "glm/ext/matrix_float4x4.hpp"
 #include "glm/ext/vector_float3.hpp"
@@ -624,6 +625,7 @@ void Renderer::SetupDeferredRendering() {
           if (!meshComponent)
             continue;
 
+
           glm::mat4 model =
               entity->GetComponent<TransformComponent>()->GetTransformmatrix();
 
@@ -634,6 +636,14 @@ void Renderer::SetupDeferredRendering() {
           vkCmdPushConstants(cmd, m_GeometryPipelineLayout,
                              VK_SHADER_STAGE_VERTEX_BIT, 0,
                              sizeof(MeshPushConstants), &push);
+
+          if(meshComponent->GetMesh()->GetIndexBuffer() == nullptr) {
+
+              INFERNO_LOG_ERROR("BESZART {} {}", meshComponent->GetMesh()->GetID(), meshComponent->GetMesh()->GetVertexCount());
+          } else {
+
+              INFERNO_LOG_ERROR("WE GUD CHIEF");
+          }
 
           VkBuffer vertexBuffers[] = {
               meshComponent->GetMesh()->GetVertexBuffer()->Get()};

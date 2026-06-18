@@ -2,19 +2,11 @@
 
 #include "GLFW/glfw3.h"
 #include "Inferno/Core/Memory.h"
-#include "Inferno/ECS/Entity.h"
 #include "Inferno/Events/ApplicationEvent.h"
 #include "Inferno/Events/Event.h"
 #include "Inferno/Events/Input.h"
-#include "Inferno/Events/KeyCodes.h"
-#include "Inferno/Events/KeyEvent.h"
 #include "Inferno/Utils/DeltaTime.h"
 #include "Log.h"
-#include "glm/ext/quaternion_trigonometric.hpp"
-#include "glm/ext/vector_float3.hpp"
-#include "glm/fwd.hpp"
-#include "glm/trigonometric.hpp"
-#include <memory>
 
 namespace Inferno {
 Application::Application() { StartUp(); }
@@ -28,7 +20,7 @@ void Application::StartUp() {
   m_RenderingContext = MakeScope<DeviceContext>();
   m_RenderingContext->StartUp(m_Window->GetNativeWindow());
   m_ResourceManager = MakeScope<ResourceManager>(m_RenderingContext.get());
-  m_Renderer = std::make_unique<Renderer>(m_RenderingContext.get());
+  m_Renderer = MakeScope<Renderer>(m_RenderingContext.get());
   m_Renderer->StartUp(m_ResourceManager.get());
   Input::SetWindowHandle(m_Window->GetNativeWindow());
 }
@@ -84,66 +76,14 @@ void Application::OnEvent(Event &event) {
         return true;
       });
 
-  // TODO: Input Testing
-  dispatcher.Dispatch<KeyPressedEvent>([this](KeyPressedEvent &event) {
-    for (auto &entity : m_ActiveScene->GetEntities()) {
-      auto position = entity->GetComponent<TransformComponent>()->GetPosition();
-      auto rotation = entity->GetComponent<TransformComponent>()->GetRotation();
-
-      if (event.GetKeyCode() == ENGINE_KEY_LEFT) {
-        position = position + glm::vec3(-0.1f, 0.0f, 0.0f);
-        entity->GetComponent<TransformComponent>()->SetPosition(position);
-      } else if (event.GetKeyCode() == ENGINE_KEY_RIGHT) {
-        position = position + glm::vec3(0.1f, 0.0f, 0.0f);
-        entity->GetComponent<TransformComponent>()->SetPosition(position);
-      } else if (event.GetKeyCode() == ENGINE_KEY_UP) {
-        position = position + glm::vec3(0.0f, 0.1f, 0.0f);
-        entity->GetComponent<TransformComponent>()->SetPosition(position);
-      } else if (event.GetKeyCode() == ENGINE_KEY_DOWN) {
-        position = position + glm::vec3(0.0f, -0.1f, 0.0f);
-        entity->GetComponent<TransformComponent>()->SetPosition(position);
-
-      } else if (event.GetKeyCode() == ENGINE_KEY_F) {
-        glm::quat rotationInc =
-            glm::angleAxis(glm::radians(-1.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-        glm::quat newRotation = rotationInc * rotation;
-        entity->GetComponent<TransformComponent>()->SetRotation(newRotation);
-      } else if (event.GetKeyCode() == ENGINE_KEY_G) {
-        glm::quat rotationInc =
-            glm::angleAxis(glm::radians(1.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-        glm::quat newRotation = rotationInc * rotation;
-        entity->GetComponent<TransformComponent>()->SetRotation(newRotation);
-      } else if (event.GetKeyCode() == ENGINE_KEY_H) {
-        glm::quat rotationInc =
-            glm::angleAxis(glm::radians(-1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        glm::quat newRotation = rotationInc * rotation;
-        entity->GetComponent<TransformComponent>()->SetRotation(newRotation);
-      } else if (event.GetKeyCode() == ENGINE_KEY_J) {
-        glm::quat rotationInc =
-            glm::angleAxis(glm::radians(1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        glm::quat newRotation = rotationInc * rotation;
-        entity->GetComponent<TransformComponent>()->SetRotation(newRotation);
-      } else if (event.GetKeyCode() == ENGINE_KEY_K) {
-        glm::quat rotationInc =
-            glm::angleAxis(glm::radians(1.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-        glm::quat newRotation = rotationInc * rotation;
-        entity->GetComponent<TransformComponent>()->SetRotation(newRotation);
-      } else if (event.GetKeyCode() == ENGINE_KEY_L) {
-        glm::quat rotationInc =
-            glm::angleAxis(glm::radians(-1.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-        glm::quat newRotation = rotationInc * rotation;
-        entity->GetComponent<TransformComponent>()->SetRotation(newRotation);
-      }
-    }
-
-    return true;
-  });
-  // ============================================================================
-
   for (auto it = m_LayerStack.end(); it != m_LayerStack.begin();) {
     (*--it)->OnEvent(event);
     if (event.IsHandled())
       break;
+  }
+
+  if (!event.IsHandled() && m_ActiveScene) {
+    m_ActiveScene->OnEvent(event);
   }
 }
 
@@ -160,8 +100,14 @@ void Application::PushOverlay(Layer *layer) {
 }
 
 void Application::SetActiveScene(Scope<Scene> scene) {
+  if (m_ActiveScene) {
+    m_ActiveScene->OnDetach();
+  }
+
   m_ActiveScene = std::move(scene);
+
   m_ActiveScene->SetResourceManager(m_ResourceManager.get());
+  m_ActiveScene->SetEventCallback([this](Event &e) { this->OnEvent(e); });
   m_ActiveScene->OnAttach();
 }
 

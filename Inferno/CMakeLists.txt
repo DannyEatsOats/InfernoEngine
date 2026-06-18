@@ -23,6 +23,8 @@ add_library(Inferno
         src/Inferno/ECS/Component.cpp
         src/Inferno/ECS/Entity.h
         src/Inferno/ECS/Entity.cpp
+        src/Inferno/ECS/Scene.h
+        src/Inferno/ECS/Scene.cpp
         # RENDERER
         src/Inferno/Renderer/BoundingBox.h
         src/Inferno/Renderer/Buffer.h

@@ -3,22 +3,18 @@
 #include "GLFW/glfw3.h"
 #include "Inferno/Core/Memory.h"
 #include "Inferno/ECS/Entity.h"
+#include "Inferno/Events/ApplicationEvent.h"
+#include "Inferno/Events/Event.h"
 #include "Inferno/Events/Input.h"
 #include "Inferno/Events/KeyCodes.h"
 #include "Inferno/Events/KeyEvent.h"
-#include "Inferno/Renderer/Mesh.h"
-#include "Inferno/Tools/GeometryGenerator.h"
 #include "Inferno/Utils/DeltaTime.h"
 #include "Log.h"
 #include "glm/ext/quaternion_trigonometric.hpp"
 #include "glm/ext/vector_float3.hpp"
 #include "glm/fwd.hpp"
 #include "glm/trigonometric.hpp"
-#include <algorithm>
-#include <chrono>
 #include <memory>
-#include <stdexcept>
-#include <string>
 
 namespace Inferno {
 Application::Application() { StartUp(); }
@@ -29,69 +25,18 @@ void Application::StartUp() {
 
   m_Window = Window::Create();
   m_Window->SetEventCallback([this](Event &event) { this->OnEvent(event); });
-  Input::SetWindowHandle(m_Window->GetNativeWindow());
-  // TODO Init subsystems
-  m_ResourceManager = MakeScope<ResourceManager>();
   m_RenderingContext = MakeScope<DeviceContext>();
   m_RenderingContext->StartUp(m_Window->GetNativeWindow());
+  m_ResourceManager = MakeScope<ResourceManager>(m_RenderingContext.get());
   m_Renderer = std::make_unique<Renderer>(m_RenderingContext.get());
   m_Renderer->StartUp(m_ResourceManager.get());
-
-  // TEMP
-
-  {
-    Entity *testEntity = new Entity("test");
-    testEntity->AddComponent<TransformComponent>();
-    // testEntity->GetComponent<TransformComponent>()->SetRotation(
-    //    glm::angleAxis(glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f)));
-    // auto mesh =
-    // m_ResourceManager->Load<Mesh>("viking_room", m_RenderingContext.get());
-    // auto texture = m_ResourceManager->Load<Texture>("viking_room",
-    // m_RenderingContext.get());
-    // testEntity->AddComponent<MeshComponent>(mesh.get(), texture.get());
-    //  m_Entities.push_back(testEntity);
-  }
-
-  /*
-  {
-    Entity *cube = new Entity("cube");
-    cube->AddComponent<TransformComponent>();
-    m_CubeMesh = GeometryGenerator::GenerateCube(m_RenderingContext.get());
-    auto texture = m_ResourceManager->Load<Texture>("viking_room",
-                                                    m_RenderingContext.get());
-    // TODO: I SHOULD PASS A SHARED PTR HERE I THINK IDKKKKK
-    cube->AddComponent<MeshComponent>(m_CubeMesh.get(), texture.get());
-    m_Entities.push_back(cube);
-  }
-  */
-
-  for (int i = 0; i < 1; ++i) {
-    Entity *knight = new Entity("knight");
-    auto *transform = knight->AddComponent<TransformComponent>();
-
-    auto rotation = transform->GetRotation();
-    glm::quat rotationInc =
-        glm::angleAxis(glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-    glm::quat newRotation = rotationInc * rotation;
-    transform->SetRotation(newRotation);
-
-    rotation = transform->GetRotation();
-    rotationInc =
-        glm::angleAxis(glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    newRotation = rotationInc * rotation;
-    transform->SetRotation(newRotation);
-
-    auto mesh =
-        m_ResourceManager->Load<Mesh>("zsamo", m_RenderingContext.get());
-    auto texture =
-        m_ResourceManager->Load<Texture>("zsamo", m_RenderingContext.get());
-    knight->AddComponent<MeshComponent>(mesh.get(), texture.get());
-    m_Entities.push_back(knight);
-  }
+  Input::SetWindowHandle(m_Window->GetNativeWindow());
 }
 
 void Application::ShutDown() {
   INFERNO_LOG_INFO("Shutting Down Engine...");
+  m_ActiveScene->OnDetach();
+
   m_Renderer->ShutDown();
   m_ResourceManager->UnloadAll();
   m_RenderingContext->ShutDown();
@@ -111,35 +56,12 @@ void Application::Run() {
         layer->OnUpdate(deltaTime);
       }
 
-      for (auto entity : m_Entities) {
+      if (m_ActiveScene) {
+        m_ActiveScene->OnUpdate(deltaTime);
       }
-
-      // TODO: TEMP ======================================================
-      if (Input::IsKeyDown(ENGINE_KEY_LEFT_CONTROL) &&
-          Input::IsKeyDown(ENGINE_KEY_GRAVE_ACCENT)) {
-        m_Renderer->SetLightingDebugMode(0);
-      }
-      if (Input::IsKeyDown(ENGINE_KEY_LEFT_CONTROL) &&
-          Input::IsKeyDown(ENGINE_KEY_1)) {
-        m_Renderer->SetLightingDebugMode(1);
-      }
-      if (Input::IsKeyDown(ENGINE_KEY_LEFT_CONTROL) &&
-          Input::IsKeyDown(ENGINE_KEY_2)) {
-        m_Renderer->SetLightingDebugMode(2);
-      }
-      if (Input::IsKeyDown(ENGINE_KEY_LEFT_CONTROL) &&
-          Input::IsKeyDown(ENGINE_KEY_3)) {
-        m_Renderer->SetLightingDebugMode(3);
-      }
-      if (Input::IsKeyDown(ENGINE_KEY_LEFT_CONTROL) &&
-          Input::IsKeyDown(ENGINE_KEY_4)) {
-        m_Renderer->SetLightingDebugMode(4);
-      }
-      // ============================================================7=
 
       // TODO GUI Layer Stuff
-      // m_Renderer->DrawFrame();
-      m_Renderer->Render(m_Entities);
+      m_Renderer->Render(m_ActiveScene->GetEntities());
     }
     // TODO Gui end
     // TODO window stuff
@@ -156,10 +78,15 @@ void Application::OnEvent(Event &event) {
       [this](WindowCloseEvent &event) { return this->OnWindowClosed(event); });
   dispatcher.Dispatch<WindowResizeEvent>(
       [this](WindowResizeEvent &event) { return this->OnWindowResize(event); });
+  dispatcher.Dispatch<SetLightingDebugModeEvent>(
+      [this](SetLightingDebugModeEvent &event) {
+        m_Renderer->SetLightingDebugMode(event.Mode);
+        return true;
+      });
 
-  // Input Testing
+  // TODO: Input Testing
   dispatcher.Dispatch<KeyPressedEvent>([this](KeyPressedEvent &event) {
-    for (Entity *entity : m_Entities) {
+    for (auto &entity : m_ActiveScene->GetEntities()) {
       auto position = entity->GetComponent<TransformComponent>()->GetPosition();
       auto rotation = entity->GetComponent<TransformComponent>()->GetRotation();
 
@@ -221,14 +148,24 @@ void Application::OnEvent(Event &event) {
 }
 
 void Application::PushLayer(Layer *layer) {
+  layer->SetEventCallback([this](Event &e) { this->OnEvent(e); });
   m_LayerStack.PushLayer(layer);
   layer->OnAttach();
 }
 
 void Application::PushOverlay(Layer *layer) {
-  m_LayerStack.PopOverlay(layer);
+  layer->SetEventCallback([this](Event &e) { this->OnEvent(e); });
+  m_LayerStack.PushOverlay(layer);
   layer->OnAttach();
 }
+
+void Application::SetActiveScene(Scope<Scene> scene) {
+  m_ActiveScene = std::move(scene);
+  m_ActiveScene->SetResourceManager(m_ResourceManager.get());
+  m_ActiveScene->OnAttach();
+}
+
+void Application::SwitchScene(Scope<Scene> scene) { m_ActiveScene->OnDetach(); }
 
 bool Application::OnWindowClosed(WindowCloseEvent &event) {
   m_Running = false;

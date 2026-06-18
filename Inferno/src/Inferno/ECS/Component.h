@@ -3,7 +3,6 @@
 #include "Inferno/Renderer/Texture.h"
 #include "Inferno/Utils/DeltaTime.h"
 #include "glm/ext/matrix_float4x4.hpp"
-#include "glm/geometric.hpp"
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
@@ -117,22 +116,22 @@ class Mesh;
 class Material;
 class MeshComponent : public Component {
 public:
-  MeshComponent(const Mesh *mesh, const Texture *texture)
+  MeshComponent(const Mesh* mesh, const Texture* texture)
       : m_Mesh(mesh), m_Texture(texture) {}
 
-  void SetMesh(Mesh *mesh) { m_Mesh = mesh; }
+  void SetMesh(const Mesh* mesh) { m_Mesh = mesh; }
   // void SetMaterial(Material *material) { m_Material = material; }
-  void SetTexture(const Texture *texture) { m_Texture = texture; }
+  void SetTexture(const Texture* texture) { m_Texture = texture; }
 
-  const Mesh *GetMesh() const { return m_Mesh; }
+  const Mesh* GetMesh() const { return m_Mesh; }
   // Material *GetMaterial() const { return m_Material; }
-  const Texture *GetTexture() const { return m_Texture; }
+  const Texture* GetTexture() const { return m_Texture; }
 
   virtual void Render() override;
 
 private:
-  const Mesh *m_Mesh = nullptr;
+  const Mesh* m_Mesh = nullptr;
   // Material *m_Material = nullptr;
-  const Texture *m_Texture = nullptr;
+  const Texture* m_Texture = nullptr;
 };
 } // namespace Inferno

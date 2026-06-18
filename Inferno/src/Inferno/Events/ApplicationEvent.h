@@ -54,4 +54,14 @@ public:
   EVENT_CLASS_TYPE(AppRender)
   EVENT_CLASS_CATEGORY(EventCategoryApplication)
 };
+
+class SetLightingDebugModeEvent : public Event {
+public:
+  SetLightingDebugModeEvent(int mode) : Mode(mode) {}
+
+  EVENT_CLASS_TYPE(SetLightingDebugMode)
+  EVENT_CLASS_CATEGORY(EventCategoryRenderSetting)
+
+  int Mode = 0;
+};
 } // namespace Inferno

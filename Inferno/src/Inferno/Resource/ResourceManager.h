@@ -8,14 +8,21 @@
 #include <utility>
 
 #include "Inferno/Core/Memory.h"
+#include "Inferno/Renderer/DeviceContext.h"
+#include "Inferno/Renderer/Mesh.h"
+#include "Inferno/Renderer/Shader.h"
+#include "Inferno/Renderer/Texture.h"
 #include "Inferno/Resource/Resource.h"
 
 namespace Inferno {
 class ResourceManager {
 public:
+  ResourceManager(const DeviceContext *context) : m_Context(context) {}
+  ~ResourceManager() = default;
+
   // Loading
   template <typename T, typename... Args>
-  Ref<T> Load(const std::string &resourceID, Args &&...args) {
+  const T *Load(const std::string &resourceID) {
     static_assert(std::is_base_of<Resource, T>::value,
                   "ResourceManager: T must derive from Resource");
 
@@ -24,28 +31,36 @@ public:
     auto &typeResources = m_Resources[typeIdx];
     auto resourceIt = typeResources.find(resourceID);
 
-    // If Resource is cached - inc and return handle
+    // If exists return
     if (resourceIt != typeResources.end()) {
-      ++m_RefCounts[typeIdx][resourceID].RefCount;
-      return std::static_pointer_cast<T>(resourceIt->second);
+      return std::static_pointer_cast<T>(resourceIt->second).get();
+    }
+
+    constexpr bool isRenderingResource = std::is_same_v<T, Mesh> ||
+                                         std::is_same_v<T, Texture> ||
+                                         std::is_same_v<T, Shader>;
+
+    Ref<T> resource = nullptr;
+
+    if constexpr (isRenderingResource) {
+      resource = MakeRef<T>(resourceID, m_Context);
+    } else {
+      resource = MakeRef<T>(resourceID);
     }
 
     // Create new Resource and try loading
-    auto resource =
-        std::make_shared<T>(resourceID, std::forward<Args>(args)...);
     if (!resource->Load()) {
-      // Loading failed - return invalid handle
       return nullptr;
     }
 
     typeResources.emplace(resourceID, resource);
-    m_RefCounts[typeIdx].emplace(resourceID, ResourceData{resource, 1});
 
-    return resource;
+    return resource.get();
   }
 
   // Accessing
-  template <typename T> T *GetResource(const std::string &resourceID) const {
+  template <typename T>
+  const T *GetResource(const std::string &resourceID) const {
     const std::type_index typeIdx = std::type_index(typeid(T));
 
     auto typeResourcesIt = m_Resources.find(typeIdx);
@@ -57,7 +72,7 @@ public:
     auto resourceIt = typeResources.find(resourceID);
 
     if (resourceIt != typeResources.end()) {
-      return static_cast<T *>(resourceIt->second.get());
+      return std::static_pointer_cast<T>(resourceIt->second).get();
     }
 
     return nullptr;
@@ -81,39 +96,22 @@ public:
   template <typename T> void Release(const std::string &resourceId) {
     const std::type_index typeIdx = std::type_index(typeid(T));
 
-    auto typeRefCountsIt = m_RefCounts.find(typeIdx);
-    if (typeRefCountsIt == m_RefCounts.end()) {
+    auto typeResourcesIt = m_Resources.find(typeIdx);
+    if (typeResourcesIt == m_Resources.end()) {
       return;
     }
 
-    auto resourceRefCountsIt = typeRefCountsIt->second.find(resourceId);
-    if (resourceRefCountsIt == typeRefCountsIt->second.end()) {
+    auto &typeResources = typeResourcesIt->second;
+    auto resourceIt = typeResources.find(resourceId);
+    if (resourceIt == typeResources.end()) {
       return;
     }
 
-    --resourceRefCountsIt->second.RefCount;
+    resourceIt->second->UnLoad();
+    typeResources.erase(resourceIt);
 
-    if (resourceRefCountsIt->second.RefCount <= 0) {
-      auto resourcePtr = resourceRefCountsIt->second.ResourceHandle;
-      if (resourcePtr) {
-        resourcePtr->UnLoad();
-      }
-
-      // Erase from RefCount table
-      typeRefCountsIt->second.erase(resourceRefCountsIt);
-      if (typeRefCountsIt->second.empty()) {
-        m_RefCounts.erase(typeRefCountsIt);
-      }
-
-      // Erase from Resource cache
-      auto typeResourcesIt = m_Resources.find(typeIdx);
-      if (typeResourcesIt != m_Resources.end()) {
-        auto &typeResources = typeResourcesIt->second;
-        typeResources.erase(resourceId);
-        if (typeResources.empty()) {
-          m_Resources.erase(typeResourcesIt);
-        }
-      }
+    if (typeResources.empty()) {
+      m_Resources.erase(typeResourcesIt);
     }
   }
 
@@ -124,21 +122,14 @@ public:
       }
       typeResources.clear();
     }
-    m_RefCounts.clear();
+    m_Resources.clear();
   }
 
 private:
+  const DeviceContext *m_Context = nullptr;
+
   std::unordered_map<std::type_index,
-                     std::unordered_map<std::string, std::shared_ptr<Resource>>>
+                     std::unordered_map<std::string, Ref<Resource>>>
       m_Resources;
-
-  struct ResourceData {
-    std::shared_ptr<Resource> ResourceHandle;
-    int RefCount = 0;
-  };
-
-  std::unordered_map<std::type_index,
-                     std::unordered_map<std::string, ResourceData>>
-      m_RefCounts;
 };
 } // namespace Inferno

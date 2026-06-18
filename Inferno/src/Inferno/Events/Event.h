@@ -5,34 +5,36 @@
 #define BIT(x) (1 << x)
 
 namespace Inferno {
-  enum class EventType {
-    None = 0,
-    //Application
-    WindowClose,
-    WindowResize,
-    WindowFocus,
-    WindowLostFocus,
-    WindowMoved,
-    AppTick,
-    AppUpdate,
-    AppRender,
-    //Input
-    KeyPressed,
-    KeyReleased,
-    MouseButtonPressed,
-    MouseButtonReleased,
-    MouseMoved,
-    MouseScrolled
-  };
+enum class EventType {
+  None = 0,
+  // Application
+  WindowClose,
+  WindowResize,
+  WindowFocus,
+  WindowLostFocus,
+  WindowMoved,
+  AppTick,
+  AppUpdate,
+  AppRender,
+  SetLightingDebugMode,
+  // Input
+  KeyPressed,
+  KeyReleased,
+  MouseButtonPressed,
+  MouseButtonReleased,
+  MouseMoved,
+  MouseScrolled,
+};
 
-  enum EventCategory {
-    None = 0,
-    EventCategoryApplication = BIT(0),
-    EventCategoryInput = BIT(1),
-    EventCategoryKeyboard = BIT(2),
-    EventCategoryMouse = BIT(3),
-    EventCategoryMouseButton = BIT(4),
-  };
+enum EventCategory {
+  None = 0,
+  EventCategoryApplication = BIT(0),
+  EventCategoryInput = BIT(1),
+  EventCategoryKeyboard = BIT(2),
+  EventCategoryMouse = BIT(3),
+  EventCategoryMouseButton = BIT(4),
+  EventCategoryRenderSetting = BIT(5),
+};
 
 #define EVENT_CLASS_TYPE(type)                                                 \
   static EventType GetStaticType() { return EventType::type; }                 \
@@ -42,48 +44,45 @@ namespace Inferno {
 #define EVENT_CLASS_CATEGORY(category)                                         \
   virtual int GetCategoryFlags() const override { return category; }
 
-  class Event {
-    friend class EventDispatcher;
+class Event {
+  friend class EventDispatcher;
 
-  public:
-    virtual ~Event() = default;
+public:
+  virtual ~Event() = default;
 
-    virtual EventType GetEventType() const = 0;
+  virtual EventType GetEventType() const = 0;
 
-    virtual const char *GetName() const = 0;
+  virtual const char *GetName() const = 0;
 
-    virtual int GetCategoryFlags() const = 0;
+  virtual int GetCategoryFlags() const = 0;
 
-    virtual std::string ToString() const { return GetName(); }
+  virtual std::string ToString() const { return GetName(); }
 
-    inline bool IsHandled() const {return m_Handled;}
+  inline bool IsHandled() const { return m_Handled; }
 
-    inline bool IsInCategory(EventCategory category) {
-      return GetCategoryFlags() & category;
+  inline bool IsInCategory(EventCategory category) {
+    return GetCategoryFlags() & category;
+  }
+
+protected:
+  bool m_Handled = false;
+};
+
+class EventDispatcher {
+  template <typename T> using EventFn = std::function<bool(T &)>;
+
+public:
+  EventDispatcher(Event &event) : m_Event(event) {}
+
+  template <typename T> bool Dispatch(EventFn<T> func) {
+    if (m_Event.GetEventType() == T::GetStaticType()) {
+      m_Event.m_Handled = func(static_cast<T &>(m_Event));
+      return true;
     }
+    return false;
+  }
 
-  protected:
-    bool m_Handled = false;
-  };
-
-  class EventDispatcher {
-    template<typename T>
-    using EventFn = std::function<bool(T &)>;
-
-  public:
-    EventDispatcher(Event &event) : m_Event(event) {
-    }
-
-    template<typename T>
-    bool Dispatch(EventFn<T> func) {
-      if (m_Event.GetEventType() == T::GetStaticType()) {
-        m_Event.m_Handled = func(static_cast<T &>(m_Event));
-        return true;
-      }
-      return false;
-    }
-
-  private:
-    Event &m_Event;
-  };
-} // namespace Engine
+private:
+  Event &m_Event;
+};
+} // namespace Inferno

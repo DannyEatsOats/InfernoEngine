@@ -44,6 +44,7 @@ void Renderer::StartUp(ResourceManager *resourceManager) {
   for (uint32_t i = 0; i < m_RenderGraph->GetMaxFramesInFlight(); ++i) {
     UpdateLightingDescriptorSet(i);
   }
+
 }
 
 void Renderer::ShutDown() {
@@ -103,7 +104,7 @@ void Renderer::ShutDown() {
 }
 
 void Renderer::CreateGeometryPipeline() {
-  auto gbufferShader = m_ResourceManager->Load<Shader>("gbuffer", m_Context);
+  auto gbufferShader = m_ResourceManager->Load<Shader>("gbuffer");
 
   VkDescriptorSetLayoutBinding samplerLayoutBinding{};
   samplerLayoutBinding.binding = 0;
@@ -312,7 +313,7 @@ Renderer::GetOrCreateTextureDescriptorSet(const Texture *texture) {
 }
 
 void Renderer::CreateLightingPipeline() {
-  auto lightingShader = m_ResourceManager->Load<Shader>("lighting", m_Context);
+  auto lightingShader = m_ResourceManager->Load<Shader>("lighting");
 
   VkPushConstantRange lightingDebugPushConstants{};
   lightingDebugPushConstants.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
@@ -625,7 +626,6 @@ void Renderer::SetupDeferredRendering() {
           if (!meshComponent)
             continue;
 
-
           glm::mat4 model =
               entity->GetComponent<TransformComponent>()->GetTransformmatrix();
 
@@ -637,14 +637,6 @@ void Renderer::SetupDeferredRendering() {
                              VK_SHADER_STAGE_VERTEX_BIT, 0,
                              sizeof(MeshPushConstants), &push);
 
-          if(meshComponent->GetMesh()->GetIndexBuffer() == nullptr) {
-
-              INFERNO_LOG_ERROR("BESZART {} {}", meshComponent->GetMesh()->GetID(), meshComponent->GetMesh()->GetVertexCount());
-          } else {
-
-              INFERNO_LOG_ERROR("WE GUD CHIEF");
-          }
-
           VkBuffer vertexBuffers[] = {
               meshComponent->GetMesh()->GetVertexBuffer()->Get()};
           VkDeviceSize offsets[] = {0};
@@ -653,7 +645,7 @@ void Renderer::SetupDeferredRendering() {
               cmd, meshComponent->GetMesh()->GetIndexBuffer()->Get(), 0,
               meshComponent->GetMesh()->GetIndexBuffer()->GetIndexType());
 
-          const auto *texture = meshComponent->GetTexture();
+          auto texture = meshComponent->GetTexture();
           if (texture) {
             VkDescriptorSet textureSet =
                 GetOrCreateTextureDescriptorSet(texture);

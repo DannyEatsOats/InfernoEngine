@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Inferno/Core/Memory.h"
+#include "Inferno/ECS/Scene.h"
 #include "Inferno/Events/ApplicationEvent.h"
 #include "Inferno/Events/Event.h"
 #include "Inferno/Renderer/DeviceContext.h"
@@ -10,10 +11,6 @@
 #include "LayerStack.h"
 #include "Window.h"
 #include <memory>
-#include <vector>
-
-//TODO: TEMPPPPPPP
-#include "Inferno/Renderer/Mesh.h"
 
 namespace Inferno {
 class Application {
@@ -32,6 +29,9 @@ public:
   void PushLayer(Layer *layer);
   void PushOverlay(Layer *layer);
 
+  void SetActiveScene(Scope<Scene> scene);
+  void SwitchScene(Scope<Scene> scene);
+
 private:
   bool OnWindowClosed(WindowCloseEvent &event);
   bool OnWindowResize(WindowResizeEvent &event);
@@ -42,13 +42,11 @@ private:
   Scope<DeviceContext> m_RenderingContext;
   Scope<Renderer> m_Renderer;
   Scope<ResourceManager> m_ResourceManager;
+
+  Scope<Scene> m_ActiveScene = nullptr;
+
   bool m_Running = true;
   bool m_Minimized = false;
   float m_LastFrameTime = 0.0f;
-
-  // TEMP
-  std::vector<Entity *> m_Entities;
-  //TODO: THIS IS REAAAAAAAAAAAAAALLY SHIT HERE, LIKE ABSOLUTE FUCK ASS
-  Scope<Mesh> m_CubeMesh;
 };
 } // namespace Inferno

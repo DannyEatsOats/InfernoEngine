@@ -54,14 +54,13 @@ private:
 
   VkDescriptorSetLayout m_GeometryDescriptorSetLayout = VK_NULL_HANDLE;
   VkDescriptorPool m_TextureDescriptorPool = VK_NULL_HANDLE;
-  std::unordered_map<std::string, VkDescriptorSet> m_TextureDescroptiorSets;
 
   // Deffered Shading Lighting Pass
   VkPipeline m_LightingPipeline = VK_NULL_HANDLE;
   VkPipelineLayout m_LightingPipelineLayout = VK_NULL_HANDLE;
 
   VkDescriptorSetLayout m_LightingDescriptorLayout = VK_NULL_HANDLE;
-  VkDescriptorPool m_DescriptorPool = VK_NULL_HANDLE;
+  VkDescriptorPool m_LightingDescriptorPool = VK_NULL_HANDLE;
   std::vector<VkDescriptorSet> m_LightingDescriptorSets;
   VkSampler m_GBufferSampler = VK_NULL_HANDLE;
 

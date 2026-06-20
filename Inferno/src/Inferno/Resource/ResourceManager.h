@@ -22,7 +22,7 @@ public:
 
   // Loading
   template <typename T, typename... Args>
-  const T *Load(const std::string &resourceID) {
+  T *Load(const std::string &resourceID) {
     static_assert(std::is_base_of<Resource, T>::value,
                   "ResourceManager: T must derive from Resource");
 
@@ -60,7 +60,7 @@ public:
 
   // Accessing
   template <typename T>
-  const T *GetResource(const std::string &resourceID) const {
+  T *GetResource(const std::string &resourceID) const {
     const std::type_index typeIdx = std::type_index(typeid(T));
 
     auto typeResourcesIt = m_Resources.find(typeIdx);

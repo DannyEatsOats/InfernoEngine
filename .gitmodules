@@ -25,3 +25,6 @@
 [submodule "Inferno/vendor/ktx"]
 	path = Inferno/vendor/ktx
 	url = https://github.com/KhronosGroup/KTX-Software.git
+[submodule "Inferno/vendor/tracy"]
+	path = Inferno/vendor/tracy
+	url = https://github.com/wolfpld/tracy.git

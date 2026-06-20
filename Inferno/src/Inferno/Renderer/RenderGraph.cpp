@@ -7,6 +7,7 @@
 
 #include "Inferno/Renderer/Image.h"
 #include "RenderGraph.h"
+#include "tracy/Tracy.hpp"
 
 namespace Inferno {
 static VkImageAspectFlags GetAspectMaskFromFormat(VkFormat format) {
@@ -280,6 +281,9 @@ void RenderGraph::Execute(uint32_t imageIndex) {
       VkImageLayout oldLayout = currentLayouts[input];
       VkImageLayout newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
+      if (oldLayout == newLayout)
+        continue;
+
       VkImageAspectFlags aspectMask = GetAspectMaskFromFormat(resource.Format);
 
       VkImageMemoryBarrier barrier{};
@@ -291,12 +295,17 @@ void RenderGraph::Execute(uint32_t imageIndex) {
       barrier.image = resource.GetVkImage(m_CurrentFrame, imageIndex);
       barrier.subresourceRange = {aspectMask, 0, VK_REMAINING_MIP_LEVELS, 0,
                                   VK_REMAINING_ARRAY_LAYERS};
-      // barrier.subresourceRange = {aspectMask, 0, 1, 0, 1};
-      barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
+      barrier.srcAccessMask =
+          (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED)
+              ? 0
+              : (VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+                 VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
       barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
-      vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+      vkCmdPipelineBarrier(commandBuffer,
+                           VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                               VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                           VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                            VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 0, nullptr,
                            1, &barrier);
 
@@ -306,11 +315,13 @@ void RenderGraph::Execute(uint32_t imageIndex) {
     for (const auto &output : pass.Outputs) {
       auto &resource = m_Resources[output];
       VkImageLayout oldLayout = currentLayouts[output];
-
       VkImageLayout newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
       VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
       VkAccessFlags dstAccess = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
       VkPipelineStageFlags dstStage =
+          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+      VkPipelineStageFlags srcStage =
           VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
       if (resource.Usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) {
@@ -319,6 +330,11 @@ void RenderGraph::Execute(uint32_t imageIndex) {
         dstAccess = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
         dstStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
                    VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+        srcStage = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+      }
+
+      if (oldLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+        srcStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
       }
 
       VkImageMemoryBarrier barrier{};
@@ -329,53 +345,50 @@ void RenderGraph::Execute(uint32_t imageIndex) {
       barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
       barrier.image = resource.GetVkImage(m_CurrentFrame, imageIndex);
       barrier.subresourceRange = {aspectMask, 0, 1, 0, 1};
-      barrier.srcAccessMask =
-          VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+      if (oldLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+        srcStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+      } else if (oldLayout ==
+                 VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
+        srcStage = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+        barrier.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+      } else if (oldLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) {
+        srcStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+      } else { // UNDEFINED
+        srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        barrier.srcAccessMask = 0;
+      }
       barrier.dstAccessMask = dstAccess;
 
-      vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                           dstStage, VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 0,
-                           nullptr, 1, &barrier);
+      vkCmdPipelineBarrier(commandBuffer, srcStage, dstStage,
+                           VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 0, nullptr,
+                           1, &barrier);
 
       currentLayouts[output] = newLayout;
     }
 
     pass.ExecuteFunc(commandBuffer);
+  }
 
-    for (const auto &output : pass.Outputs) {
-      auto &resource = m_Resources[output];
-      VkImageLayout oldLayout = currentLayouts[output];
-      VkImageLayout newLayout = resource.FinalLayout;
-
-      VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-      VkPipelineStageFlags srcStage =
-          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-      VkAccessFlags srcAccess = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-
-      if (resource.Usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) {
-        aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-        srcStage = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-        srcAccess = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-      }
-
+  for (const auto &[name, resource] : m_Resources) {
+    if (resource.FinalLayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR &&
+        currentLayouts[name] != VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) {
       VkImageMemoryBarrier barrier{};
       barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-      barrier.oldLayout = oldLayout;
-      barrier.newLayout = newLayout;
+      barrier.oldLayout = currentLayouts[name];
+      barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
       barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
       barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
       barrier.image = resource.GetVkImage(m_CurrentFrame, imageIndex);
-      barrier.subresourceRange = {aspectMask, 0, 1, 0, 1};
-      barrier.srcAccessMask = srcAccess;
-      barrier.dstAccessMask = (newLayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
-                                  ? 0
-                                  : VK_ACCESS_MEMORY_READ_BIT;
+      barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+      barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+      barrier.dstAccessMask = 0;
 
       vkCmdPipelineBarrier(
-          commandBuffer, srcStage, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-          VK_DEPENDENCY_BY_REGION_BIT, 0, nullptr, 0, nullptr, 1, &barrier);
-
-      currentLayouts[output] = newLayout;
+          commandBuffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+          VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_DEPENDENCY_BY_REGION_BIT, 0,
+          nullptr, 0, nullptr, 1, &barrier);
     }
   }
 
@@ -386,20 +399,31 @@ void RenderGraph::Execute(uint32_t imageIndex) {
 
 bool RenderGraph::RenderFrame(VkSwapchainKHR swapchain, VkQueue graphicsQueue,
                               VkQueue presentQueue) {
+
   vkWaitForFences(m_Context->Device, 1, &m_InFlightFences[m_CurrentFrame],
                   VK_TRUE, UINT64_MAX);
-
   uint32_t imageIndex;
-  VkResult result = vkAcquireNextImageKHR(
-      m_Context->Device, swapchain, UINT64_MAX,
-      m_ImagesAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &imageIndex);
+  VkResult result;
 
-  if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-    return false;
-  } else if (result != VK_SUCCESS) {
-    throw std::runtime_error("Failed to acquire swapchain image!");
+  {
+    ZoneScopedNC("FAAAAAAAAAAASZ", 0x0000FF);
+    result = vkAcquireNextImageKHR(m_Context->Device, swapchain, UINT64_MAX,
+                                   m_ImagesAvailableSemaphores[m_CurrentFrame],
+                                   VK_NULL_HANDLE, &imageIndex);
+
+    std::string debugInfo =
+        "CurrentFrame (In-Flight): " + std::to_string(m_CurrentFrame) +
+        " | Acquired Image Index: " + std::to_string(imageIndex) +
+        " | VkResult: " + std::to_string(result);
+
+    ZoneText(debugInfo.c_str(), debugInfo.size());
+
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+      return false;
+    } else if (result != VK_SUCCESS) {
+      throw std::runtime_error("Failed to acquire swapchain image!");
+    }
   }
-
   vkResetFences(m_Context->Device, 1, &m_InFlightFences[m_CurrentFrame]);
 
   Execute(imageIndex);

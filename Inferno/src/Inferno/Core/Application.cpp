@@ -8,6 +8,8 @@
 #include "Inferno/Utils/DeltaTime.h"
 #include "Log.h"
 
+#include <tracy/Tracy.hpp>
+
 namespace Inferno {
 Application::Application() { StartUp(); }
 
@@ -37,11 +39,12 @@ void Application::ShutDown() {
 
 void Application::Run() {
   while (m_Running) {
+    ZoneScopedN("Frame Start");
     const float time = static_cast<float>(glfwGetTime());
     const DeltaTime deltaTime = time - m_LastFrameTime;
     m_LastFrameTime = time;
 
-    INFERNO_LOG_INFO("FPS: {}", 1.0f / deltaTime.GetSeconds());
+    // INFERNO_LOG_INFO("FPS: {}", 1.0f / deltaTime.GetSeconds());
 
     if (!m_Minimized) {
       for (Layer *layer : m_LayerStack) {
@@ -59,12 +62,12 @@ void Application::Run() {
     // TODO window stuff
 
     m_Window->OnUpdate();
+    FrameMark;
   }
   ShutDown();
 }
 
 void Application::OnEvent(Event &event) {
-  INFERNO_LOG_INFO("Event: {}", event.ToString());
   EventDispatcher dispatcher(event);
   dispatcher.Dispatch<WindowCloseEvent>(
       [this](WindowCloseEvent &event) { return this->OnWindowClosed(event); });

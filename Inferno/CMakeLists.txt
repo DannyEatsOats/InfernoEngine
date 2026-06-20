@@ -90,11 +90,13 @@ target_link_libraries(Inferno
         VMA
         ktx
         imgui
+        tracy
 )
 
 target_compile_definitions(Inferno
     PRIVATE
         GLFW_INCLUDE_NONE
+        $<$<OR:$<CONFIG:Debug>,$<CONFIG:Profile>>:TRACY_ENABLE>
 )
 
 set_target_properties(Inferno PROPERTIES

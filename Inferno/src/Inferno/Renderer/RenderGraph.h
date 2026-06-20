@@ -79,6 +79,7 @@ public:
   VkImageView GetImageView(const std::string &name, uint32_t frameIndex);
 
   uint32_t GetGetCurrentFrameIndex() const { return m_CurrentFrame; }
+  uint32_t GetActiveImageIndex() const { return m_ActiveImageIndex; }
 
   void Compile();
   void Execute(uint32_t imageIndex);

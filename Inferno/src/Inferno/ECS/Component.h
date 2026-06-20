@@ -116,22 +116,22 @@ class Mesh;
 class Material;
 class MeshComponent : public Component {
 public:
-  MeshComponent(const Mesh* mesh, const Texture* texture)
+  MeshComponent(Mesh *mesh, Texture *texture)
       : m_Mesh(mesh), m_Texture(texture) {}
 
-  void SetMesh(const Mesh* mesh) { m_Mesh = mesh; }
+  void SetMesh(Mesh *mesh) { m_Mesh = mesh; }
   // void SetMaterial(Material *material) { m_Material = material; }
-  void SetTexture(const Texture* texture) { m_Texture = texture; }
+  void SetTexture(Texture *texture) { m_Texture = texture; }
 
-  const Mesh* GetMesh() const { return m_Mesh; }
+  const Mesh *GetMesh() const { return m_Mesh; }
   // Material *GetMaterial() const { return m_Material; }
-  const Texture* GetTexture() const { return m_Texture; }
+  Texture *GetTexture() { return m_Texture; }
 
   virtual void Render() override;
 
 private:
-  const Mesh* m_Mesh = nullptr;
+  Mesh *m_Mesh = nullptr;
   // Material *m_Material = nullptr;
-  const Texture* m_Texture = nullptr;
+  Texture *m_Texture = nullptr;
 };
 } // namespace Inferno

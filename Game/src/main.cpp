@@ -4,10 +4,10 @@
 #include "Inferno/Events/Input.h"
 #include "Inferno/Events/KeyCodes.h"
 #include "Inferno/Events/KeyEvent.h"
-#include "glm/ext/quaternion_geometric.hpp"
 #include "glm/ext/quaternion_trigonometric.hpp"
 #include "glm/ext/vector_float3.hpp"
 #include "glm/trigonometric.hpp"
+#include "tracy/Tracy.hpp"
 #include <Inferno.h>
 
 namespace Inferno {
@@ -23,7 +23,7 @@ public:
   virtual void OnUpdate(DeltaTime deltaTime) {}
 
   virtual void OnImGuiRender() { INFERNO_LOG_INFO("IMGUIRENDER TEST LAYER"); }
-  virtual void OnEvent(Event &event) { INFERNO_LOG_INFO("ONEVENT TEST LAYER"); }
+  virtual void OnEvent(Event &event) {}
 };
 
 class GameScene : public Inferno::Scene {
@@ -58,7 +58,7 @@ public:
     }
     */
 
-    for (int i = 0; i < 2; ++i) {
+    for (int i = 0; i < 1; ++i) {
       Entity *knight = CreateEntity("knight");
       auto *transform = knight->AddComponent<TransformComponent>();
 
@@ -81,6 +81,7 @@ public:
       auto texture = m_ResourceManager->Load<Texture>("zsamo");
       knight->AddComponent<MeshComponent>(mesh, texture);
     }
+
   }
 
   void OnDetach() override {}

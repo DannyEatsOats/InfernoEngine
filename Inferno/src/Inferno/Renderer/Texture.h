@@ -24,6 +24,9 @@ public:
   VkImageView GetImageView() const { return m_Image.GetView(); }
   VkSampler GetSampler() const { return m_Sampler; }
 
+  VkDescriptorSet GetDescriptorSet() const { return m_DescriptorSet; }
+  void CreateDescriptorSet(VkDescriptorPool pool, VkDescriptorSetLayout layout);
+
 protected:
   bool DoLoad() override;
   bool DoUnLoad() override;
@@ -42,5 +45,7 @@ private:
 
   Image m_Image;
   VkSampler m_Sampler = VK_NULL_HANDLE;
+
+  VkDescriptorSet m_DescriptorSet = VK_NULL_HANDLE;
 };
 } // namespace Inferno

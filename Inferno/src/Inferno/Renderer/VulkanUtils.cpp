@@ -195,7 +195,7 @@ void VulkanUtils::CopyBuffer(const DeviceContext *context, VkBuffer srcBuffer,
 }
 
 void VulkanUtils::TransitionImageLayout(const DeviceContext *context,
-                                        const Image& image,
+                                        const Image &image,
                                         VkImageLayout oldLayout,
                                         VkImageLayout newLayout) {
   VkCommandBuffer commandBuffer = BeginSingleTimeCommands(context);

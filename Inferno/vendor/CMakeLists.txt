@@ -79,3 +79,26 @@ target_link_libraries(imgui PUBLIC
     glfw
     Vulkan::Vulkan
 )
+
+# ------------------------
+# Tracy
+# ------------------------
+
+add_library(tracy STATIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/tracy/public/TracyClient.cpp
+)
+
+target_include_directories(tracy PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/tracy/public
+)
+
+set_target_properties(tracy PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+    LINKER_LANGUAGE CXX
+    POSITION_INDEPENDENT_CODE ON
+)
+
+target_compile_definitions(tracy PUBLIC
+    $<$<OR:$<CONFIG:Debug>,$<CONFIG:Profile>>:TRACY_ENABLE>
+)

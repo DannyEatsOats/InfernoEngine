@@ -19,9 +19,11 @@
 namespace Inferno {
 Texture::Texture(Texture &&other)
     : Resource(std::move(other)), m_Context(other.m_Context),
-      m_Image(std::move(other.m_Image)), m_Sampler(other.m_Sampler) {
+      m_Image(std::move(other.m_Image)), m_Sampler(other.m_Sampler),
+      m_DescriptorSet(other.m_DescriptorSet) {
   other.m_Context = nullptr;
   other.m_Sampler = VK_NULL_HANDLE;
+  other.m_DescriptorSet = VK_NULL_HANDLE;
 }
 
 Texture &Texture::operator=(Texture &&other) {
@@ -35,11 +37,46 @@ Texture &Texture::operator=(Texture &&other) {
   m_Context = other.m_Context;
   m_Image = std::move(other.m_Image);
   m_Sampler = other.m_Sampler;
+  m_DescriptorSet = other.m_DescriptorSet;
 
   other.m_Context = nullptr;
   other.m_Sampler = VK_NULL_HANDLE;
+  other.m_DescriptorSet = VK_NULL_HANDLE;
 
   return *this;
+}
+
+void Texture::CreateDescriptorSet(VkDescriptorPool pool,
+                                  VkDescriptorSetLayout layout) {
+  if (m_DescriptorSet != VK_NULL_HANDLE)
+    return;
+
+  VkDescriptorSetAllocateInfo allocInfo{};
+  allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+  allocInfo.descriptorPool = pool;
+  allocInfo.descriptorSetCount = 1;
+  allocInfo.pSetLayouts = &layout;
+
+  if (vkAllocateDescriptorSets(m_Context->Device, &allocInfo,
+                               &m_DescriptorSet) != VK_SUCCESS) {
+    throw std::runtime_error("Failed to allocate Texture Descriptor set");
+  }
+
+  VkDescriptorImageInfo imageInfo{};
+  imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  imageInfo.imageView = m_Image.GetView();
+  imageInfo.sampler = m_Sampler;
+
+  VkWriteDescriptorSet descriptorWrite{};
+  descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+  descriptorWrite.dstSet = m_DescriptorSet;
+  descriptorWrite.dstBinding = 0;
+  descriptorWrite.dstArrayElement = 0;
+  descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+  descriptorWrite.descriptorCount = 1;
+  descriptorWrite.pImageInfo = &imageInfo;
+
+  vkUpdateDescriptorSets(m_Context->Device, 1, &descriptorWrite, 0, nullptr);
 }
 
 bool Texture::DoLoad() {
@@ -245,7 +282,7 @@ void Texture::GenerateMipmaps() {
     if (mipWidth > 1)
       mipWidth /= 2;
     if (mipHeight > 1)
-      mipHeight/= 2;
+      mipHeight /= 2;
   }
 
   barrier.subresourceRange.baseMipLevel = m_Image.GetMipLevels() - 1;

@@ -1,7 +1,7 @@
-#include "Inferno/Core/Log.h"
 #include "Inferno/ECS/Entity.h"
 #include "glm/ext/matrix_float4x4.hpp"
 #include "glm/ext/vector_float3.hpp"
+#include "tracy/Tracy.hpp"
 #include <vector>
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <GLFW/glfw3.h>
@@ -44,7 +44,6 @@ void Renderer::StartUp(ResourceManager *resourceManager) {
   for (uint32_t i = 0; i < m_RenderGraph->GetMaxFramesInFlight(); ++i) {
     UpdateLightingDescriptorSet(i);
   }
-
 }
 
 void Renderer::ShutDown() {
@@ -83,14 +82,14 @@ void Renderer::ShutDown() {
                             nullptr);
     m_TextureDescriptorPool = VK_NULL_HANDLE;
   }
-  m_TextureDescroptiorSets.clear();
 
   if (m_LightingDescriptorLayout != VK_NULL_HANDLE) {
     vkDestroyDescriptorSetLayout(m_Context->Device, m_LightingDescriptorLayout,
                                  nullptr);
   }
-  if (m_DescriptorPool != VK_NULL_HANDLE) {
-    vkDestroyDescriptorPool(m_Context->Device, m_DescriptorPool, nullptr);
+  if (m_LightingDescriptorPool != VK_NULL_HANDLE) {
+    vkDestroyDescriptorPool(m_Context->Device, m_LightingDescriptorPool,
+                            nullptr);
   }
   if (m_GBufferSampler != VK_NULL_HANDLE) {
     vkDestroySampler(m_Context->Device, m_GBufferSampler, nullptr);
@@ -122,6 +121,23 @@ void Renderer::CreateGeometryPipeline() {
   if (vkCreateDescriptorSetLayout(m_Context->Device, &layoutInfo, nullptr,
                                   &m_GeometryDescriptorSetLayout)) {
     throw std::runtime_error("Failed to create Geometry descriptor set layout");
+  }
+
+  VkDescriptorPoolSize poolSize{};
+  poolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+  poolSize.descriptorCount = 1000;
+
+  VkDescriptorPoolCreateInfo poolInfo{};
+  poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+  poolInfo.poolSizeCount = 1;
+  poolInfo.pPoolSizes = &poolSize;
+  poolInfo.maxSets = 1000;
+  poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+
+  if (vkCreateDescriptorPool(m_Context->Device, &poolInfo, nullptr,
+                             &m_TextureDescriptorPool) != VK_SUCCESS) {
+    throw std::runtime_error(
+        "Failed to create geometry texture descriptor pool");
   }
 
   VkPushConstantRange pushConstantRange{};
@@ -254,62 +270,6 @@ void Renderer::CreateGeometryPipeline() {
                                 &m_GeometryPipeline) != VK_SUCCESS) {
     throw std::runtime_error("Failed to create geometry graphics pipeline!");
   }
-}
-
-VkDescriptorSet
-Renderer::GetOrCreateTextureDescriptorSet(const Texture *texture) {
-  auto it = m_TextureDescroptiorSets.find(texture->GetID());
-  if (it != m_TextureDescroptiorSets.end()) {
-    return it->second;
-  }
-
-  if (m_TextureDescriptorPool == VK_NULL_HANDLE) {
-    VkDescriptorPoolSize poolSize{};
-    poolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    poolSize.descriptorCount = 100;
-
-    VkDescriptorPoolCreateInfo poolInfo{};
-    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    poolInfo.poolSizeCount = 1;
-    poolInfo.pPoolSizes = &poolSize;
-    poolInfo.maxSets = 100;
-
-    if (vkCreateDescriptorPool(m_Context->Device, &poolInfo, nullptr,
-                               &m_TextureDescriptorPool) != VK_SUCCESS) {
-      throw std::runtime_error("Failed to create texture descriptor pool");
-    }
-  }
-
-  VkDescriptorSetAllocateInfo allocInfo{};
-  allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-  allocInfo.descriptorPool = m_TextureDescriptorPool;
-  allocInfo.descriptorSetCount = 1;
-  allocInfo.pSetLayouts = &m_GeometryDescriptorSetLayout;
-
-  VkDescriptorSet descriptorSet;
-  if (vkAllocateDescriptorSets(m_Context->Device, &allocInfo, &descriptorSet) !=
-      VK_SUCCESS) {
-    throw std::runtime_error("Failed to allocate texture descriptor set");
-  }
-
-  VkDescriptorImageInfo imageInfo{};
-  imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-  imageInfo.imageView = texture->GetImageView();
-  imageInfo.sampler = texture->GetSampler();
-
-  VkWriteDescriptorSet descriptorWrite{};
-  descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-  descriptorWrite.dstSet = descriptorSet;
-  descriptorWrite.dstBinding = 0;
-  descriptorWrite.dstArrayElement = 0;
-  descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-  descriptorWrite.descriptorCount = 1;
-  descriptorWrite.pImageInfo = &imageInfo;
-
-  vkUpdateDescriptorSets(m_Context->Device, 1, &descriptorWrite, 0, nullptr);
-
-  m_TextureDescroptiorSets[texture->GetID()] = descriptorSet;
-  return descriptorSet;
 }
 
 void Renderer::CreateLightingPipeline() {
@@ -470,7 +430,7 @@ void Renderer::CreateLightingDescriptorSet() {
   poolInfo.maxSets = 2;
 
   if (vkCreateDescriptorPool(m_Context->Device, &poolInfo, nullptr,
-                             &m_DescriptorPool) != VK_SUCCESS) {
+                             &m_LightingDescriptorPool) != VK_SUCCESS) {
     throw std::runtime_error("Failed to create descriptor pool!");
   }
 
@@ -479,7 +439,7 @@ void Renderer::CreateLightingDescriptorSet() {
 
   VkDescriptorSetAllocateInfo allocInfo{};
   allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-  allocInfo.descriptorPool = m_DescriptorPool;
+  allocInfo.descriptorPool = m_LightingDescriptorPool;
   allocInfo.descriptorSetCount = 2;
   allocInfo.pSetLayouts = layouts.data();
 
@@ -647,8 +607,13 @@ void Renderer::SetupDeferredRendering() {
 
           auto texture = meshComponent->GetTexture();
           if (texture) {
-            VkDescriptorSet textureSet =
-                GetOrCreateTextureDescriptorSet(texture);
+            VkDescriptorSet textureSet = texture->GetDescriptorSet();
+            if (textureSet == VK_NULL_HANDLE) {
+              texture->CreateDescriptorSet(m_TextureDescriptorPool,
+                                           m_GeometryDescriptorSetLayout);
+              textureSet = texture->GetDescriptorSet();
+            }
+
             vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     m_GeometryPipelineLayout, 0, 1, &textureSet,
                                     0, nullptr);
@@ -718,19 +683,26 @@ void Renderer::SetupDeferredRendering() {
 }
 
 void Renderer::Render(const std::vector<Entity *> &entities) {
-  // TODO: Enable once we have a Camera
-  // m_CullingSystem->CullScene(entities);
+  if (m_Resized) {
+    Resize();
+  }
+
   m_VisibleEntites = entities;
   bool success = m_RenderGraph->RenderFrame(m_Context->Swapchain.Handle,
                                             m_Context->GraphicsQueue,
                                             m_Context->PresentQueue);
 
-  if (!success || m_Resized) {
+  if (!success) {
     Resize();
   }
 }
 
 void Renderer::Resize() {
+  if (m_Context->Swapchain.Extent.width == 0 ||
+      m_Context->Swapchain.Extent.height == 0) {
+    return;
+  }
+
   vkDeviceWaitIdle(m_Context->Device);
   m_Context->RecreateSwapchain();
 

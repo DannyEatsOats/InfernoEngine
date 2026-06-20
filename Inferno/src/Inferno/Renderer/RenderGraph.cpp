@@ -5,6 +5,7 @@
 #include <vector>
 #include <vulkan/vulkan_core.h>
 
+#include "Inferno/Core/Log.h"
 #include "Inferno/Renderer/Image.h"
 #include "RenderGraph.h"
 #include "tracy/Tracy.hpp"
@@ -190,7 +191,7 @@ void RenderGraph::Compile() {
   m_ImagesAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
   m_InFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
 
-  uint32_t swapchainImageCount = MAX_FRAMES_IN_FLIGHT;
+  uint32_t swapchainImageCount = 0;
   for (const auto &[name, resource] : m_Resources) {
     if (resource.IsExternal) {
       swapchainImageCount =
@@ -198,6 +199,9 @@ void RenderGraph::Compile() {
       break;
     }
   }
+
+  INFERNO_LOG_INFO("SWAPCHAIN IMAGE COUNT: {}", swapchainImageCount);
+
   m_RenderFinishedSemaphores.resize(swapchainImageCount);
 
   VkCommandBufferAllocateInfo allocInfo{};
@@ -418,7 +422,7 @@ bool RenderGraph::RenderFrame(VkSwapchainKHR swapchain, VkQueue graphicsQueue,
 
     ZoneText(debugInfo.c_str(), debugInfo.size());
 
-    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
       return false;
     } else if (result != VK_SUCCESS) {
       throw std::runtime_error("Failed to acquire swapchain image!");

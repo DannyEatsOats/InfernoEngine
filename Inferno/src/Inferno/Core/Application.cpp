@@ -11,6 +11,79 @@
 #include <tracy/Tracy.hpp>
 
 namespace Inferno {
+class FrameLimiter {
+public:
+  /**
+   * @brief Construct a new Frame Limiter object
+   * @param targetFps The desired maximum frame rate (e.g., 60.0)
+   */
+  FrameLimiter(double targetFps) {
+    setTargetFps(targetFps);
+    m_FrameStart = std::chrono::high_resolution_clock::now();
+  }
+
+  /**
+   * @brief Dynamically change the target frame rate at runtime
+   */
+  void setTargetFps(double targetFps) {
+    m_TargetFps = targetFps;
+    m_TargetDuration = std::chrono::duration<double>(1.0 / targetFps);
+  }
+
+  /**
+   * @brief Call at the absolute beginning of your main loop iteration
+   */
+  void startFrame() {
+    m_FrameStart = std::chrono::high_resolution_clock::now();
+  }
+
+  /**
+   * @brief Call at the absolute end of your main loop iteration
+   * Uses a high-precision hybrid sleep/spin-lock tailored for Linux.
+   */
+  void endFrame() {
+    const auto frameEnd = std::chrono::high_resolution_clock::now();
+    const auto elapsed = frameEnd - m_FrameStart;
+
+    if (elapsed < m_TargetDuration) {
+      const auto remainingTime = m_TargetDuration - elapsed;
+
+      // 1. Precise OS Sleep
+      // Linux kernel high-resolution timers (hrtimers) are incredibly sharp.
+      // We sleep for the majority of the time, leaving a tiny 0.5ms (500us)
+      // buffer.
+      if (remainingTime > std::chrono::microseconds(500)) {
+        std::this_thread::sleep_for(remainingTime -
+                                    std::chrono::microseconds(500));
+      }
+
+      // 2. Precise Spin-lock
+      // Burn the remaining <0.5ms in a tight loop to hit the exact microsecond
+      // target.
+      while (std::chrono::high_resolution_clock::now() - m_FrameStart <
+             m_TargetDuration) {
+// Emit a NOP instruction to let the CPU pipeline optimize hyper-threading
+// and avoid burning excessive watt-hours while spinning.
+#if defined(__GNUC__) || defined(__clang__)
+        asm volatile("nop");
+#elif defined(_MSC_VER)
+        __nop();
+#endif
+      }
+    }
+  }
+
+  /**
+   * @brief Get the current target FPS
+   */
+  double getTargetFps() const { return m_TargetFps; }
+
+private:
+  double m_TargetFps;
+  std::chrono::duration<double> m_TargetDuration;
+  std::chrono::high_resolution_clock::time_point m_FrameStart;
+};
+
 Application::Application() { StartUp(); }
 
 void Application::StartUp() {
@@ -38,21 +111,27 @@ void Application::ShutDown() {
 }
 
 void Application::Run() {
+  FrameLimiter limiter(150.0);
+
   while (m_Running) {
+    // limiter.startFrame();
+
     ZoneScopedN("Frame Start");
     const float time = static_cast<float>(glfwGetTime());
     const DeltaTime deltaTime = time - m_LastFrameTime;
     m_LastFrameTime = time;
 
-    // INFERNO_LOG_INFO("FPS: {}", 1.0f / deltaTime.GetSeconds());
+    INFERNO_LOG_INFO("Duration (ms): {}", deltaTime.GetMilliseconds());
+
+    float dt = std::min(deltaTime.GetSeconds(), 0.1f);
 
     if (!m_Minimized) {
       for (Layer *layer : m_LayerStack) {
-        layer->OnUpdate(deltaTime);
+        layer->OnUpdate(dt);
       }
 
       if (m_ActiveScene) {
-        m_ActiveScene->OnUpdate(deltaTime);
+        m_ActiveScene->OnUpdate(dt);
       }
 
       // TODO GUI Layer Stuff
@@ -62,6 +141,7 @@ void Application::Run() {
     // TODO window stuff
 
     m_Window->OnUpdate();
+    // limiter.endFrame();
     FrameMark;
   }
   ShutDown();

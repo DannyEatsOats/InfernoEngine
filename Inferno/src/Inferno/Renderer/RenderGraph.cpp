@@ -410,7 +410,7 @@ bool RenderGraph::RenderFrame(VkSwapchainKHR swapchain, VkQueue graphicsQueue,
   VkResult result;
 
   {
-    ZoneScopedNC("FAAAAAAAAAAASZ", 0x0000FF);
+    ZoneScopedNC("AcquireNextImage", 0x0000FF);
     result = vkAcquireNextImageKHR(m_Context->Device, swapchain, UINT64_MAX,
                                    m_ImagesAvailableSemaphores[m_CurrentFrame],
                                    VK_NULL_HANDLE, &imageIndex);
@@ -429,6 +429,8 @@ bool RenderGraph::RenderFrame(VkSwapchainKHR swapchain, VkQueue graphicsQueue,
     }
   }
   vkResetFences(m_Context->Device, 1, &m_InFlightFences[m_CurrentFrame]);
+
+  ZoneScopedN("Jonnek a migransok");
 
   Execute(imageIndex);
 
@@ -466,7 +468,7 @@ bool RenderGraph::RenderFrame(VkSwapchainKHR swapchain, VkQueue graphicsQueue,
   presentInfo.pImageIndices = &imageIndex;
 
   result = vkQueuePresentKHR(presentQueue, &presentInfo);
-  if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+  if (result == VK_ERROR_OUT_OF_DATE_KHR) {
     return false;
   } else if (result != VK_SUCCESS) {
     throw std::runtime_error("Failed to present rendered swapchain image!");

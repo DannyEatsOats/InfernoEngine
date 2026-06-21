@@ -421,26 +421,26 @@ void Renderer::CreateLightingDescriptorSet() {
 
   VkDescriptorPoolSize poolSize{};
   poolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-  poolSize.descriptorCount = 8;
+  poolSize.descriptorCount = m_RenderGraph->GetMaxFramesInFlight() * 4;
 
   VkDescriptorPoolCreateInfo poolInfo{};
   poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
   poolInfo.poolSizeCount = 1;
   poolInfo.pPoolSizes = &poolSize;
-  poolInfo.maxSets = 2;
+  poolInfo.maxSets = m_RenderGraph->GetMaxFramesInFlight();
 
   if (vkCreateDescriptorPool(m_Context->Device, &poolInfo, nullptr,
                              &m_LightingDescriptorPool) != VK_SUCCESS) {
     throw std::runtime_error("Failed to create descriptor pool!");
   }
 
-  m_LightingDescriptorSets.resize(2);
-  std::vector<VkDescriptorSetLayout> layouts(2, m_LightingDescriptorLayout);
+  m_LightingDescriptorSets.resize(m_RenderGraph->GetMaxFramesInFlight());
+  std::vector<VkDescriptorSetLayout> layouts(m_RenderGraph->GetMaxFramesInFlight(), m_LightingDescriptorLayout);
 
   VkDescriptorSetAllocateInfo allocInfo{};
   allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
   allocInfo.descriptorPool = m_LightingDescriptorPool;
-  allocInfo.descriptorSetCount = 2;
+  allocInfo.descriptorSetCount = m_RenderGraph->GetMaxFramesInFlight();
   allocInfo.pSetLayouts = layouts.data();
 
   if (vkAllocateDescriptorSets(m_Context->Device, &allocInfo,
@@ -512,6 +512,7 @@ void Renderer::SetupDeferredRendering() {
       "GeometryPass", {},
       {"GBuffer_Position", "GBuffer_Normal", "GBuffer_Albedo", "Depth"},
       [this](VkCommandBuffer &cmd) {
+        ZoneScopedN("GeometryPass");
         VkClearValue clearColor{};
         clearColor.color = {{0.2f, 0.3f, 0.3f, 1.0f}};
 
@@ -630,6 +631,8 @@ void Renderer::SetupDeferredRendering() {
       {"GBuffer_Position", "GBuffer_Normal", "GBuffer_Albedo", "Depth"},
       {"SwapchainOutput"}, [this](VkCommandBuffer &cmd) {
         // Target the screen swapchain backbuffer directly
+
+        ZoneScopedN("LightingPass");
         uint32_t frameIdx = m_RenderGraph->GetGetCurrentFrameIndex();
 
         VkRenderingAttachmentInfo swapchainAttachment{};

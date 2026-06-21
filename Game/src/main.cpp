@@ -81,7 +81,6 @@ public:
       auto texture = m_ResourceManager->Load<Texture>("zsamo");
       knight->AddComponent<MeshComponent>(mesh, texture);
     }
-
   }
 
   void OnDetach() override {}

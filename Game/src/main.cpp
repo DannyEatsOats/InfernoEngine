@@ -58,7 +58,7 @@ public:
     }
     */
 
-    for (int i = 0; i < 1; ++i) {
+    for (int i = 0; i < 5; ++i) {
       Entity *knight = CreateEntity("knight");
       auto *transform = knight->AddComponent<TransformComponent>();
 
@@ -75,7 +75,7 @@ public:
       transform->SetRotation(newRotation);
 
       transform->SetPosition(
-          glm::vec3(-1.5f + i * 2.0f, 0.0f, 0.0f - i * 2.0f));
+          glm::vec3(-1.5f + i * 1.2f, 0.0f, 0.0f - i * 2.0f));
 
       auto mesh = m_ResourceManager->Load<Mesh>("zsamo");
       auto texture = m_ResourceManager->Load<Texture>("zsamo");

@@ -32,6 +32,9 @@ struct DeviceContext {
   void StartUp(void *windowHandle);
   void ShutDown();
 
+
+  std::pair<VkResult, uint32_t> AcquireNextImage(VkSemaphore presentCompleteSemaphore);
+  
   void RecreateSwapchain();
 
 private:

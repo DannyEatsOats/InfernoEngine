@@ -2,10 +2,9 @@
 
 #include "Inferno/Renderer/CullingSystem.h"
 #include "Inferno/Renderer/DeviceContext.h"
-#include "Inferno/Renderer/RenderGraph.h"
-#include "Inferno/Renderer/Texture.h"
 #include "Inferno/Resource/ResourceManager.h"
-#include <unordered_map>
+#include <array>
+#include <vector>
 #include <vulkan/vulkan_core.h>
 
 namespace Inferno {
@@ -26,48 +25,46 @@ public:
 
   void SignalResize() { m_Resized = true; }
 
-  void SetLightingDebugMode(int mode) { m_LightinDebugMode = mode; }
-
 private:
-  void SetupDeferredRendering();
-  void CreateGeometryPipeline();
-  VkDescriptorSet GetOrCreateTextureDescriptorSet(const Texture *texture);
-  void CreateLightingPipeline();
-  void CreateLightingDescriptorSet();
-  void UpdateLightingDescriptorSet(uint32_t frameIdx);
+  void CreateForwardPipeline();
+  void AllocateCommandBuffer();
+  void CreateSyncObjects();
+
+  void TransitionImageLayout(VkImage image, VkImageAspectFlags aspect,
+                             VkImageLayout oldLayout, VkImageLayout newLayout,
+                             VkAccessFlags2 srcAccessMask,
+                             VkAccessFlags2 dstAccessMask,
+                             VkPipelineStageFlags2 srcStageMask,
+                             VkPipelineStageFlags2 dstStageMask);
+
+  void RecordForwardPass();
 
   void Resize();
-
-  // TEST
-  void CreateTestPipeline();
 
 private:
   DeviceContext *m_Context = nullptr;
 
-  CullingSystem *m_CullingSystem = nullptr;
-  RenderGraph *m_RenderGraph = nullptr;
+  static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
+
+  Scope<CullingSystem> m_CullingSystem = nullptr;
   ResourceManager *m_ResourceManager = nullptr;
 
-  // G-Buffer Geometry Pass
-  VkPipeline m_GeometryPipeline = VK_NULL_HANDLE;
-  VkPipelineLayout m_GeometryPipelineLayout = VK_NULL_HANDLE;
+  VkPipeline m_ForwardPipeline = VK_NULL_HANDLE;
+  VkPipelineLayout m_ForwardLayout = VK_NULL_HANDLE;
+  std::array<VkCommandBuffer, MAX_FRAMES_IN_FLIGHT> m_CommandBuffers;
+  std::array<Image, MAX_FRAMES_IN_FLIGHT> m_DepthImages;
 
-  VkDescriptorSetLayout m_GeometryDescriptorSetLayout = VK_NULL_HANDLE;
   VkDescriptorPool m_TextureDescriptorPool = VK_NULL_HANDLE;
+  VkDescriptorSetLayout m_TextureDescriptorSetLayout = VK_NULL_HANDLE;
 
-  // Deffered Shading Lighting Pass
-  VkPipeline m_LightingPipeline = VK_NULL_HANDLE;
-  VkPipelineLayout m_LightingPipelineLayout = VK_NULL_HANDLE;
-
-  VkDescriptorSetLayout m_LightingDescriptorLayout = VK_NULL_HANDLE;
-  VkDescriptorPool m_LightingDescriptorPool = VK_NULL_HANDLE;
-  std::vector<VkDescriptorSet> m_LightingDescriptorSets;
-  VkSampler m_GBufferSampler = VK_NULL_HANDLE;
+  std::array<VkSemaphore, MAX_FRAMES_IN_FLIGHT> m_PresentCompleteSemaphores;
+  std::vector<VkSemaphore> m_RenderFinishedSemaphores;
+  std::array<VkFence, MAX_FRAMES_IN_FLIGHT> m_DrawFences;
+  uint32_t m_FrameIndex = 0;
+  uint32_t m_ImageIndex = 0;
 
   bool m_Resized = false;
 
-  // TEST
   std::vector<Entity *> m_VisibleEntites;
-  int m_LightinDebugMode = 0;
 };
 } // namespace Inferno

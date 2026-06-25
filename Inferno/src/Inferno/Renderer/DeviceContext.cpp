@@ -2,15 +2,17 @@
 #include "Inferno/Core/Log.h"
 #include "vulkan/vulkan_core.h"
 #include <Inferno/Renderer/VulkanUtils.h>
+#include <cstdint>
 #include <cstring>
 #include <pch.h>
+#include <utility>
 #include <vulkan/vulkan_core.h>
 
 const std::vector<const char *> validationLayers = {
     "VK_LAYER_KHRONOS_validation"};
 
 const std::vector<const char *> deviceExtensions = {
-    VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+    VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME};
 
 #ifdef NDEBUG
 const bool enableValidationLayers = false;
@@ -166,6 +168,15 @@ void DeviceContext::ShutDown() {
   Instance = VK_NULL_HANDLE;
 }
 
+std::pair<VkResult, uint32_t>
+DeviceContext::AcquireNextImage(VkSemaphore presentCompleteSemaphore) {
+  uint32_t imageIndex;
+  VkResult result =
+      vkAcquireNextImageKHR(Device, Swapchain.Handle, UINT64_MAX,
+                            presentCompleteSemaphore, nullptr, &imageIndex);
+  return std::make_pair(result, imageIndex);
+}
+
 void DeviceContext::CreateInstance() {
   VkApplicationInfo appInfo{};
   appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -257,9 +268,14 @@ void DeviceContext::CreateLogicalDevice() {
   VkPhysicalDeviceFeatures deviceFeatures{};
   deviceFeatures.samplerAnisotropy = VK_TRUE;
 
+  VkPhysicalDeviceVulkan11Features features11{
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
+      .shaderDrawParameters = VK_TRUE,
+  };
+
   VkPhysicalDeviceVulkan13Features features13{};
   features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
-  features13.pNext = nullptr;
+  features13.pNext = &features11;
   features13.dynamicRendering = VK_TRUE;
 
   VkDeviceCreateInfo deviceInfo = {

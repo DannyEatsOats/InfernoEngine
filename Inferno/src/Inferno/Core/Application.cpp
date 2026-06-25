@@ -121,7 +121,8 @@ void Application::Run() {
     const DeltaTime deltaTime = time - m_LastFrameTime;
     m_LastFrameTime = time;
 
-    INFERNO_LOG_INFO("Duration (ms): {}", deltaTime.GetMilliseconds());
+    //INFERNO_LOG_INFO("Duration (ms): {}", deltaTime.GetMilliseconds());
+    INFERNO_LOG_INFO("FPTS:: {}", 1000.0f / deltaTime.GetMilliseconds());
 
     float dt = std::min(deltaTime.GetSeconds(), 0.1f);
 
@@ -155,7 +156,7 @@ void Application::OnEvent(Event &event) {
       [this](WindowResizeEvent &event) { return this->OnWindowResize(event); });
   dispatcher.Dispatch<SetLightingDebugModeEvent>(
       [this](SetLightingDebugModeEvent &event) {
-        m_Renderer->SetLightingDebugMode(event.Mode);
+        //m_Renderer->SetLightingDebugMode(event.Mode);
         return true;
       });
 

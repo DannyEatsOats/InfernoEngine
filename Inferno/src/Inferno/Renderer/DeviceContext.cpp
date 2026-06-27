@@ -139,7 +139,7 @@ void DeviceContext::StartUp(void *windowHandle) {
   CreateLogicalDevice();
   CreateSwapchain();
   CreateSwapchainImageViews();
-  CreateCommandPool();
+  CreateCommandPools();
 }
 
 void DeviceContext::ShutDown() {
@@ -147,9 +147,14 @@ void DeviceContext::ShutDown() {
     vkDeviceWaitIdle(Device);
   }
 
-  if (CommandPool != VK_NULL_HANDLE) {
-    vkDestroyCommandPool(Device, CommandPool, nullptr);
-    CommandPool = VK_NULL_HANDLE;
+  if (GraphicsCommandPool != VK_NULL_HANDLE) {
+    vkDestroyCommandPool(Device, GraphicsCommandPool, nullptr);
+    GraphicsCommandPool = VK_NULL_HANDLE;
+  }
+
+  if (TransientCommandPool != VK_NULL_HANDLE) {
+    vkDestroyCommandPool(Device, TransientCommandPool, nullptr);
+    TransientCommandPool = VK_NULL_HANDLE;
   }
 
   CleanupSwapchain();
@@ -401,7 +406,7 @@ void DeviceContext::CreateSwapchainImageViews() {
   }
 }
 
-void DeviceContext::CreateCommandPool() {
+void DeviceContext::CreateCommandPools() {
   VulkanUtils::QueueFamilyIndices commandPoolIndices =
       VulkanUtils::FindQueueFamilies(PhysicalDevice, Surface);
 
@@ -411,9 +416,22 @@ void DeviceContext::CreateCommandPool() {
       .queueFamilyIndex = commandPoolIndices.graphicsFamily.value(),
   };
 
-  if (vkCreateCommandPool(Device, &poolCreateInfo, nullptr, &CommandPool) !=
-      VK_SUCCESS) {
-    throw std::runtime_error("Failed to create command pool!");
+  if (vkCreateCommandPool(Device, &poolCreateInfo, nullptr,
+                          &GraphicsCommandPool) != VK_SUCCESS) {
+    throw std::runtime_error("Failed to create Graphics Command Pool!");
+  }
+
+  VkCommandPoolCreateInfo transientPoolInfo{
+      .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+      .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT |
+               VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
+      // TODO: SWITCH THIS TO A TRANSFER QUEUE INDEX
+      .queueFamilyIndex = commandPoolIndices.graphicsFamily.value(),
+  };
+
+  if (vkCreateCommandPool(Device, &transientPoolInfo, nullptr,
+                          &TransientCommandPool) != VK_SUCCESS) {
+    throw std::runtime_error("Failed to create Transient Command Pool!");
   }
 }
 

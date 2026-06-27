@@ -25,16 +25,17 @@ struct DeviceContext {
   VkQueue PresentQueue = VK_NULL_HANDLE;
   SwapchainConfig Swapchain{};
   PhysicalDeviceProperties PhysicalDeviceProps{};
-  VkCommandPool CommandPool = VK_NULL_HANDLE;
+  VkCommandPool GraphicsCommandPool = VK_NULL_HANDLE;
+  VkCommandPool TransientCommandPool = VK_NULL_HANDLE;
 
   void *WindowHandle = nullptr;
 
   void StartUp(void *windowHandle);
   void ShutDown();
 
+  std::pair<VkResult, uint32_t>
+  AcquireNextImage(VkSemaphore presentCompleteSemaphore);
 
-  std::pair<VkResult, uint32_t> AcquireNextImage(VkSemaphore presentCompleteSemaphore);
-  
   void RecreateSwapchain();
 
 private:
@@ -44,7 +45,7 @@ private:
   void CreateLogicalDevice();
   void CreateSwapchain();
   void CreateSwapchainImageViews();
-  void CreateCommandPool();
+  void CreateCommandPools();
 
   void CleanupSwapchain();
 };

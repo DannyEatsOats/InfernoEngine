@@ -357,7 +357,7 @@ void Renderer::CreateForwardPipeline() {
 void Renderer::AllocateCommandBuffer() {
   VkCommandBufferAllocateInfo allocInfo{
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-      .commandPool = m_Context->CommandPool,
+      .commandPool = m_Context->GraphicsCommandPool,
       .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
       .commandBufferCount = 1,
   };

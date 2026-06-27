@@ -30,7 +30,7 @@ static VkImageAspectFlags GetAspectMaskFromFormat(VkFormat format) {
 
 RenderGraph::~RenderGraph() {
   if (!m_CommandBuffers.empty()) {
-    vkFreeCommandBuffers(m_Context->Device, m_Context->CommandPool,
+    vkFreeCommandBuffers(m_Context->Device, m_Context->GraphicsCommandPool,
                          static_cast<uint32_t>(m_CommandBuffers.size()),
                          m_CommandBuffers.data());
   }
@@ -206,7 +206,7 @@ void RenderGraph::Compile() {
 
   VkCommandBufferAllocateInfo allocInfo{};
   allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-  allocInfo.commandPool = m_Context->CommandPool;
+  allocInfo.commandPool = m_Context->GraphicsCommandPool;
   allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
   allocInfo.commandBufferCount = MAX_FRAMES_IN_FLIGHT;
 

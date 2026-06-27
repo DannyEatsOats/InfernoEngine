@@ -152,7 +152,7 @@ VulkanUtils::BeginSingleTimeCommands(const DeviceContext *context) {
   VkCommandBufferAllocateInfo allocInfo{};
   allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
   allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-  allocInfo.commandPool = context->CommandPool;
+  allocInfo.commandPool = context->TransientCommandPool;
   allocInfo.commandBufferCount = 1;
 
   VkCommandBuffer commandBuffer;
@@ -176,10 +176,11 @@ void VulkanUtils::EndSingleTimeCommands(const DeviceContext *context,
   submitInfo.commandBufferCount = 1;
   submitInfo.pCommandBuffers = &commandBuffer;
 
+  //TODO: SWITCH THIS TO A TRANSFER QUEUE
   vkQueueSubmit(context->GraphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
   vkQueueWaitIdle(context->GraphicsQueue);
 
-  vkFreeCommandBuffers(context->Device, context->CommandPool, 1,
+  vkFreeCommandBuffers(context->Device, context->TransientCommandPool, 1,
                        &commandBuffer);
 }
 

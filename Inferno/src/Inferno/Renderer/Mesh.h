@@ -67,7 +67,7 @@ private:
                     std::vector<MeshVertex> &vertexBuffer,
                     std::vector<uint32_t> &indexBuffer);
 
-  void SetGeometryData(std::vector<MeshVertex>& vertexBufferData,
+  void SetGeometryData(std::vector<MeshVertex> &vertexBufferData,
                        std::vector<uint32_t> &indexBufferData);
 
   void CleanUp() {

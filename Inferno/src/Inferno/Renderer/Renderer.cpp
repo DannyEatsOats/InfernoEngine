@@ -1,4 +1,3 @@
-#include "Inferno/Core/Log.h"
 #include "Inferno/Core/Memory.h"
 #include "Inferno/ECS/Entity.h"
 #include "Inferno/Renderer/Image.h"
@@ -83,7 +82,6 @@ void Renderer::Render(const std::vector<Entity *> &entities) {
                       VK_TRUE, UINT64_MAX) != VK_SUCCESS) {
     throw std::runtime_error("Failed to Wait on Draw Fence");
   }
-  vkResetFences(m_Context->Device, 1, &m_DrawFences[m_FrameIndex]);
 
   auto [result, imageIndex] =
       m_Context->AcquireNextImage(m_PresentCompleteSemaphores[m_FrameIndex]);
@@ -95,6 +93,7 @@ void Renderer::Render(const std::vector<Entity *> &entities) {
   } else if (result != VK_SUCCESS) {
     throw std::runtime_error("Failed to acquire swapchain image!");
   }
+  vkResetFences(m_Context->Device, 1, &m_DrawFences[m_FrameIndex]);
 
   RecordForwardPass();
 

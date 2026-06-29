@@ -12,6 +12,8 @@ namespace Inferno {
 struct GridPushConstants {
   glm::mat4 View;
   glm::mat4 Proj;
+  glm::mat4 ViewInv;
+  glm::mat4 ProjInv;
 };
 
 class Renderer {

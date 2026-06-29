@@ -6,6 +6,8 @@ layout(location = 1) out vec3 outFarPoint;
 layout(push_constant) uniform GridConstants {
     mat4 view;
     mat4 proj;
+    mat4 viewInv;
+    mat4 projInv;
 } push;
 
 vec3 positions[6] = vec3[](
@@ -14,9 +16,7 @@ vec3 positions[6] = vec3[](
     );
 
 vec3 Unproject(float x, float y, float z) {
-    mat4 viewInv = inverse(push.view);
-    mat4 projInv = inverse(push.proj);
-    vec4 p = viewInv * projInv * vec4(x, y, z, 1.0);
+    vec4 p = push.viewInv * push.projInv * vec4(x, y, z, 1.0);
     return p.xyz / p.w;
 }
 

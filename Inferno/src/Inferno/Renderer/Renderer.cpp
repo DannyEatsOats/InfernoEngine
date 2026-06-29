@@ -3,6 +3,8 @@
 #include "Inferno/Renderer/Image.h"
 #include "Inferno/Renderer/Mesh.h"
 #include "glm/ext/matrix_float4x4.hpp"
+#include "glm/matrix.hpp"
+#include "tracy/Tracy.hpp"
 #include <cstdint>
 #include <stdexcept>
 #include <vector>
@@ -86,17 +88,20 @@ void Renderer::Render(const std::vector<Entity *> &entities) {
     throw std::runtime_error("Failed to Wait on Draw Fence");
   }
 
-  auto [result, imageIndex] =
-      m_Context->AcquireNextImage(m_PresentCompleteSemaphores[m_FrameIndex]);
-  m_ImageIndex = imageIndex;
+  {
+    ZoneScopedN("FelRobban a Fing");
+    auto [result, imageIndex] =
+        m_Context->AcquireNextImage(m_PresentCompleteSemaphores[m_FrameIndex]);
+    m_ImageIndex = imageIndex;
 
-  if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-    SignalResize();
-    return;
-  } else if (result != VK_SUCCESS) {
-    throw std::runtime_error("Failed to acquire swapchain image!");
+    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+      SignalResize();
+      return;
+    } else if (result != VK_SUCCESS) {
+      throw std::runtime_error("Failed to acquire swapchain image!");
+    }
+    vkResetFences(m_Context->Device, 1, &m_DrawFences[m_FrameIndex]);
   }
-  vkResetFences(m_Context->Device, 1, &m_DrawFences[m_FrameIndex]);
 
   RecordForwardPass();
 
@@ -724,18 +729,22 @@ void Renderer::RecordForwardPass() {
   }
 
   // Drawing Grid
+  /*
   vkCmdBindPipeline(m_CommandBuffers[m_FrameIndex],
                     VK_PIPELINE_BIND_POINT_GRAPHICS, m_GridPipeline);
 
   GridPushConstants gridPushConstants{
       .View = view,
       .Proj = proj,
+      .ViewInv = glm::inverse(view),
+      .ProjInv = glm::inverse(proj),
   };
   vkCmdPushConstants(m_CommandBuffers[m_FrameIndex], m_GridLayout,
                      VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                      0, sizeof(GridPushConstants), &gridPushConstants);
 
   vkCmdDraw(m_CommandBuffers[m_FrameIndex], 6, 1, 0, 0);
+  */
 
   // Rendering End
 

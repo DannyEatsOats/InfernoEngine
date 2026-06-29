@@ -111,10 +111,10 @@ void Application::ShutDown() {
 }
 
 void Application::Run() {
-  FrameLimiter limiter(150.0);
+  FrameLimiter limiter(160.0);
 
   while (m_Running) {
-    // limiter.startFrame();
+    limiter.startFrame();
 
     ZoneScopedN("Frame Start");
     const float time = static_cast<float>(glfwGetTime());
@@ -142,7 +142,7 @@ void Application::Run() {
     // TODO window stuff
 
     m_Window->OnUpdate();
-    // limiter.endFrame();
+    limiter.endFrame();
     FrameMark;
   }
   ShutDown();

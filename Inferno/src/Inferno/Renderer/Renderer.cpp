@@ -97,7 +97,7 @@ void Renderer::Render(const std::vector<Entity *> &entities) {
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
       SignalResize();
       return;
-    } else if (result != VK_SUCCESS) {
+    } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
       throw std::runtime_error("Failed to acquire swapchain image!");
     }
     vkResetFences(m_Context->Device, 1, &m_DrawFences[m_FrameIndex]);
@@ -133,16 +133,16 @@ void Renderer::Render(const std::vector<Entity *> &entities) {
       .pImageIndices = &m_ImageIndex,
   };
 
-  if (vkQueuePresentKHR(m_Context->PresentQueue, &presentInfo) != VK_SUCCESS) {
+  VkResult presentResult =
+      vkQueuePresentKHR(m_Context->PresentQueue, &presentInfo);
+  if (presentResult == VK_ERROR_OUT_OF_DATE_KHR ||
+      presentResult == VK_SUBOPTIMAL_KHR) {
+    SignalResize();
+  } else if (presentResult != VK_SUCCESS) {
     throw std::runtime_error("Failed To Submit To Present Queue");
   }
 
   m_FrameIndex = (m_FrameIndex + 1) % MAX_FRAMES_IN_FLIGHT;
-
-  // =============================
-  if (!success) {
-    Resize();
-  }
 }
 
 void Renderer::CreateForwardPipeline() {
@@ -517,14 +517,12 @@ void Renderer::AllocateCommandBuffer() {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
       .commandPool = m_Context->GraphicsCommandPool,
       .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-      .commandBufferCount = 1,
+      .commandBufferCount = MAX_FRAMES_IN_FLIGHT,
   };
 
-  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-    if (vkAllocateCommandBuffers(m_Context->Device, &allocInfo,
-                                 &m_CommandBuffers[i]) != VK_SUCCESS) {
-      throw std::runtime_error("Failed To Allocate Command Buffers");
-    }
+  if (vkAllocateCommandBuffers(m_Context->Device, &allocInfo,
+                               m_CommandBuffers.data()) != VK_SUCCESS) {
+    throw std::runtime_error("Failed To Allocate Command Buffers");
   }
 }
 
@@ -729,7 +727,6 @@ void Renderer::RecordForwardPass() {
   }
 
   // Drawing Grid
-  /*
   vkCmdBindPipeline(m_CommandBuffers[m_FrameIndex],
                     VK_PIPELINE_BIND_POINT_GRAPHICS, m_GridPipeline);
 
@@ -744,7 +741,6 @@ void Renderer::RecordForwardPass() {
                      0, sizeof(GridPushConstants), &gridPushConstants);
 
   vkCmdDraw(m_CommandBuffers[m_FrameIndex], 6, 1, 0, 0);
-  */
 
   // Rendering End
 

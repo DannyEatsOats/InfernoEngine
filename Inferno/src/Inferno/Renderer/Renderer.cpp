@@ -29,6 +29,7 @@ void Renderer::StartUp(ResourceManager *resourceManager) {
   m_ResourceManager = resourceManager;
 
   CreateForwardPipeline();
+  CreateGridPipeline();
   AllocateCommandBuffer();
   CreateSyncObjects();
   // TODO: SET CAMERA
@@ -63,8 +64,10 @@ void Renderer::ShutDown() {
       m_DepthImages[i] = Image();
     }
 
-    vkDestroyPipelineLayout(m_Context->Device, m_ForwardLayout, nullptr);
+    vkDestroyPipelineLayout(m_Context->Device, m_GridLayout, nullptr);
+    vkDestroyPipeline(m_Context->Device, m_GridPipeline, nullptr);
 
+    vkDestroyPipelineLayout(m_Context->Device, m_ForwardLayout, nullptr);
     vkDestroyPipeline(m_Context->Device, m_ForwardPipeline, nullptr);
   }
 }
@@ -354,6 +357,156 @@ void Renderer::CreateForwardPipeline() {
   }
 }
 
+void Renderer::CreateGridPipeline() {
+  auto *shader = m_ResourceManager->Load<Shader>("grid");
+
+  // Shader Stages
+  VkPipelineShaderStageCreateInfo shaderStages[]{
+      {
+          .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+          .stage = VK_SHADER_STAGE_VERTEX_BIT,
+          .module = shader->GetVertexShaderModule(),
+          .pName = "main",
+      },
+      {
+          .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+          .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+          .module = shader->GetFragmentShaderModule(),
+          .pName = "main",
+      }};
+
+  // Vertex Input
+  VkPipelineVertexInputStateCreateInfo vertexInfo{
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+      .vertexBindingDescriptionCount = 0,
+      .vertexAttributeDescriptionCount = 0,
+  };
+
+  // Input Assembly
+  VkPipelineInputAssemblyStateCreateInfo assemblyInfo{
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+      .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+      .primitiveRestartEnable = VK_FALSE,
+  };
+
+  // Viewport (ignoring cuz of dynamic states dawgh)
+  VkPipelineViewportStateCreateInfo viewportInfo{
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+      .viewportCount = 1,
+      .pViewports = nullptr,
+      .scissorCount = 1,
+      .pScissors = nullptr,
+  };
+
+  // Rasterizer
+  VkPipelineRasterizationStateCreateInfo rasterizationInfo{
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+      .depthClampEnable = VK_FALSE,
+      .rasterizerDiscardEnable = VK_FALSE,
+      .polygonMode = VK_POLYGON_MODE_FILL,
+      .cullMode = VK_CULL_MODE_NONE,
+      .depthBiasEnable = VK_FALSE,
+      .lineWidth = 1.0f,
+  };
+
+  // Multisampling
+  VkPipelineMultisampleStateCreateInfo multisampleInfo{
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+      .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+      .sampleShadingEnable = VK_FALSE,
+  };
+
+  // Depth Stencil
+  VkPipelineDepthStencilStateCreateInfo depthInfo{
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+      .depthTestEnable = VK_TRUE,
+      .depthWriteEnable = VK_TRUE,
+      .depthCompareOp = VK_COMPARE_OP_LESS,
+      .stencilTestEnable = VK_FALSE,
+  };
+
+  // Color Blending
+  VkPipelineColorBlendAttachmentState colorBlendAttachment{
+      .blendEnable = VK_TRUE,
+      .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+      .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+      .colorBlendOp = VK_BLEND_OP_ADD,
+      .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+      .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+      .alphaBlendOp = VK_BLEND_OP_ADD,
+      .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                        VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+  };
+
+  VkPipelineColorBlendStateCreateInfo colorBlendInfo{
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+      .logicOpEnable = VK_FALSE,
+      .logicOp = VK_LOGIC_OP_COPY,
+      .attachmentCount = 1,
+      .pAttachments = &colorBlendAttachment,
+  };
+
+  // Pipeline Layout
+  VkPushConstantRange pushConstantRange{
+      .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+      .offset = 0,
+      .size = sizeof(GridPushConstants),
+  };
+
+  VkPipelineLayoutCreateInfo layoutInfo{
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+      .setLayoutCount = 0,
+      .pushConstantRangeCount = 1,
+      .pPushConstantRanges = &pushConstantRange,
+  };
+
+  if (vkCreatePipelineLayout(m_Context->Device, &layoutInfo, nullptr,
+                             &m_GridLayout) != VK_SUCCESS) {
+    throw std::runtime_error("Failed To Create Forward Pipeline");
+  }
+
+  // Dynamic Rendering
+  VkPipelineRenderingCreateInfo renderingInfo{
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+      .colorAttachmentCount = 1,
+      .pColorAttachmentFormats = &m_Context->Swapchain.Format,
+      .depthAttachmentFormat =
+          VK_FORMAT_D32_SFLOAT, // TODO: Query this in startup
+  };
+
+  // Dynamic State
+  std::vector<VkDynamicState> dynamicState{VK_DYNAMIC_STATE_VIEWPORT,
+                                           VK_DYNAMIC_STATE_SCISSOR};
+  VkPipelineDynamicStateCreateInfo dynamicStateInfo{
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+      .dynamicStateCount = static_cast<uint32_t>(dynamicState.size()),
+      .pDynamicStates = dynamicState.data(),
+  };
+
+  // Pipeline Creation
+  VkGraphicsPipelineCreateInfo pipelineInfo{
+      .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+      .pNext = &renderingInfo,
+      .stageCount = 2,
+      .pStages = shaderStages,
+      .pVertexInputState = &vertexInfo,
+      .pInputAssemblyState = &assemblyInfo,
+      .pViewportState = &viewportInfo,
+      .pRasterizationState = &rasterizationInfo,
+      .pMultisampleState = &multisampleInfo,
+      .pDepthStencilState = &depthInfo,
+      .pColorBlendState = &colorBlendInfo,
+      .pDynamicState = &dynamicStateInfo,
+      .layout = m_GridLayout,
+      .renderPass = nullptr,
+  };
+
+  if (vkCreateGraphicsPipelines(m_Context->Device, nullptr, 1, &pipelineInfo,
+                                nullptr, &m_GridPipeline) != VK_SUCCESS) {
+    throw std::runtime_error("Failed To Create Grid Pipeline");
+  }
+}
+
 void Renderer::AllocateCommandBuffer() {
   VkCommandBufferAllocateInfo allocInfo{
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -462,7 +615,7 @@ void Renderer::RecordForwardPass() {
                         VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT);
 
   VkClearValue clearColor{
-      .color = {{0.2f, 0.3f, 0.3f, 1.0f}},
+      .color = {{0.14f, 0.14f, 0.14f, 1.0f}},
   };
   VkRenderingAttachmentInfo colorAttachment{
       .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
@@ -556,7 +709,7 @@ void Renderer::RecordForwardPass() {
         meshComponent->GetMesh()->GetIndexBuffer()->GetIndexType());
 
     VkDescriptorSet textureSet = texture->GetDescriptorSet();
-    //TODO: Fix This On multithreading
+    // TODO: Fix This On multithreading
     if (textureSet == VK_NULL_HANDLE) {
       texture->CreateDescriptorSet(m_TextureDescriptorPool,
                                    m_TextureDescriptorSetLayout);
@@ -569,6 +722,22 @@ void Renderer::RecordForwardPass() {
     vkCmdDrawIndexed(m_CommandBuffers[m_FrameIndex],
                      meshComponent->GetMesh()->GetIndexCount(), 1, 0, 0, 0);
   }
+
+  // Drawing Grid
+  vkCmdBindPipeline(m_CommandBuffers[m_FrameIndex],
+                    VK_PIPELINE_BIND_POINT_GRAPHICS, m_GridPipeline);
+
+  GridPushConstants gridPushConstants{
+      .View = view,
+      .Proj = proj,
+  };
+  vkCmdPushConstants(m_CommandBuffers[m_FrameIndex], m_GridLayout,
+                     VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                     0, sizeof(GridPushConstants), &gridPushConstants);
+
+  vkCmdDraw(m_CommandBuffers[m_FrameIndex], 6, 1, 0, 0);
+
+  // Rendering End
 
   vkCmdEndRendering(m_CommandBuffers[m_FrameIndex]);
 

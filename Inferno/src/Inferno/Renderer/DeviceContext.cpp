@@ -213,6 +213,12 @@ void DeviceContext::CreateInstance() {
     instanceInfo.ppEnabledLayerNames = validationLayers.data();
   }
 
+  if (enableValidationLayers) {
+    instanceInfo.enabledLayerCount =
+        static_cast<uint32_t>(validationLayers.size());
+    instanceInfo.ppEnabledLayerNames = validationLayers.data();
+  }
+
   if (vkCreateInstance(&instanceInfo, nullptr, &Instance) != VK_SUCCESS) {
     INFERNO_LOG_ERROR("Failed to create VkInstance");
     throw std::runtime_error("Failed to create VkInstance");
@@ -293,12 +299,6 @@ void DeviceContext::CreateLogicalDevice() {
       .ppEnabledExtensionNames = deviceExtensions.data(),
       .pEnabledFeatures = &deviceFeatures,
   };
-
-  if (enableValidationLayers) {
-    deviceInfo.enabledLayerCount =
-        static_cast<uint32_t>(validationLayers.size());
-    deviceInfo.ppEnabledLayerNames = validationLayers.data();
-  }
 
   if (vkCreateDevice(PhysicalDevice, &deviceInfo, nullptr, &Device) !=
       VK_SUCCESS) {

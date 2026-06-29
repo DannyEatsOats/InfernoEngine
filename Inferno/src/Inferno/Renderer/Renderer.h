@@ -8,6 +8,12 @@
 #include <vulkan/vulkan_core.h>
 
 namespace Inferno {
+
+struct GridPushConstants {
+  glm::mat4 View;
+  glm::mat4 Proj;
+};
+
 class Renderer {
 public:
   Renderer(DeviceContext *context) : m_Context(context) {}
@@ -27,6 +33,8 @@ public:
 
 private:
   void CreateForwardPipeline();
+  void CreateGridPipeline();
+
   void AllocateCommandBuffer();
   void CreateSyncObjects();
 
@@ -51,6 +59,10 @@ private:
 
   VkPipeline m_ForwardPipeline = VK_NULL_HANDLE;
   VkPipelineLayout m_ForwardLayout = VK_NULL_HANDLE;
+
+  VkPipeline m_GridPipeline = VK_NULL_HANDLE;
+  VkPipelineLayout m_GridLayout = VK_NULL_HANDLE;
+
   std::array<VkCommandBuffer, MAX_FRAMES_IN_FLIGHT> m_CommandBuffers;
   std::array<Image, MAX_FRAMES_IN_FLIGHT> m_DepthImages;
 

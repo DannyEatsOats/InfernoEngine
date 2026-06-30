@@ -114,7 +114,7 @@ void Application::Run() {
   FrameLimiter limiter(160.0);
 
   while (m_Running) {
-    limiter.startFrame();
+    //limiter.startFrame();
 
     ZoneScopedN("Frame Start");
     const float time = static_cast<float>(glfwGetTime());
@@ -122,7 +122,7 @@ void Application::Run() {
     m_LastFrameTime = time;
 
     //INFERNO_LOG_INFO("Duration (ms): {}", deltaTime.GetMilliseconds());
-    INFERNO_LOG_INFO("FPTS:: {}", 1000.0f / deltaTime.GetMilliseconds());
+    //INFERNO_LOG_INFO("FPTS:: {}", 1000.0f / deltaTime.GetMilliseconds());
 
     float dt = std::min(deltaTime.GetSeconds(), 0.1f);
 
@@ -142,7 +142,7 @@ void Application::Run() {
     // TODO window stuff
 
     m_Window->OnUpdate();
-    limiter.endFrame();
+    //limiter.endFrame();
     FrameMark;
   }
   ShutDown();

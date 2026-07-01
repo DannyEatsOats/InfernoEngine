@@ -199,6 +199,18 @@ void DeviceContext::CreateInstance() {
     throw std::runtime_error("Validation layers requested, but not available");
   }
 
+  std::vector<VkValidationFeatureEnableEXT> enabledFeatures{
+      VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
+      VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT,
+  };
+
+  VkValidationFeaturesEXT validationFeatures{
+      .sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT,
+      .enabledValidationFeatureCount =
+          static_cast<uint32_t>(enabledFeatures.size()),
+      .pEnabledValidationFeatures = enabledFeatures.data(),
+  };
+
   VkInstanceCreateInfo instanceInfo{};
   instanceInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
   instanceInfo.pApplicationInfo = &appInfo;
@@ -211,6 +223,7 @@ void DeviceContext::CreateInstance() {
     instanceInfo.enabledLayerCount =
         static_cast<uint32_t>(validationLayers.size());
     instanceInfo.ppEnabledLayerNames = validationLayers.data();
+    instanceInfo.pNext = &validationFeatures;
   }
 
   if (vkCreateInstance(&instanceInfo, nullptr, &Instance) != VK_SUCCESS) {

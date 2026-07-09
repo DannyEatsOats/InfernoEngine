@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.31)
 project(Inferno LANGUAGES CXX)
 
 find_package(Vulkan REQUIRED)
-find_package(glfw3 CONFIG REQUIRED)
 
 add_library(Inferno
     SHARED

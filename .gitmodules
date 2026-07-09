@@ -28,3 +28,9 @@
 [submodule "Inferno/vendor/tracy"]
 	path = Inferno/vendor/tracy
 	url = https://github.com/wolfpld/tracy.git
+[submodule "glfw"]
+	path = glfw
+	url = https://github.com/glfw/glfw.git
+[submodule "Inferno/vendor/glfw"]
+	path = Inferno/vendor/glfw
+	url = https://github.com/glfw/glfw.git

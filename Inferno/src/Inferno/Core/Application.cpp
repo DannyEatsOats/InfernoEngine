@@ -1,6 +1,5 @@
 #include "Application.h"
 
-#include "GLFW/glfw3.h"
 #include "Inferno/Core/Memory.h"
 #include "Inferno/Events/ApplicationEvent.h"
 #include "Inferno/Events/Event.h"
@@ -114,7 +113,7 @@ void Application::Run() {
   FrameLimiter limiter(160.0);
 
   while (m_Running) {
-    //limiter.startFrame();
+    // limiter.startFrame();
 
     ZoneScopedN("Frame Start");
 
@@ -124,26 +123,22 @@ void Application::Run() {
     lastTime = currentTime;
     const DeltaTime deltaTime = std::min(dt, 0.05f);
 
-    //INFERNO_LOG_INFO("Duration (ms): {}", deltaTime.GetMilliseconds());
-    //INFERNO_LOG_INFO("FPTS:: {}", 1000.0f / deltaTime.GetMilliseconds());
+    // INFERNO_LOG_INFO("Duration (ms): {}", deltaTime.GetMilliseconds());
+    // INFERNO_LOG_INFO("FPTS:: {}", 1000.0f / deltaTime.GetMilliseconds());
 
     if (!m_Minimized) {
-      for (Layer *layer : m_LayerStack) {
-        layer->OnUpdate(dt);
-      }
+        if(m_NextScene) {
+            SwitchScene();
+        }
 
-      if (m_ActiveScene) {
+      if (m_ActiveScene)
         m_ActiveScene->OnUpdate(deltaTime);
-      }
 
-      // TODO GUI Layer Stuff
       m_Renderer->Render(m_ActiveScene->GetEntities());
     }
-    // TODO Gui end
-    // TODO window stuff
 
     m_Window->OnUpdate();
-    //limiter.endFrame();
+    // limiter.endFrame();
     FrameMark;
   }
   ShutDown();
@@ -151,52 +146,42 @@ void Application::Run() {
 
 void Application::OnEvent(Event &event) {
   EventDispatcher dispatcher(event);
+
   dispatcher.Dispatch<WindowCloseEvent>(
       [this](WindowCloseEvent &event) { return this->OnWindowClosed(event); });
+
   dispatcher.Dispatch<WindowResizeEvent>(
       [this](WindowResizeEvent &event) { return this->OnWindowResize(event); });
+
+  /*
   dispatcher.Dispatch<SetLightingDebugModeEvent>(
       [this](SetLightingDebugModeEvent &event) {
-        //m_Renderer->SetLightingDebugMode(event.Mode);
+        m_Renderer->SetLightingDebugMode(event.Mode);
         return true;
       });
-
-  for (auto it = m_LayerStack.end(); it != m_LayerStack.begin();) {
-    (*--it)->OnEvent(event);
-    if (event.IsHandled())
-      break;
-  }
+  */
 
   if (!event.IsHandled() && m_ActiveScene) {
     m_ActiveScene->OnEvent(event);
   }
 }
 
-void Application::PushLayer(Layer *layer) {
-  layer->SetEventCallback([this](Event &e) { this->OnEvent(e); });
-  m_LayerStack.PushLayer(layer);
-  layer->OnAttach();
-}
-
-void Application::PushOverlay(Layer *layer) {
-  layer->SetEventCallback([this](Event &e) { this->OnEvent(e); });
-  m_LayerStack.PushOverlay(layer);
-  layer->OnAttach();
-}
-
-void Application::SetActiveScene(Scope<Scene> scene) {
+void Application::SwitchScene() {
   if (m_ActiveScene) {
     m_ActiveScene->OnDetach();
   }
 
-  m_ActiveScene = std::move(scene);
+  m_ActiveScene = std::move(m_NextScene);
+  m_NextScene = nullptr;
 
   m_ActiveScene->SetResourceManager(m_ResourceManager.get());
   m_ActiveScene->SetEventCallback([this](Event &e) { this->OnEvent(e); });
   m_ActiveScene->OnAttach();
 }
 
-void Application::SwitchScene(Scope<Scene> scene) { m_ActiveScene->OnDetach(); }
+void Application::QueueActiveScene(Scope<Scene> scene) {
+  m_NextScene = std::move(scene);
+}
 
 bool Application::OnWindowClosed(WindowCloseEvent &event) {
   m_Running = false;

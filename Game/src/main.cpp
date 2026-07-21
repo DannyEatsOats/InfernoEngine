@@ -1,4 +1,3 @@
-#include "Inferno/Core/Log.h"
 #include "Inferno/Core/Memory.h"
 #include "Inferno/ECS/Scene.h"
 #include "Inferno/Events/ApplicationEvent.h"
@@ -8,25 +7,9 @@
 #include "glm/ext/quaternion_trigonometric.hpp"
 #include "glm/ext/vector_float3.hpp"
 #include "glm/trigonometric.hpp"
-#include "tracy/Tracy.hpp"
 #include <Inferno.h>
 
 namespace Inferno {
-class TestLayer : public Inferno::Layer {
-public:
-  TestLayer() : Inferno::Layer("Test Layer") {}
-  ~TestLayer() {}
-
-  virtual void OnAttach() { INFERNO_LOG_INFO("ATTACHED TEST LAYER"); };
-
-  virtual void OnDetach() { INFERNO_LOG_INFO("DETACHED TEST LAYER"); };
-
-  virtual void OnUpdate(DeltaTime deltaTime) {}
-
-  virtual void OnImGuiRender() { INFERNO_LOG_INFO("IMGUIRENDER TEST LAYER"); }
-  virtual void OnEvent(Event &event) {}
-};
-
 class GameScene : public Inferno::Scene {
 public:
   GameScene(const std::string &name) : Inferno::Scene(name) {}
@@ -63,6 +46,7 @@ public:
       Entity *knight = CreateEntity("knight");
       auto *transform = knight->AddComponent<TransformComponent>();
 
+      /*
       auto rotation = transform->GetRotation();
       glm::quat rotationInc =
           glm::angleAxis(glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
@@ -74,14 +58,15 @@ public:
           glm::angleAxis(glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
       newRotation = rotationInc * rotation;
       transform->SetRotation(newRotation);
+      */
 
       /*
       transform->SetPosition(
           glm::vec3(-1.5f + i * 0.6f, 0.0f, 0.0f - i * 0.3f));
        */
 
-      auto mesh = m_ResourceManager->Load<Mesh>("suzanne");
-      auto texture = m_ResourceManager->Load<Texture>("zsamo");
+      auto mesh = m_ResourceManager->Load<Mesh>("viking_room");
+      auto texture = m_ResourceManager->Load<Texture>("viking_room");
       knight->AddComponent<MeshComponent>(mesh, texture);
     }
   }
@@ -107,9 +92,8 @@ public:
     if (Input::IsKeyDown(ENGINE_KEY_DOWN))
       movement.y -= moveSpeed;
 
-    float rotationSpeed = deltaTime * glm::radians(120.0f);
-    // float rotationSpeed = glm::radians(0.1f);
-    glm::vec3 rotationAxis(0.0f);
+    float rotationSpeed = deltaTime * glm::radians(90.0f);
+    glm::vec3 rotationAxis(0.0f, 1.0f, 0.0f);
 
     if (Input::IsKeyDown(ENGINE_KEY_F))
       rotationAxis.x -= 1.0f;
@@ -117,8 +101,8 @@ public:
       rotationAxis.x += 1.0f;
     if (Input::IsKeyDown(ENGINE_KEY_H))
       rotationAxis.y -= 1.0f;
-    // if (Input::IsKeyDown(ENGINE_KEY_J))
-    rotationAxis.y += 1.0f;
+    if (Input::IsKeyDown(ENGINE_KEY_J))
+      rotationAxis.y += 1.0f;
     if (Input::IsKeyDown(ENGINE_KEY_K))
       rotationAxis.z += 1.0f;
     if (Input::IsKeyDown(ENGINE_KEY_L))
@@ -183,7 +167,7 @@ public:
 
 int main() {
   Inferno::Application app = Inferno::Application();
-  app.SetActiveScene(
+  app.QueueActiveScene(
       std::move(Inferno::MakeScope<Inferno::GameScene>("GameScene")));
   app.Run();
 }

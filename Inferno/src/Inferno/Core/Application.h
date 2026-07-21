@@ -7,10 +7,7 @@
 #include "Inferno/Renderer/DeviceContext.h"
 #include "Inferno/Renderer/Renderer.h"
 #include "Inferno/Resource/ResourceManager.h"
-#include "Layer.h"
-#include "LayerStack.h"
 #include "Window.h"
-#include <memory>
 
 namespace Inferno {
 class Application {
@@ -26,24 +23,23 @@ public:
 
   void Run();
   void OnEvent(Event &event);
-  void PushLayer(Layer *layer);
-  void PushOverlay(Layer *layer);
 
-  void SetActiveScene(Scope<Scene> scene);
-  void SwitchScene(Scope<Scene> scene);
+  void QueueActiveScene(Scope<Scene> scene);
 
 private:
   bool OnWindowClosed(WindowCloseEvent &event);
   bool OnWindowResize(WindowResizeEvent &event);
 
+  void SwitchScene();
+
 private:
   Scope<Window> m_Window;
-  LayerStack m_LayerStack;
   Scope<DeviceContext> m_RenderingContext;
   Scope<Renderer> m_Renderer;
   Scope<ResourceManager> m_ResourceManager;
 
   Scope<Scene> m_ActiveScene = nullptr;
+  Scope<Scene> m_NextScene = nullptr;
 
   bool m_Running = true;
   bool m_Minimized = false;

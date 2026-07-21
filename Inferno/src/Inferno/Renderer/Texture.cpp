@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <utility>
 #include <vulkan/vulkan_core.h>
+#include <volk/volk.h>
 
 #include "Inferno/Renderer/Buffer.h"
 #include "Inferno/Renderer/Image.h"

@@ -98,6 +98,8 @@ target_compile_definitions(Inferno
         $<$<OR:$<CONFIG:Debug>,$<CONFIG:Profile>>:TRACY_ENABLE>
 )
 
+target_compile_definitions(Inferno PRIVATE VK_NO_PROTOTYPES)
+
 set_target_properties(Inferno PROPERTIES
         ARCHIVE_OUTPUT_DIRECTORY ${OUTPUT_DIR}/${CMAKE_BUILD_TYPE}/Inferno
         LIBRARY_OUTPUT_DIRECTORY ${OUTPUT_DIR}/${CMAKE_BUILD_TYPE}/Inferno

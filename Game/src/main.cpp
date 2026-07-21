@@ -1,3 +1,4 @@
+#include "Inferno/Core/Log.h"
 #include "Inferno/Core/Memory.h"
 #include "Inferno/ECS/Scene.h"
 #include "Inferno/Events/ApplicationEvent.h"
@@ -74,10 +75,12 @@ public:
       newRotation = rotationInc * rotation;
       transform->SetRotation(newRotation);
 
+      /*
       transform->SetPosition(
           glm::vec3(-1.5f + i * 0.6f, 0.0f, 0.0f - i * 0.3f));
+       */
 
-      auto mesh = m_ResourceManager->Load<Mesh>("zsamo");
+      auto mesh = m_ResourceManager->Load<Mesh>("suzanne");
       auto texture = m_ResourceManager->Load<Texture>("zsamo");
       knight->AddComponent<MeshComponent>(mesh, texture);
     }
@@ -92,7 +95,7 @@ public:
   void LoadScene() override {}
 
   void OnUpdate(DeltaTime deltaTime) override {
-    float moveSpeed = 2.0f * deltaTime.GetSeconds();
+    float moveSpeed = 2.0f * deltaTime;
     glm::vec3 movement(0.0f);
 
     if (Input::IsKeyDown(ENGINE_KEY_LEFT))
@@ -104,7 +107,8 @@ public:
     if (Input::IsKeyDown(ENGINE_KEY_DOWN))
       movement.y -= moveSpeed;
 
-    float rotationSpeed = glm::radians(90.0f) * deltaTime;
+    float rotationSpeed = deltaTime * glm::radians(120.0f);
+    // float rotationSpeed = glm::radians(0.1f);
     glm::vec3 rotationAxis(0.0f);
 
     if (Input::IsKeyDown(ENGINE_KEY_F))
@@ -113,8 +117,8 @@ public:
       rotationAxis.x += 1.0f;
     if (Input::IsKeyDown(ENGINE_KEY_H))
       rotationAxis.y -= 1.0f;
-    if (Input::IsKeyDown(ENGINE_KEY_J))
-      rotationAxis.y += 1.0f;
+    // if (Input::IsKeyDown(ENGINE_KEY_J))
+    rotationAxis.y += 1.0f;
     if (Input::IsKeyDown(ENGINE_KEY_K))
       rotationAxis.z += 1.0f;
     if (Input::IsKeyDown(ENGINE_KEY_L))
@@ -178,10 +182,8 @@ public:
 } // namespace Inferno
 
 int main() {
-  Inferno::Application *app = new Inferno::Application();
-  app->PushLayer(new Inferno::TestLayer());
-  app->SetActiveScene(
+  Inferno::Application app = Inferno::Application();
+  app.SetActiveScene(
       std::move(Inferno::MakeScope<Inferno::GameScene>("GameScene")));
-  app->Run();
-  delete app;
+  app.Run();
 }

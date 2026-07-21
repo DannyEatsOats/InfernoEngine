@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include <vector>
 #include <vulkan/vulkan_core.h>
+#include <volk/volk.h>
 
 #include "Inferno/Resource/Resource.h"
 #include "Shader.h"

@@ -117,14 +117,15 @@ void Application::Run() {
     //limiter.startFrame();
 
     ZoneScopedN("Frame Start");
-    const float time = static_cast<float>(glfwGetTime());
-    const DeltaTime deltaTime = time - m_LastFrameTime;
-    m_LastFrameTime = time;
+
+    static auto lastTime = std::chrono::high_resolution_clock::now();
+    auto currentTime = std::chrono::high_resolution_clock::now();
+    float dt = std::chrono::duration<float>(currentTime - lastTime).count();
+    lastTime = currentTime;
+    const DeltaTime deltaTime = std::min(dt, 0.05f);
 
     //INFERNO_LOG_INFO("Duration (ms): {}", deltaTime.GetMilliseconds());
     //INFERNO_LOG_INFO("FPTS:: {}", 1000.0f / deltaTime.GetMilliseconds());
-
-    float dt = std::min(deltaTime.GetSeconds(), 0.1f);
 
     if (!m_Minimized) {
       for (Layer *layer : m_LayerStack) {
@@ -132,7 +133,7 @@ void Application::Run() {
       }
 
       if (m_ActiveScene) {
-        m_ActiveScene->OnUpdate(dt);
+        m_ActiveScene->OnUpdate(deltaTime);
       }
 
       // TODO GUI Layer Stuff

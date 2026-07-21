@@ -37,7 +37,7 @@ private:
   bool OnWindowResize(WindowResizeEvent &event);
 
 private:
-  std::unique_ptr<Window> m_Window;
+  Scope<Window> m_Window;
   LayerStack m_LayerStack;
   Scope<DeviceContext> m_RenderingContext;
   Scope<Renderer> m_Renderer;

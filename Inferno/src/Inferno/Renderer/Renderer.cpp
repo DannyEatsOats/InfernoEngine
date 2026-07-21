@@ -12,6 +12,7 @@
 #include <GLFW/glfw3.h>
 #include <pch.h>
 #include <vulkan/vulkan_core.h>
+#include <volk/volk.h>
 
 #include "Inferno/ECS/Component.h"
 #include "Inferno/Renderer/CullingSystem.h"

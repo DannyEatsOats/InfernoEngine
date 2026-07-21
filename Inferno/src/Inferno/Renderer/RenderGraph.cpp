@@ -4,6 +4,7 @@
 #include <utility>
 #include <vector>
 #include <vulkan/vulkan_core.h>
+#include <volk/volk.h>
 
 #include "Inferno/Core/Log.h"
 #include "Inferno/Renderer/Image.h"

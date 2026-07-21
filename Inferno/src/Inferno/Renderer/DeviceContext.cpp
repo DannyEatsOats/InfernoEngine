@@ -1,3 +1,6 @@
+#define VOLK_IMPLEMENTATION
+#include <volk/volk.h>
+
 #include "DeviceContext.h"
 #include "Inferno/Core/Log.h"
 #include "vulkan/vulkan_core.h"
@@ -183,6 +186,8 @@ DeviceContext::AcquireNextImage(VkSemaphore presentCompleteSemaphore) {
 }
 
 void DeviceContext::CreateInstance() {
+  volkInitialize();
+
   VkApplicationInfo appInfo{};
   appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
   appInfo.pApplicationName = "Inferno Engine";
@@ -230,6 +235,8 @@ void DeviceContext::CreateInstance() {
     INFERNO_LOG_ERROR("Failed to create VkInstance");
     throw std::runtime_error("Failed to create VkInstance");
   }
+
+  volkLoadInstance(Instance);
 }
 
 void DeviceContext::CreateSurface() {
@@ -312,6 +319,8 @@ void DeviceContext::CreateLogicalDevice() {
       VK_SUCCESS) {
     throw std::runtime_error("Failed to create logical deivce");
   }
+
+  volkLoadDevice(Device);
 
   vkGetDeviceQueue(Device, deviceIndices.graphicsFamily.value(), 0,
                    &GraphicsQueue);

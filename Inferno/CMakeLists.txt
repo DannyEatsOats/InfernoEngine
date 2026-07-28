@@ -6,13 +6,11 @@ find_package(Vulkan REQUIRED)
 add_library(Inferno
     SHARED
         # MAIN ENGINE COMPONENTS
-        src/Inferno/Core/Application.h
-        src/Inferno/Core/Application.cpp
+        src/Inferno/Core/Engine.h
+        src/Inferno/Core/Engine.cpp
         src/Inferno/Core/Log.h
         src/Inferno/Core/Log.cpp
-        src/Inferno/Core/Layer.h
-        src/Inferno/Core/LayerStack.h
-        src/Inferno/Core/LayerStack.cpp
+        src/Inferno/Core/Memory.h
         src/Inferno/Core/Window.h
         src/Inferno/Core/Window.cpp
         src/Inferno/Events/Input.h

@@ -9,10 +9,10 @@
 #include <stdexcept>
 #include <vector>
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#include <volk/volk.h>
 #include <GLFW/glfw3.h>
 #include <pch.h>
 #include <vulkan/vulkan_core.h>
-#include <volk/volk.h>
 
 #include "Inferno/ECS/Component.h"
 #include "Inferno/Renderer/CullingSystem.h"
@@ -672,7 +672,7 @@ void Renderer::RecordForwardPass() {
   };
   vkCmdSetScissor(m_CommandBuffers[m_FrameIndex], 0, 1, &scissor);
 
-  // Mock Camera Setup
+  //TODO: Mock Camera Setup, should not be calculated every frame
   glm::mat4 proj =
       glm::perspective(glm::radians(45.0f),
                        (float)m_Context->Swapchain.Extent.width /
@@ -731,6 +731,7 @@ void Renderer::RecordForwardPass() {
   vkCmdBindPipeline(m_CommandBuffers[m_FrameIndex],
                     VK_PIPELINE_BIND_POINT_GRAPHICS, m_GridPipeline);
 
+  //TODO: Inverse should not be calculated per frame
   GridPushConstants gridPushConstants{
       .View = view,
       .Proj = proj,

@@ -10,13 +10,13 @@
 #include "Window.h"
 
 namespace Inferno {
-class Application {
+class Engine {
 public:
-  Application();
-  virtual ~Application() = default;
+  Engine();
+  virtual ~Engine() = default;
 
-  Application(const Application &) = delete;
-  Application &operator=(const Application &) = delete;
+  Engine(const Engine &) = delete;
+  Engine &operator=(const Engine &) = delete;
 
   void StartUp();
   void ShutDown();

@@ -16,59 +16,24 @@ public:
   virtual ~GameScene() = default;
 
   void OnAttach() override {
-    {
-      Entity *testEntity = new Entity("test");
-      testEntity->AddComponent<TransformComponent>();
-      // testEntity->GetComponent<TransformComponent>()->SetRotation(
-      //    glm::angleAxis(glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f)));
-      // auto mesh =
-      // m_ResourceManager->Load<Mesh>("viking_room", m_RenderingContext.get());
-      // auto texture = m_ResourceManager->Load<Texture>("viking_room",
-      // m_RenderingContext.get());
-      // testEntity->AddComponent<MeshComponent>(mesh.get(), texture.get());
-      //  m_Entities.push_back(testEntity);
-    }
+    Entity *knight = CreateEntity("knight");
+    auto *transform = knight->AddComponent<TransformComponent>();
 
-    /*
-    {
-      Entity *cube = new Entity("cube");
-      cube->AddComponent<TransformComponent>();
-      m_CubeMesh = GeometryGenerator::GenerateCube(m_RenderingContext.get());
-      auto texture = m_ResourceManager->Load<Texture>("viking_room",
-                                                      m_RenderingContext.get());
-      // TODO: I SHOULD PASS A SHARED PTR HERE I THINK IDKKKKK
-      cube->AddComponent<MeshComponent>(m_CubeMesh.get(), texture.get());
-      m_Entities.push_back(cube);
-    }
-    */
+    auto rotation = transform->GetRotation();
+    glm::quat rotationInc =
+        glm::angleAxis(glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+    glm::quat newRotation = rotationInc * rotation;
+    transform->SetRotation(newRotation);
 
-    for (int i = 0; i < 1; ++i) {
-      Entity *knight = CreateEntity("knight");
-      auto *transform = knight->AddComponent<TransformComponent>();
+    rotation = transform->GetRotation();
+    rotationInc =
+        glm::angleAxis(glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    newRotation = rotationInc * rotation;
+    transform->SetRotation(newRotation);
 
-      /*
-      auto rotation = transform->GetRotation();
-      glm::quat rotationInc =
-          glm::angleAxis(glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-      glm::quat newRotation = rotationInc * rotation;
-      transform->SetRotation(newRotation);
-
-      rotation = transform->GetRotation();
-      rotationInc =
-          glm::angleAxis(glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-      newRotation = rotationInc * rotation;
-      transform->SetRotation(newRotation);
-      */
-
-      /*
-      transform->SetPosition(
-          glm::vec3(-1.5f + i * 0.6f, 0.0f, 0.0f - i * 0.3f));
-       */
-
-      auto mesh = m_ResourceManager->Load<Mesh>("viking_room");
-      auto texture = m_ResourceManager->Load<Texture>("viking_room");
-      knight->AddComponent<MeshComponent>(mesh, texture);
-    }
+    auto mesh = m_ResourceManager->Load<Mesh>("zsamo");
+    auto texture = m_ResourceManager->Load<Texture>("zsamo");
+    knight->AddComponent<MeshComponent>(mesh, texture);
   }
 
   void OnDetach() override {}
@@ -93,7 +58,7 @@ public:
       movement.y -= moveSpeed;
 
     float rotationSpeed = deltaTime * glm::radians(90.0f);
-    glm::vec3 rotationAxis(0.0f, 1.0f, 0.0f);
+    glm::vec3 rotationAxis(0.0f);
 
     if (Input::IsKeyDown(ENGINE_KEY_F))
       rotationAxis.x -= 1.0f;
@@ -166,7 +131,7 @@ public:
 } // namespace Inferno
 
 int main() {
-  Inferno::Application app = Inferno::Application();
+  Inferno::Engine app = Inferno::Engine();
   app.QueueActiveScene(
       std::move(Inferno::MakeScope<Inferno::GameScene>("GameScene")));
   app.Run();

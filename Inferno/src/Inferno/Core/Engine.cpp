@@ -1,4 +1,4 @@
-#include "Application.h"
+#include "Engine.h"
 
 #include "Inferno/Core/Memory.h"
 #include "Inferno/Events/ApplicationEvent.h"
@@ -83,9 +83,9 @@ private:
   std::chrono::high_resolution_clock::time_point m_FrameStart;
 };
 
-Application::Application() { StartUp(); }
+Engine::Engine() { StartUp(); }
 
-void Application::StartUp() {
+void Engine::StartUp() {
   Log::Init();
   INFERNO_LOG_INFO("Starting Up Engine...");
 
@@ -99,7 +99,7 @@ void Application::StartUp() {
   Input::SetWindowHandle(m_Window->GetNativeWindow());
 }
 
-void Application::ShutDown() {
+void Engine::ShutDown() {
   INFERNO_LOG_INFO("Shutting Down Engine...");
   m_ActiveScene->OnDetach();
 
@@ -109,7 +109,7 @@ void Application::ShutDown() {
   m_Running = false;
 }
 
-void Application::Run() {
+void Engine::Run() {
   FrameLimiter limiter(160.0);
 
   while (m_Running) {
@@ -144,7 +144,7 @@ void Application::Run() {
   ShutDown();
 }
 
-void Application::OnEvent(Event &event) {
+void Engine::OnEvent(Event &event) {
   EventDispatcher dispatcher(event);
 
   dispatcher.Dispatch<WindowCloseEvent>(
@@ -166,7 +166,7 @@ void Application::OnEvent(Event &event) {
   }
 }
 
-void Application::SwitchScene() {
+void Engine::SwitchScene() {
   if (m_ActiveScene) {
     m_ActiveScene->OnDetach();
   }
@@ -179,16 +179,16 @@ void Application::SwitchScene() {
   m_ActiveScene->OnAttach();
 }
 
-void Application::QueueActiveScene(Scope<Scene> scene) {
+void Engine::QueueActiveScene(Scope<Scene> scene) {
   m_NextScene = std::move(scene);
 }
 
-bool Application::OnWindowClosed(WindowCloseEvent &event) {
+bool Engine::OnWindowClosed(WindowCloseEvent &event) {
   m_Running = false;
   return true;
 }
 
-bool Application::OnWindowResize(WindowResizeEvent &event) {
+bool Engine::OnWindowResize(WindowResizeEvent &event) {
   if (event.GetWidth() == 0 || event.GetHeight() == 0) {
     m_Minimized = true;
     return false;

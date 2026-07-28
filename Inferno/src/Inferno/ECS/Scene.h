@@ -6,7 +6,7 @@
 #include "Inferno/Utils/DeltaTime.h"
 
 namespace Inferno {
-class Application;
+class Engine;
 
 class Scene {
 public:
@@ -46,6 +46,6 @@ protected:
 
   EventCallbackFn m_CallbackFn = nullptr;
 
-  friend class Application;
+  friend class Engine;
 };
 } // namespace Inferno

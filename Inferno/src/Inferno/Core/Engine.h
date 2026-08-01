@@ -33,6 +33,10 @@ private:
   void SwitchScene();
 
 private:
+  ArenaAllocator m_EngineArena;
+  //ArenaAllocator m_SceneArena;
+  ArenaAllocator m_FrameArena;
+
   Scope<Window> m_Window;
   Scope<DeviceContext> m_RenderingContext;
   Scope<Renderer> m_Renderer;

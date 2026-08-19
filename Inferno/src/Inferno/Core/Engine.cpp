@@ -83,7 +83,7 @@ private:
   std::chrono::high_resolution_clock::time_point m_FrameStart;
 };
 
-Engine::Engine() { StartUp(); }
+Engine::Engine() : m_EngineArena(GiB(1)), m_FrameArena(GiB(1)) { StartUp(); }
 
 void Engine::StartUp() {
   Log::Init();
@@ -127,9 +127,9 @@ void Engine::Run() {
     // INFERNO_LOG_INFO("FPTS:: {}", 1000.0f / deltaTime.GetMilliseconds());
 
     if (!m_Minimized) {
-        if(m_NextScene) {
-            SwitchScene();
-        }
+      if (m_NextScene) {
+        SwitchScene();
+      }
 
       if (m_ActiveScene)
         m_ActiveScene->OnUpdate(deltaTime);

@@ -1,16 +1,16 @@
+// EditorCamera.h
 #pragma once
-
 #include "Inferno/Events/Event.h"
 #include "Inferno/Events/MouseEvent.h"
 #include "Inferno/Renderer/Camera.h"
 #include "Inferno/Utils/DeltaTime.h"
 #include "glm/ext/matrix_transform.hpp"
 #include "glm/ext/vector_float3.hpp"
+
 namespace Inferno {
 class EditorCamera {
 public:
   void Init(float fov, float aspect, float nearPlane, float farPlane);
-
   void OnUpdate(DeltaTime dt);
   void OnEvent(Event &e);
 
@@ -23,10 +23,14 @@ public:
 
   void SetViewportSize(float width, float height);
 
+  bool IsRotating() const { return m_IsRotating; }
+
 private:
   void UpdateBasisVectors();
   bool OnMouseMoved(MouseMovedEvent &e);
   bool OnMouseScrolled(MouseScrolledEvent &e);
+  bool OnMouseButtonPressed(MouseButtonPressedEvent &e);
+  bool OnMouseButtonReleased(MouseButtonReleasedEvent &e);
 
 private:
   Camera m_Camera;
@@ -45,5 +49,7 @@ private:
 
   float m_LastMouseX = 0.0f, m_LastMouseY = 0.0f;
   bool m_FirstMouse = true;
+
+  bool m_IsRotating = false;
 };
 } // namespace Inferno

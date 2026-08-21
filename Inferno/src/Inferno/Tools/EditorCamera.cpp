@@ -1,8 +1,8 @@
-#include "EditorCamera.h"
-#include <pch.h>
-
 // EditorCamera.cpp
 #include "EditorCamera.h"
+#include <pch.h>
+#include "EditorCamera.h"
+#include "GLFW/glfw3.h"
 #include "Inferno/Events/Input.h"
 #include "Inferno/Events/KeyCodes.h"
 #include "Inferno/Events/MouseEvent.h"
@@ -26,6 +26,10 @@ void EditorCamera::UpdateBasisVectors() {
 }
 
 void EditorCamera::OnUpdate(DeltaTime dt) {
+  // Unreal-style: WASD/QE only move the camera while RMB is held.
+  if (!m_IsRotating)
+    return;
+
   float velocity = m_MovementSpeed * dt.GetSeconds();
   if (Input::IsKeyDown(ENGINE_KEY_W))
     m_Position += m_Front * velocity;
@@ -41,12 +45,46 @@ void EditorCamera::OnUpdate(DeltaTime dt) {
     m_Position -= m_Up * velocity * 0.5f;
 }
 
+void EditorCamera::OnEvent(Event &e) {
+  EventDispatcher dispatcher(e);
+  dispatcher.Dispatch<MouseMovedEvent>(
+      [this](MouseMovedEvent &ev) { return OnMouseMoved(ev); });
+  dispatcher.Dispatch<MouseScrolledEvent>(
+      [this](MouseScrolledEvent &ev) { return OnMouseScrolled(ev); });
+  dispatcher.Dispatch<MouseButtonPressedEvent>(
+      [this](MouseButtonPressedEvent &ev) { return OnMouseButtonPressed(ev); });
+  dispatcher.Dispatch<MouseButtonReleasedEvent>(
+      [this](MouseButtonReleasedEvent &ev) { return OnMouseButtonReleased(ev); });
+}
+
+bool EditorCamera::OnMouseButtonPressed(MouseButtonPressedEvent &e) {
+  if (e.GetMouseButton() == GLFW_MOUSE_BUTTON_RIGHT) {
+    m_IsRotating = true;
+    m_FirstMouse = true;
+  }
+  return false;
+}
+
+bool EditorCamera::OnMouseButtonReleased(MouseButtonReleasedEvent &e) {
+  if (e.GetMouseButton() == GLFW_MOUSE_BUTTON_RIGHT) {
+    m_IsRotating = false;
+  }
+  return false;
+}
+
 bool EditorCamera::OnMouseMoved(MouseMovedEvent &e) {
+  if (!m_IsRotating) {
+    m_LastMouseX = e.GetX();
+    m_LastMouseY = e.GetY();
+    return false;
+  }
+
   if (m_FirstMouse) {
     m_LastMouseX = e.GetX();
     m_LastMouseY = e.GetY();
     m_FirstMouse = false;
   }
+
   float dx = e.GetX() - m_LastMouseX;
   float dy = m_LastMouseY - e.GetY();
   m_LastMouseX = e.GetX();

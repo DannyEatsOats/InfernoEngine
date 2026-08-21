@@ -4,6 +4,8 @@
 #include "Inferno/Events/ApplicationEvent.h"
 #include "Inferno/Events/Event.h"
 #include "Inferno/Events/Input.h"
+#include "Inferno/Events/KeyCodes.h"
+#include "Inferno/Events/KeyEvent.h"
 #include "Inferno/Utils/DeltaTime.h"
 #include "Log.h"
 
@@ -137,12 +139,28 @@ void Engine::Run() {
         SwitchScene();
       }
 
-      if (m_ActiveScene)
+      if (m_ActiveScene && !m_Editing)
         m_ActiveScene->OnUpdate(deltaTime);
 
-      m_EditorCamera->OnUpdate(deltaTime);
-      m_Renderer->SetActiveCamera({m_EditorCamera->GetViewMatrix(),
-                                   m_EditorCamera->GetProjectionMatrix()});
+      if (m_Editing)
+        m_EditorCamera->OnUpdate(deltaTime);
+
+      if (m_Editing) {
+        m_Renderer->SetActiveCamera({m_EditorCamera->GetViewMatrix(),
+                                     m_EditorCamera->GetProjectionMatrix()});
+      } else {
+        // TODO: MOCK GAME CAMERA
+        glm::mat4 proj = glm::perspective(
+            glm::radians(45.0f),
+            (float)m_RenderingContext->Swapchain.Extent.width /
+                (float)m_RenderingContext->Swapchain.Extent.height,
+            0.1f, 10.0f);
+        proj[1][1] *= -1;
+        glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 1.0f, 3.0f),
+                                     glm::vec3(0.0f, 0.0f, 0.0f),
+                                     glm::vec3(0.0f, 1.0f, 0.0f));
+        m_Renderer->SetActiveCamera({view, proj});
+      }
 
       m_Renderer->Render(m_ActiveScene->GetEntities());
     }
@@ -163,6 +181,14 @@ void Engine::OnEvent(Event &event) {
   dispatcher.Dispatch<WindowResizeEvent>(
       [this](WindowResizeEvent &event) { return this->OnWindowResize(event); });
 
+  dispatcher.Dispatch<KeyPressedEvent>([this](KeyPressedEvent &event) {
+    if (event.GetKeyCode() == ENGINE_KEY_F12) {
+      m_Editing = !m_Editing;
+      return true;
+    }
+    return false;
+  });
+
   /*
   dispatcher.Dispatch<SetLightingDebugModeEvent>(
       [this](SetLightingDebugModeEvent &event) {
@@ -171,8 +197,14 @@ void Engine::OnEvent(Event &event) {
       });
   */
 
-  if (!event.IsHandled() && m_ActiveScene) {
-    m_ActiveScene->OnEvent(event);
+  if (m_Editing) {
+    if (!event.IsHandled()) {
+      m_EditorCamera->OnEvent(event);
+    }
+  } else {
+    if (!event.IsHandled() && m_ActiveScene) {
+      m_ActiveScene->OnEvent(event);
+    }
   }
 }
 

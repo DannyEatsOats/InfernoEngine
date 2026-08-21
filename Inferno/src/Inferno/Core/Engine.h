@@ -7,6 +7,7 @@
 #include "Inferno/Renderer/DeviceContext.h"
 #include "Inferno/Renderer/Renderer.h"
 #include "Inferno/Resource/ResourceManager.h"
+#include "Inferno/Tools/EditorCamera.h"
 #include "Window.h"
 
 namespace Inferno {
@@ -33,19 +34,20 @@ private:
   void SwitchScene();
 
 private:
-  ArenaAllocator m_EngineArena;
-  //ArenaAllocator m_SceneArena;
-  ArenaAllocator m_FrameArena;
+  // ArenaAllocator m_EngineArena;
+  // ArenaAllocator m_SceneArena;
 
   Scope<Window> m_Window;
   Scope<DeviceContext> m_RenderingContext;
   Scope<Renderer> m_Renderer;
   Scope<ResourceManager> m_ResourceManager;
+  Scope<EditorCamera> m_EditorCamera;
 
   Scope<Scene> m_ActiveScene = nullptr;
   Scope<Scene> m_NextScene = nullptr;
 
   bool m_Running = true;
+  bool m_Editing = true;
   bool m_Minimized = false;
   float m_LastFrameTime = 0.0f;
 };

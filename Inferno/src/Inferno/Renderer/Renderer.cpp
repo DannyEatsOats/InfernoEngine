@@ -1,4 +1,3 @@
-#include "Inferno/Core/Memory.h"
 #include "Inferno/ECS/Entity.h"
 #include "Inferno/Renderer/Image.h"
 #include "Inferno/Renderer/Mesh.h"
@@ -9,13 +8,12 @@
 #include <stdexcept>
 #include <vector>
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
-#include <volk/volk.h>
 #include <GLFW/glfw3.h>
 #include <pch.h>
+#include <volk/volk.h>
 #include <vulkan/vulkan_core.h>
 
 #include "Inferno/ECS/Component.h"
-#include "Inferno/Renderer/CullingSystem.h"
 #include "Inferno/Resource/ResourceManager.h"
 #include "Renderer.h"
 
@@ -28,7 +26,6 @@ struct MeshPushConstants {
 };
 
 void Renderer::StartUp(ResourceManager *resourceManager) {
-  m_CullingSystem = MakeScope<CullingSystem>();
   m_ResourceManager = resourceManager;
 
   CreateForwardPipeline();
@@ -80,7 +77,6 @@ void Renderer::Render(const std::vector<Entity *> &entities) {
     Resize();
   }
 
-  m_VisibleEntites = entities;
   bool success = true;
 
   // Draw Frame
@@ -104,7 +100,7 @@ void Renderer::Render(const std::vector<Entity *> &entities) {
     vkResetFences(m_Context->Device, 1, &m_DrawFences[m_FrameIndex]);
   }
 
-  RecordForwardPass();
+  RecordForwardPass(entities);
 
   VkPipelineStageFlags waitDstStageMask =
       VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -592,7 +588,7 @@ void Renderer::TransitionImageLayout(VkImage image, VkImageAspectFlags aspect,
   vkCmdPipelineBarrier2(m_CommandBuffers[m_FrameIndex], &dependencyInfo);
 }
 
-void Renderer::RecordForwardPass() {
+void Renderer::RecordForwardPass(const std::vector<Entity *> &entities) {
 
   VkCommandBufferBeginInfo beginInfo{
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -672,7 +668,8 @@ void Renderer::RecordForwardPass() {
   };
   vkCmdSetScissor(m_CommandBuffers[m_FrameIndex], 0, 1, &scissor);
 
-  //TODO: Mock Camera Setup, should not be calculated every frame
+  // TODO: Mock Camera Setup, should not be calculated every frame
+  /*
   glm::mat4 proj =
       glm::perspective(glm::radians(45.0f),
                        (float)m_Context->Swapchain.Extent.width /
@@ -682,8 +679,9 @@ void Renderer::RecordForwardPass() {
   glm::mat4 view =
       glm::lookAt(glm::vec3(0.0f, 1.0f, 3.0f), glm::vec3(0.0f, 0.0f, 0.0f),
                   glm::vec3(0.0f, 1.0f, 0.0f));
+                  */
 
-  for (auto *entity : m_VisibleEntites) {
+  for (auto *entity : entities) {
     MeshComponent *meshComponent = entity->GetComponent<MeshComponent>();
     if (!meshComponent)
       continue;
@@ -695,7 +693,7 @@ void Renderer::RecordForwardPass() {
         entity->GetComponent<TransformComponent>()->GetTransformmatrix();
 
     MeshPushConstants push{};
-    push.Mvp = proj * view * model;
+    push.Mvp = m_ActiveCamera.Proj * m_ActiveCamera.View * model;
     push.Model = model;
 
     vkCmdPushConstants(m_CommandBuffers[m_FrameIndex], m_ForwardLayout,
@@ -731,12 +729,12 @@ void Renderer::RecordForwardPass() {
   vkCmdBindPipeline(m_CommandBuffers[m_FrameIndex],
                     VK_PIPELINE_BIND_POINT_GRAPHICS, m_GridPipeline);
 
-  //TODO: Inverse should not be calculated per frame
+  // TODO: Inverse should not be calculated per frame
   GridPushConstants gridPushConstants{
-      .View = view,
-      .Proj = proj,
-      .ViewInv = glm::inverse(view),
-      .ProjInv = glm::inverse(proj),
+      .View = m_ActiveCamera.View,
+      .Proj = m_ActiveCamera.Proj,
+      .ViewInv = glm::inverse(m_ActiveCamera.View),
+      .ProjInv = glm::inverse(m_ActiveCamera.Proj),
   };
   vkCmdPushConstants(m_CommandBuffers[m_FrameIndex], m_GridLayout,
                      VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,

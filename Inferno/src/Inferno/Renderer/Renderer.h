@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Inferno/Renderer/CullingSystem.h"
+#include "Inferno/ECS/Entity.h"
 #include "Inferno/Renderer/DeviceContext.h"
 #include "Inferno/Resource/ResourceManager.h"
 #include <array>
@@ -14,6 +14,11 @@ struct GridPushConstants {
   glm::mat4 Proj;
   glm::mat4 ViewInv;
   glm::mat4 ProjInv;
+};
+
+struct RenderCamera {
+  glm::mat4 View;
+  glm::mat4 Proj;
 };
 
 class Renderer {
@@ -33,6 +38,8 @@ public:
 
   void SignalResize() { m_Resized = true; }
 
+  void SetActiveCamera(RenderCamera camera) { m_ActiveCamera = camera; }
+
 private:
   void CreateForwardPipeline();
   void CreateGridPipeline();
@@ -47,7 +54,7 @@ private:
                              VkPipelineStageFlags2 srcStageMask,
                              VkPipelineStageFlags2 dstStageMask);
 
-  void RecordForwardPass();
+  void RecordForwardPass(const std::vector<Entity *> &entities);
 
   void Resize();
 
@@ -56,7 +63,6 @@ private:
 
   static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
 
-  Scope<CullingSystem> m_CullingSystem = nullptr;
   ResourceManager *m_ResourceManager = nullptr;
 
   VkPipeline m_ForwardPipeline = VK_NULL_HANDLE;
@@ -79,6 +85,6 @@ private:
 
   bool m_Resized = false;
 
-  std::vector<Entity *> m_VisibleEntites;
+  RenderCamera m_ActiveCamera;
 };
 } // namespace Inferno

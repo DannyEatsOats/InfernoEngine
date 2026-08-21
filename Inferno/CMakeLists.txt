@@ -27,8 +27,6 @@ add_library(Inferno
         src/Inferno/Renderer/Buffer.h
         src/Inferno/Renderer/Buffer.cpp
         src/Inferno/Renderer/Camera.h
-        src/Inferno/Renderer/CullingSystem.h
-        src/Inferno/Renderer/CullingSystem.cpp
         src/Inferno/Renderer/DeviceContext.h
         src/Inferno/Renderer/DeviceContext.cpp
         src/Inferno/Renderer/Image.h
@@ -51,6 +49,8 @@ add_library(Inferno
         # TOOLS
         src/Inferno/Tools/GeometryGenerator.h
         src/Inferno/Tools/GeometryGenerator.cpp
+        src/Inferno/Tools/EditorCamera.h
+        src/Inferno/Tools/EditorCamera.cpp
         # EVENTS
         src/Inferno/Events/Event.h
         src/Inferno/Events/ApplicationEvent.h

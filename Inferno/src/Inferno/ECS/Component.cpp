@@ -54,11 +54,12 @@ glm::mat4 TransformComponent::GetTransformmatrix() const {
 // -------- CAMERA COMPONENT --------
 void CameraComponent::SetPerspective(float fov, float aspect, float near,
                                      float far) {
-  m_FOV = fov;
-  m_AspectRatio = aspect;
-  m_NearPlane = near;
-  m_FarPlane = far;
-  m_ProjectionDirty = true;
+  m_Camera.SetPerspective(fov, aspect, near, far);
+}
+
+void CameraComponent::SetOrthographic(float size, float aspect, float nearPlane,
+                                      float farPlane) {
+  m_Camera.SetOrthographic(size, aspect, nearPlane, farPlane);
 }
 
 glm::mat4 CameraComponent::GetViewMatrix() const {
@@ -81,13 +82,7 @@ glm::mat4 CameraComponent::GetViewMatrix() const {
 }
 
 glm::mat4 CameraComponent::GetProjectionMatrix() const {
-  if (m_ProjectionDirty) {
-    m_ProjectionMatrix = glm::perspective(glm::radians(m_FOV), m_AspectRatio,
-                                          m_NearPlane, m_FarPlane);
-    m_ProjectionMatrix[1][1] *= -1;
-    m_ProjectionDirty = false;
-  }
-  return m_ProjectionMatrix;
+  return m_Camera.GetProjectionMatrix();
 }
 
 // -------- MESH COMPONENT --------

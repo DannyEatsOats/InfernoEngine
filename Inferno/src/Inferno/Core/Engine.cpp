@@ -83,7 +83,7 @@ private:
   std::chrono::high_resolution_clock::time_point m_FrameStart;
 };
 
-Engine::Engine() : m_EngineArena(GiB(1)), m_FrameArena(GiB(1)) { StartUp(); }
+Engine::Engine() { StartUp(); }
 
 void Engine::StartUp() {
   Log::Init();
@@ -96,6 +96,12 @@ void Engine::StartUp() {
   m_ResourceManager = MakeScope<ResourceManager>(m_RenderingContext.get());
   m_Renderer = MakeScope<Renderer>(m_RenderingContext.get());
   m_Renderer->StartUp(m_ResourceManager.get());
+  m_EditorCamera = MakeScope<EditorCamera>();
+  m_EditorCamera->Init(
+      45.0f, (float)m_Window->GetWidth() / (float)m_Window->GetHeight(), 0.1f,
+      100.0f);
+  m_Renderer->SetActiveCamera(
+      {m_EditorCamera->GetViewMatrix(), m_EditorCamera->GetProjectionMatrix()});
   Input::SetWindowHandle(m_Window->GetNativeWindow());
 }
 
@@ -133,6 +139,10 @@ void Engine::Run() {
 
       if (m_ActiveScene)
         m_ActiveScene->OnUpdate(deltaTime);
+
+      m_EditorCamera->OnUpdate(deltaTime);
+      m_Renderer->SetActiveCamera({m_EditorCamera->GetViewMatrix(),
+                                   m_EditorCamera->GetProjectionMatrix()});
 
       m_Renderer->Render(m_ActiveScene->GetEntities());
     }
@@ -195,6 +205,8 @@ bool Engine::OnWindowResize(WindowResizeEvent &event) {
   }
   m_Minimized = false;
   m_Renderer->SignalResize();
+  m_EditorCamera->SetViewportSize((float)event.GetWidth(),
+                                  (float)event.GetHeight());
 
   return false;
 }

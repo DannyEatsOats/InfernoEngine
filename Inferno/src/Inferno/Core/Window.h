@@ -18,23 +18,23 @@ public:
   using EventCallbackFn = std::function<void(Event &)>;
 
   Window(const WindowProperties &properties);
-  virtual ~Window();
+  ~Window();
 
-  virtual void OnUpdate();
+  void OnUpdate();
 
-  virtual uint32_t GetWidth() const;
+  uint32_t GetWidth() const;
 
-  virtual uint32_t GetHeight() const;
+  uint32_t GetHeight() const;
 
-  virtual inline GLFWwindow *GetNativeWindow() const { return m_Window; }
+  inline GLFWwindow *GetNativeWindow() const { return m_Window; }
 
-  virtual void SetEventCallback(const EventCallbackFn &callback);
+  void SetEventCallback(const EventCallbackFn &callback);
 
-  virtual void SetVSync(bool enabled);
+  void SetVSync(bool enabled);
 
-  virtual bool IsVSync() const;
+  bool IsVSync() const;
 
-  virtual void GetFrameBufferSize(int *width, int *height) const;
+  void GetFrameBufferSize(int *width, int *height) const;
 
   static std::unique_ptr<Window>
   Create(const WindowProperties &properties = WindowProperties());

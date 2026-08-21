@@ -29,13 +29,11 @@ public:
   using MemMarker = size_t;
 
   explicit ArenaAllocator(size_t capacity) : m_Capacity(capacity) {
-    m_Buffer = static_cast<std::byte *>(::operator new(capacity));
+    m_Buffer = static_cast<std::byte *>(
+        ::operator new(capacity, std::align_val_t{ALIGNMENT}));
   }
 
-  ~ArenaAllocator() {
-    ::operator delete(m_Buffer);
-    m_Buffer = nullptr;
-  }
+  ~ArenaAllocator() { Release(); }
 
   ArenaAllocator(const ArenaAllocator &) = delete;
   ArenaAllocator &operator=(const ArenaAllocator &) = delete;
@@ -43,7 +41,17 @@ public:
   ArenaAllocator(ArenaAllocator &&) = delete;
   ArenaAllocator &operator=(ArenaAllocator &&) = delete;
 
-  template <typename T, typename... Args> T *Allocate(Args &&...args) {
+  template <typename T> T *Allocate() {
+    static_assert(
+        std::is_trivially_destructible_v<T>,
+        "ArenaAllocator::Allocate<T>: T has a non-trivial destructor. "
+        "Reset()/RewindTo() will never call it — give T an explicit "
+        "Destroy().");
+    static_assert(
+        std::is_nothrow_default_constructible_v<T>,
+        "ArenaAllocator::Allocate<T>: T's default constructor must not throw "
+        "(arena allocation has no exception-safety path).");
+
     // Allocate 1 T and initialize it with Args
     // return T*;
     uintptr_t currentAddress =
@@ -63,15 +71,18 @@ public:
     void *ptr = m_Buffer + m_Position;
     m_Position += sizeof(T);
 
-    return ::new (ptr) T(std::forward<Args>(args)...);
+    return ::new (ptr) T();
   }
 
   // Override aligment for SIMD types
   std::byte *AllocateBytes(size_t byteCount,
                            size_t alignment = alignof(std::max_align_t)) {
+    assert(alignment != 0);
+    assert((alignment & (alignment - 1)) == 0);
+
     uintptr_t currentAddress =
         reinterpret_cast<uintptr_t>(m_Buffer + m_Position);
-    size_t padding = (alignment - (currentAddress % alignment)) % alignment;
+    size_t padding = (-currentAddress) & (alignment - 1);
 
     size_t newPosition = m_Position + padding + byteCount;
     if (newPosition > m_Capacity) {
@@ -92,6 +103,15 @@ public:
   void RewindTo(MemMarker marker) { m_Position = marker; }
 
   void Reset() { m_Position = 0; }
+
+  void Release() {
+    if (m_Buffer) {
+      ::operator delete(m_Buffer, std::align_val_t{ALIGNMENT});
+      m_Buffer = nullptr;
+      m_Capacity = 0;
+      m_Position = 0;
+    }
+  }
 
 private:
   static constexpr size_t ALIGNMENT = alignof(std::max_align_t);

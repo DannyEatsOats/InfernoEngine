@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Inferno/Renderer/Camera.h"
 #include "Inferno/Renderer/Texture.h"
 #include "Inferno/Utils/DeltaTime.h"
 #include "glm/ext/matrix_float4x4.hpp"
@@ -97,18 +98,13 @@ private:
 class CameraComponent : public Component {
 public:
   void SetPerspective(float fov, float aspect, float near, float far);
+  void SetOrthographic(float size, float aspect, float nearPlane,
+                       float farPlane);
   glm::mat4 GetViewMatrix() const;
   glm::mat4 GetProjectionMatrix() const;
 
 private:
-  float m_FOV = 45.0f;
-  float m_AspectRatio = 16.0f / 9.0f;
-  float m_NearPlane = 0.1f;
-  float m_FarPlane = 100.0f;
-
-  glm::mat4 m_ViewMatrix = glm::mat4(1.0f);
-  mutable glm::mat4 m_ProjectionMatrix = glm::mat4(1.0f);
-  mutable bool m_ProjectionDirty = false;
+  Camera m_Camera;
 };
 
 // -------- MESH COMPONENT --------

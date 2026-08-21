@@ -4,6 +4,8 @@
 #include <cstddef>
 #include <glm/glm.hpp>
 #include <initializer_list>
+#include <stdexcept>
+#include <string>
 #include <vector>
 #include <vulkan/vulkan_core.h>
 

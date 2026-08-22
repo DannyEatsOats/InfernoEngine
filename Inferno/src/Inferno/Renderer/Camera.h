@@ -94,23 +94,29 @@ public:
     m_ProjectionDirty = true;
   }
 
-  glm::mat4 GetProjectionMatrix() const {
-    if (m_ProjectionDirty) {
-      if (m_Type == CamType::PERSPECTIVE) {
-        m_ProjectionMatrix = glm::perspective(
-            glm::radians(m_FOV), m_AspectRatio, m_NearPlane, m_FarPlane);
-      } else {
-        m_ProjectionMatrix =
-            glm::ortho(m_OrthoLeft, m_OrthoRight, m_OrthoBottom, m_OrthoTop,
-                       m_NearPlane, m_FarPlane);
-      }
-      m_ProjectionMatrix[1][1] *= -1; // Vulkan Y-flip applies to both
-      m_ProjectionDirty = false;
+  const glm::mat4 &GetProjectionMatrix() const {
+    if (!m_ProjectionDirty) {
+      return m_ProjectionMatrix;
     }
+
+    if (m_Type == CamType::PERSPECTIVE) {
+      m_ProjectionMatrix = glm::perspective(glm::radians(m_FOV), m_AspectRatio,
+                                            m_NearPlane, m_FarPlane);
+    } else {
+      m_ProjectionMatrix = glm::ortho(m_OrthoLeft, m_OrthoRight, m_OrthoBottom,
+                                      m_OrthoTop, m_NearPlane, m_FarPlane);
+    }
+    m_ProjectionMatrix[1][1] *= -1; // Vulkan Y-flip applies to both
+    m_ProjectionDirty = false;
+
     return m_ProjectionMatrix;
   }
 
   CamType GetType() const { return m_Type; }
+
+  float GetFOV() const { return m_FOV; }
+  float GetNear() const { return m_NearPlane; }
+  float GetFar() const { return m_FarPlane; }
 
 private:
   mutable glm::mat4 m_ProjectionMatrix = glm::mat4(1.0f);

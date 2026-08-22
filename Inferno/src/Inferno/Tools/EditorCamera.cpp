@@ -1,11 +1,10 @@
 // EditorCamera.cpp
 #include "EditorCamera.h"
-#include <pch.h>
-#include "EditorCamera.h"
 #include "GLFW/glfw3.h"
 #include "Inferno/Events/Input.h"
 #include "Inferno/Events/KeyCodes.h"
 #include "Inferno/Events/MouseEvent.h"
+#include <pch.h>
 
 namespace Inferno {
 
@@ -26,7 +25,6 @@ void EditorCamera::UpdateBasisVectors() {
 }
 
 void EditorCamera::OnUpdate(DeltaTime dt) {
-  // Unreal-style: WASD/QE only move the camera while RMB is held.
   if (!m_IsRotating)
     return;
 
@@ -54,7 +52,9 @@ void EditorCamera::OnEvent(Event &e) {
   dispatcher.Dispatch<MouseButtonPressedEvent>(
       [this](MouseButtonPressedEvent &ev) { return OnMouseButtonPressed(ev); });
   dispatcher.Dispatch<MouseButtonReleasedEvent>(
-      [this](MouseButtonReleasedEvent &ev) { return OnMouseButtonReleased(ev); });
+      [this](MouseButtonReleasedEvent &ev) {
+        return OnMouseButtonReleased(ev);
+      });
 }
 
 bool EditorCamera::OnMouseButtonPressed(MouseButtonPressedEvent &e) {
@@ -74,8 +74,8 @@ bool EditorCamera::OnMouseButtonReleased(MouseButtonReleasedEvent &e) {
 
 bool EditorCamera::OnMouseMoved(MouseMovedEvent &e) {
   if (!m_IsRotating) {
-    m_LastMouseX = e.GetX();
-    m_LastMouseY = e.GetY();
+    //m_LastMouseX = e.GetX();
+    //m_LastMouseY = e.GetY();
     return false;
   }
 
@@ -104,6 +104,7 @@ bool EditorCamera::OnMouseScrolled(MouseScrolledEvent &e) {
 }
 
 void EditorCamera::SetViewportSize(float width, float height) {
+  // BUG: Fov is not set currectly here, check with init it gets overriden
   m_Camera.SetPerspective(45.0f, width / height, 0.1f,
                           1000.0f); // or track/reuse existing FOV/near/far
 }

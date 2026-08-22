@@ -98,12 +98,11 @@ void Engine::StartUp() {
   m_ResourceManager = MakeScope<ResourceManager>(m_RenderingContext.get());
   m_Renderer = MakeScope<Renderer>(m_RenderingContext.get());
   m_Renderer->StartUp(m_ResourceManager.get());
-  m_EditorCamera = MakeScope<EditorCamera>();
-  m_EditorCamera->Init(
-      45.0f, (float)m_Window->GetWidth() / (float)m_Window->GetHeight(), 0.1f,
-      100.0f);
+  m_EditorCamera = MakeScope<DannyCamera>();
+  m_EditorCamera->Init((float)m_Window->GetWidth() /
+                       (float)m_Window->GetHeight());
   m_Renderer->SetActiveCamera(
-      {m_EditorCamera->GetViewMatrix(), m_EditorCamera->GetProjectionMatrix()});
+      {m_EditorCamera->GetViewMat(), m_EditorCamera->GetProjectionMat()});
   Input::SetWindowHandle(m_Window->GetNativeWindow());
 }
 
@@ -139,16 +138,15 @@ void Engine::Run() {
         SwitchScene();
       }
 
-      if (m_ActiveScene && !m_Editing)
-        m_ActiveScene->OnUpdate(deltaTime);
-
-      if (m_Editing)
+      switch (m_RuntimeMode) {
+      case Inferno::RuntimeMode::EDITOR:
         m_EditorCamera->OnUpdate(deltaTime);
-
-      if (m_Editing) {
-        m_Renderer->SetActiveCamera({m_EditorCamera->GetViewMatrix(),
-                                     m_EditorCamera->GetProjectionMatrix()});
-      } else {
+        m_Renderer->SetActiveCamera(
+            {m_EditorCamera->GetViewMat(), m_EditorCamera->GetProjectionMat()});
+        break;
+      case Inferno::RuntimeMode::GAME:
+        if (m_ActiveScene)
+          m_ActiveScene->OnUpdate(deltaTime);
         // TODO: MOCK GAME CAMERA
         glm::mat4 proj = glm::perspective(
             glm::radians(45.0f),
@@ -160,14 +158,16 @@ void Engine::Run() {
                                      glm::vec3(0.0f, 0.0f, 0.0f),
                                      glm::vec3(0.0f, 1.0f, 0.0f));
         m_Renderer->SetActiveCamera({view, proj});
+        break;
       }
 
-      m_Renderer->Render(m_ActiveScene->GetEntities());
-    }
+      if (m_ActiveScene)
+        m_Renderer->Render(m_ActiveScene->GetEntities());
 
-    m_Window->OnUpdate();
-    // limiter.endFrame();
-    FrameMark;
+      m_Window->OnUpdate();
+      // limiter.endFrame();
+      FrameMark;
+    }
   }
   ShutDown();
 }
@@ -183,7 +183,14 @@ void Engine::OnEvent(Event &event) {
 
   dispatcher.Dispatch<KeyPressedEvent>([this](KeyPressedEvent &event) {
     if (event.GetKeyCode() == ENGINE_KEY_F12) {
-      m_Editing = !m_Editing;
+      switch (m_RuntimeMode) {
+      case Inferno::RuntimeMode::EDITOR:
+        m_RuntimeMode = RuntimeMode::GAME;
+        break;
+      case Inferno::RuntimeMode::GAME:
+        m_RuntimeMode = RuntimeMode::EDITOR;
+        break;
+      }
       return true;
     }
     return false;
@@ -197,14 +204,17 @@ void Engine::OnEvent(Event &event) {
       });
   */
 
-  if (m_Editing) {
+  switch (m_RuntimeMode) {
+  case Inferno::RuntimeMode::EDITOR:
     if (!event.IsHandled()) {
       m_EditorCamera->OnEvent(event);
     }
-  } else {
+    break;
+  case Inferno::RuntimeMode::GAME:
     if (!event.IsHandled() && m_ActiveScene) {
       m_ActiveScene->OnEvent(event);
     }
+    break;
   }
 }
 
@@ -237,7 +247,7 @@ bool Engine::OnWindowResize(WindowResizeEvent &event) {
   }
   m_Minimized = false;
   m_Renderer->SignalResize();
-  m_EditorCamera->SetViewportSize((float)event.GetWidth(),
+  m_EditorCamera->SetViewPortSize((float)event.GetWidth(),
                                   (float)event.GetHeight());
 
   return false;

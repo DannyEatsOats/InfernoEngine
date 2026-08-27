@@ -100,8 +100,11 @@ public:
   void SetPerspective(float fov, float aspect, float near, float far);
   void SetOrthographic(float size, float aspect, float nearPlane,
                        float farPlane);
+  void SetAspectRatio(float aspect);
   glm::mat4 GetViewMatrix() const;
   glm::mat4 GetProjectionMatrix() const;
+
+  const Camera &GetCamera() const { return m_Camera; }
 
 private:
   Camera m_Camera;

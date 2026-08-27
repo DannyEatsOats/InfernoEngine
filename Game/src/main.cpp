@@ -1,4 +1,5 @@
 #include "Inferno/Core/Memory.h"
+#include "Inferno/ECS/Entity.h"
 #include "Inferno/ECS/Scene.h"
 #include "Inferno/Events/ApplicationEvent.h"
 #include "Inferno/Events/Input.h"
@@ -16,24 +17,39 @@ public:
   virtual ~GameScene() = default;
 
   void OnAttach() override {
-    Entity *knight = CreateEntity("knight");
-    auto *transform = knight->AddComponent<TransformComponent>();
+    // Setting Active Gameplay Camera
+    {
+      Entity *mainCamera = CreateEntity("MainCamera");
+      auto camera = mainCamera->AddComponent<CameraComponent>();
+      auto transform = mainCamera->GetComponent<TransformComponent>();
 
-    auto rotation = transform->GetRotation();
-    glm::quat rotationInc =
-        glm::angleAxis(glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-    glm::quat newRotation = rotationInc * rotation;
-    transform->SetRotation(newRotation);
+      transform->SetPosition(glm::vec3(0.0f, 1.0f, 3.0f));
 
-    rotation = transform->GetRotation();
-    rotationInc =
-        glm::angleAxis(glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    newRotation = rotationInc * rotation;
-    transform->SetRotation(newRotation);
+      camera->SetPerspective(45.0f, 1920.0f / 1080.0f, 0.1f, 100.0f);
+      SetActiveCamera(mainCamera);
+    }
 
-    auto mesh = m_ResourceManager->Load<Mesh>("zsamo");
-    auto texture = m_ResourceManager->Load<Texture>("zsamo");
-    knight->AddComponent<MeshComponent>(mesh, texture);
+    // Adding In Game Entities
+    {
+      Entity *knight = CreateEntity("knight");
+      auto *transform = knight->AddComponent<TransformComponent>();
+
+      auto rotation = transform->GetRotation();
+      glm::quat rotationInc =
+          glm::angleAxis(glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+      glm::quat newRotation = rotationInc * rotation;
+      transform->SetRotation(newRotation);
+
+      rotation = transform->GetRotation();
+      rotationInc =
+          glm::angleAxis(glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+      newRotation = rotationInc * rotation;
+      transform->SetRotation(newRotation);
+
+      auto mesh = m_ResourceManager->Load<Mesh>("zsamo");
+      auto texture = m_ResourceManager->Load<Texture>("zsamo");
+      knight->AddComponent<MeshComponent>(mesh, texture);
+    }
   }
 
   void OnDetach() override {}
@@ -74,19 +90,21 @@ public:
       rotationAxis.z -= 1.0f;
 
     for (auto &entity : GetEntities()) {
-      auto transform = entity->GetComponent<TransformComponent>();
+      if (entity->GetName() == "knight") {
+        auto transform = entity->GetComponent<TransformComponent>();
 
-      if (glm::length(movement) > 0.0f) {
-        transform->SetPosition(transform->GetPosition() + movement);
-      }
+        if (glm::length(movement) > 0.0f) {
+          transform->SetPosition(transform->GetPosition() + movement);
+        }
 
-      if (glm::length(rotationAxis) > 0.0f) {
-        glm::vec3 normAxis = glm::normalize(rotationAxis);
+        if (glm::length(rotationAxis) > 0.0f) {
+          glm::vec3 normAxis = glm::normalize(rotationAxis);
 
-        glm::quat deltaRotation = glm::angleAxis(rotationSpeed, normAxis);
+          glm::quat deltaRotation = glm::angleAxis(rotationSpeed, normAxis);
 
-        glm::quat currentRotation = transform->GetRotation();
-        transform->SetRotation(deltaRotation * currentRotation);
+          glm::quat currentRotation = transform->GetRotation();
+          transform->SetRotation(deltaRotation * currentRotation);
+        }
       }
     }
   }

@@ -94,6 +94,11 @@ public:
     m_ProjectionDirty = true;
   }
 
+  void SetAspectRatio(float aspect) {
+    m_AspectRatio = aspect;
+    m_ProjectionDirty = true;
+  }
+
   const glm::mat4 &GetProjectionMatrix() const {
     if (!m_ProjectionDirty) {
       return m_ProjectionMatrix;

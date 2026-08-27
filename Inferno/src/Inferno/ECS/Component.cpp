@@ -62,6 +62,10 @@ void CameraComponent::SetOrthographic(float size, float aspect, float nearPlane,
   m_Camera.SetOrthographic(size, aspect, nearPlane, farPlane);
 }
 
+void CameraComponent::SetAspectRatio(float aspect) {
+  m_Camera.SetAspectRatio(aspect);
+}
+
 glm::mat4 CameraComponent::GetViewMatrix() const {
   auto transform = GetEntity()->GetComponent<TransformComponent>();
   if (!transform) {

@@ -138,6 +138,10 @@ void Engine::Run() {
         SwitchScene();
       }
 
+      // TODO: Maybe I could query the active camera component from the ECS
+      // world and pass that here, so Renderer doesn't have to know about editor
+      // state
+
       switch (m_RuntimeMode) {
       case Inferno::RuntimeMode::EDITOR:
         m_EditorCamera->OnUpdate(deltaTime);
@@ -145,9 +149,30 @@ void Engine::Run() {
             {m_EditorCamera->GetViewMat(), m_EditorCamera->GetProjectionMat()});
         break;
       case Inferno::RuntimeMode::GAME:
-        if (m_ActiveScene)
-          m_ActiveScene->OnUpdate(deltaTime);
-        // TODO: MOCK GAME CAMERA
+        if (!m_ActiveScene) {
+          INFERNO_LOG_WARN("Active Scene Is Not Set");
+          break;
+        }
+        m_ActiveScene->OnUpdate(deltaTime);
+        auto activeCamera = m_ActiveScene->GetActiveCamera();
+        auto cameraComponent = activeCamera->GetComponent<CameraComponent>();
+
+        if (!cameraComponent) {
+          INFERNO_LOG_ERROR("Active Camera Has No Camera Component");
+        }
+
+        // TODO: Investigate where the View Matrix should be set.
+        // Lowkey have no Idea what default is being set now
+        // It follows the Knight because the gameplay script updates all entity
+        // positions xD brah
+        // TODO: View matrix should be derived from the camera entity's
+        // transform component
+
+        m_Renderer->SetActiveCamera({cameraComponent->GetViewMatrix(),
+                                     cameraComponent->GetProjectionMatrix()});
+        break;
+
+        // TODO: REMOVE MOCK GAME CAMERA
         glm::mat4 proj = glm::perspective(
             glm::radians(45.0f),
             (float)m_RenderingContext->Swapchain.Extent.width /
@@ -249,6 +274,9 @@ bool Engine::OnWindowResize(WindowResizeEvent &event) {
   m_Renderer->SignalResize();
   m_EditorCamera->SetViewPortSize((float)event.GetWidth(),
                                   (float)event.GetHeight());
+
+  m_ActiveScene->SetViewPortSize((float)event.GetWidth(),
+                                 (float)event.GetHeight());
 
   return false;
 }

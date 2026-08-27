@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Inferno/Core/Log.h"
 #include "Inferno/ECS/Entity.h"
 #include "Inferno/Events/Event.h"
 #include "Inferno/Resource/ResourceManager.h"
@@ -14,6 +15,32 @@ public:
 
   Scene(const std::string &name) : m_Name(std::move(name)) {}
   virtual ~Scene() = default;
+
+  Entity *GetActiveCamera() {
+    if (!m_ActiveCamera)
+      INFERNO_LOG_ERROR("[GetActiveCamera] Active Camera Not Set In Scene");
+
+    return m_ActiveCamera;
+  }
+
+  void SetActiveCamera(Entity *cameraEntity) { m_ActiveCamera = cameraEntity; }
+
+  void SetViewPortSize(float width, float height) {
+    if (!m_ActiveCamera) {
+      INFERNO_LOG_ERROR("[SetViewPortSize] Active Camera Not Set In Scene");
+      return;
+    }
+
+    auto cameraComponent = m_ActiveCamera->GetComponent<CameraComponent>();
+
+    if (!cameraComponent) {
+      INFERNO_LOG_ERROR(
+          "[SetViewPortSize] Active Camera Does Not Have Camera Component");
+      return;
+    }
+
+    cameraComponent->SetAspectRatio(width / height);
+  }
 
   virtual void OnAttach() = 0;
   virtual void OnDetach() = 0;
@@ -43,6 +70,7 @@ protected:
   std::vector<Entity *> m_Entities;
   ResourceManager *m_ResourceManager = nullptr;
   std::string m_Name;
+  Entity *m_ActiveCamera = nullptr;
 
   EventCallbackFn m_CallbackFn = nullptr;
 

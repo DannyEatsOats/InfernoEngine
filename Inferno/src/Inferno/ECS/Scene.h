@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Inferno/Core/Log.h"
+#include "Inferno/Core/Memory.h"
 #include "Inferno/ECS/Entity.h"
 #include "Inferno/Events/Event.h"
 #include "Inferno/Resource/ResourceManager.h"
@@ -14,7 +15,11 @@ public:
   using EventCallbackFn = std::function<void(Event &)>;
 
   Scene(const std::string &name) : m_Name(std::move(name)) {}
-  virtual ~Scene() = default;
+  virtual ~Scene() {
+    for (auto entity : m_Entities) {
+      delete entity;
+    }
+  }
 
   Entity *GetActiveCamera() {
     if (!m_ActiveCamera)
@@ -50,6 +55,8 @@ public:
 
   virtual void OnUpdate(DeltaTime deltaTime);
   virtual void OnEvent(Event &event) {}
+
+  virtual Scope<Scene> Clone() = 0;
 
   Entity *CreateEntity(const std::string &id);
   const std::vector<Entity *> &GetEntities() const { return m_Entities; }

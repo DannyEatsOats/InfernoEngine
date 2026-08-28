@@ -161,28 +161,8 @@ void Engine::Run() {
           INFERNO_LOG_ERROR("Active Camera Has No Camera Component");
         }
 
-        // TODO: Investigate where the View Matrix should be set.
-        // Lowkey have no Idea what default is being set now
-        // It follows the Knight because the gameplay script updates all entity
-        // positions xD brah
-        // TODO: View matrix should be derived from the camera entity's
-        // transform component
-
         m_Renderer->SetActiveCamera({cameraComponent->GetViewMatrix(),
                                      cameraComponent->GetProjectionMatrix()});
-        break;
-
-        // TODO: REMOVE MOCK GAME CAMERA
-        glm::mat4 proj = glm::perspective(
-            glm::radians(45.0f),
-            (float)m_RenderingContext->Swapchain.Extent.width /
-                (float)m_RenderingContext->Swapchain.Extent.height,
-            0.1f, 10.0f);
-        proj[1][1] *= -1;
-        glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 1.0f, 3.0f),
-                                     glm::vec3(0.0f, 0.0f, 0.0f),
-                                     glm::vec3(0.0f, 1.0f, 0.0f));
-        m_Renderer->SetActiveCamera({view, proj});
         break;
       }
 
@@ -210,10 +190,10 @@ void Engine::OnEvent(Event &event) {
     if (event.GetKeyCode() == ENGINE_KEY_F12) {
       switch (m_RuntimeMode) {
       case Inferno::RuntimeMode::EDITOR:
-        m_RuntimeMode = RuntimeMode::GAME;
+        OnRuntimeStart();
         break;
       case Inferno::RuntimeMode::GAME:
-        m_RuntimeMode = RuntimeMode::EDITOR;
+        OnRuntimeStop();
         break;
       }
       return true;
@@ -248,6 +228,8 @@ void Engine::SwitchScene() {
     m_ActiveScene->OnDetach();
   }
 
+  m_SceneSnapshop = nullptr;
+
   m_ActiveScene = std::move(m_NextScene);
   m_NextScene = nullptr;
 
@@ -281,4 +263,30 @@ bool Engine::OnWindowResize(WindowResizeEvent &event) {
   return false;
 }
 
+void Engine::OnRuntimeStart() {
+  if (!m_ActiveScene) {
+    INFERNO_LOG_ERROR("[OnRuntimeStart] Active Scene is Not set");
+    return;
+  }
+
+  m_SceneSnapshop = m_ActiveScene->Clone();
+
+  m_RuntimeMode = RuntimeMode::GAME;
+
+  INFERNO_LOG_INFO("Started Gamplay Runtime");
+}
+
+void Engine::OnRuntimeStop() {
+  if (!m_SceneSnapshop) {
+    INFERNO_LOG_ERROR("[OnRuntimeStop] Scene Snapshot has not been created");
+    return;
+  }
+
+  m_ActiveScene = std::move(m_SceneSnapshop);
+  m_SceneSnapshop = nullptr;
+
+  m_RuntimeMode = RuntimeMode::EDITOR;
+
+  INFERNO_LOG_INFO("Stoped Gamplay Runtime");
+}
 } // namespace Inferno

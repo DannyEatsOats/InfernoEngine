@@ -16,6 +16,24 @@ public:
   GameScene(const std::string &name) : Inferno::Scene(name) {}
   virtual ~GameScene() = default;
 
+  Scope<Scene> Clone() override {
+    Scope<GameScene> snapshot = MakeScope<GameScene>(m_Name);
+
+    snapshot->m_ResourceManager = m_ResourceManager;
+    snapshot->m_CallbackFn = m_CallbackFn;
+
+    for (auto entity : m_Entities) {
+      Entity *clonedEntity = entity->Clone();
+      snapshot->m_Entities.push_back(clonedEntity);
+
+      if (entity == m_ActiveCamera) {
+        snapshot->m_ActiveCamera = clonedEntity;
+      }
+    }
+
+    return snapshot;
+  }
+
   void OnAttach() override {
     // Setting Active Gameplay Camera
     {

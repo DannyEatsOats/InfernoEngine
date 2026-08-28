@@ -668,19 +668,6 @@ void Renderer::RecordForwardPass(const std::vector<Entity *> &entities) {
   };
   vkCmdSetScissor(m_CommandBuffers[m_FrameIndex], 0, 1, &scissor);
 
-  // TODO: Mock Camera Setup, should not be calculated every frame
-  /*
-  glm::mat4 proj =
-      glm::perspective(glm::radians(45.0f),
-                       (float)m_Context->Swapchain.Extent.width /
-                           (float)m_Context->Swapchain.Extent.height,
-                       0.1f, 10.0f);
-  proj[1][1] *= -1;
-  glm::mat4 view =
-      glm::lookAt(glm::vec3(0.0f, 1.0f, 3.0f), glm::vec3(0.0f, 0.0f, 0.0f),
-                  glm::vec3(0.0f, 1.0f, 0.0f));
-                  */
-
   for (auto *entity : entities) {
     MeshComponent *meshComponent = entity->GetComponent<MeshComponent>();
     if (!meshComponent)
@@ -726,21 +713,24 @@ void Renderer::RecordForwardPass(const std::vector<Entity *> &entities) {
   }
 
   // Drawing Grid
-  vkCmdBindPipeline(m_CommandBuffers[m_FrameIndex],
-                    VK_PIPELINE_BIND_POINT_GRAPHICS, m_GridPipeline);
+  {
+    vkCmdBindPipeline(m_CommandBuffers[m_FrameIndex],
+                      VK_PIPELINE_BIND_POINT_GRAPHICS, m_GridPipeline);
 
-  // TODO: Inverse should not be calculated per frame
-  GridPushConstants gridPushConstants{
-      .View = m_ActiveCamera.View,
-      .Proj = m_ActiveCamera.Proj,
-      .ViewInv = glm::inverse(m_ActiveCamera.View),
-      .ProjInv = glm::inverse(m_ActiveCamera.Proj),
-  };
-  vkCmdPushConstants(m_CommandBuffers[m_FrameIndex], m_GridLayout,
-                     VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-                     0, sizeof(GridPushConstants), &gridPushConstants);
+    // TODO: Inverse should not be calculated per frame
+    GridPushConstants gridPushConstants{
+        .View = m_ActiveCamera.View,
+        .Proj = m_ActiveCamera.Proj,
+        .ViewInv = glm::inverse(m_ActiveCamera.View),
+        .ProjInv = glm::inverse(m_ActiveCamera.Proj),
+    };
+    vkCmdPushConstants(m_CommandBuffers[m_FrameIndex], m_GridLayout,
+                       VK_SHADER_STAGE_VERTEX_BIT |
+                           VK_SHADER_STAGE_FRAGMENT_BIT,
+                       0, sizeof(GridPushConstants), &gridPushConstants);
 
-  vkCmdDraw(m_CommandBuffers[m_FrameIndex], 6, 1, 0, 0);
+    vkCmdDraw(m_CommandBuffers[m_FrameIndex], 6, 1, 0, 0);
+  }
 
   // Rendering End
 

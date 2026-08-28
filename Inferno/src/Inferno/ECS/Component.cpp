@@ -9,6 +9,8 @@
 #include "Component.h"
 #include "Entity.h"
 #include "Inferno/Core/Log.h"
+#include "Inferno/Core/Memory.h"
+#include "Inferno/Renderer/Mesh.h"
 
 namespace Inferno {
 // -------- COMPONENT TYPE ID SYSTEM --------
@@ -51,6 +53,18 @@ glm::mat4 TransformComponent::GetTransformmatrix() const {
   return m_TransformMatrix;
 }
 
+Scope<Component> TransformComponent::Clone() {
+  Scope<TransformComponent> cloned = MakeScope<TransformComponent>();
+
+  cloned->m_Position = m_Position;
+  cloned->m_Rotation = m_Rotation;
+  cloned->m_Scale = m_Scale;
+  cloned->m_TransformMatrix = m_TransformMatrix;
+  cloned->m_TransformDirty = m_TransformDirty;
+
+  return cloned;
+}
+
 // -------- CAMERA COMPONENT --------
 void CameraComponent::SetPerspective(float fov, float aspect, float near,
                                      float far) {
@@ -89,6 +103,14 @@ glm::mat4 CameraComponent::GetProjectionMatrix() const {
   return m_Camera.GetProjectionMatrix();
 }
 
+Scope<Component> CameraComponent::Clone() {
+  Scope<CameraComponent> cloned = MakeScope<CameraComponent>();
+
+  cloned->m_Camera = m_Camera;
+
+  return cloned;
+}
+
 // -------- MESH COMPONENT --------
 void MeshComponent::Render() {
   if (!m_Mesh || !/*m_Material*/ m_Texture) {
@@ -109,5 +131,10 @@ void MeshComponent::Render() {
   m_Material->SetUniform("modelMatrix", transform->GetTransformmatrix());
   m_Mesh->Render();
   */
+}
+
+Scope<Component> MeshComponent::Clone() {
+  Scope<MeshComponent> cloned = MakeScope<MeshComponent>(m_Mesh, m_Texture);
+  return cloned;
 }
 } // namespace Inferno

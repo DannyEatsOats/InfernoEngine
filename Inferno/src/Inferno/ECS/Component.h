@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Inferno/Core/Memory.h"
 #include "Inferno/Renderer/Camera.h"
 #include "Inferno/Renderer/Texture.h"
 #include "Inferno/Utils/DeltaTime.h"
@@ -34,6 +35,8 @@ public:
 
 public:
   virtual ~Component();
+
+  virtual Scope<Component> Clone() = 0;
 
   void Initialize();
   void Destroy();
@@ -84,6 +87,8 @@ public:
 
   glm::mat4 GetTransformmatrix() const;
 
+  Scope<Component> Clone() override;
+
 private:
   glm::vec3 m_Position = glm::vec3(0.0f, 0.0f, 0.0f);
   glm::quat m_Rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
@@ -94,7 +99,6 @@ private:
 };
 
 // -------- CAMERA COMPONENT --------
-// TODO: CREATE SEPERATE PERSPECTIVE AND ORTHOGRAPHIC
 class CameraComponent : public Component {
 public:
   void SetPerspective(float fov, float aspect, float near, float far);
@@ -105,6 +109,8 @@ public:
   glm::mat4 GetProjectionMatrix() const;
 
   const Camera &GetCamera() const { return m_Camera; }
+
+  Scope<Component> Clone() override;
 
 private:
   Camera m_Camera;
@@ -127,6 +133,8 @@ public:
   Texture *GetTexture() { return m_Texture; }
 
   virtual void Render() override;
+
+  Scope<Component> Clone() override;
 
 private:
   Mesh *m_Mesh = nullptr;

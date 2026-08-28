@@ -378,9 +378,6 @@ void DeviceContext::CreateSwapchain() {
   swapchainInfo.clipped = VK_TRUE;
   swapchainInfo.oldSwapchain = VK_NULL_HANDLE;
 
-  INFERNO_LOG_ERROR("Width {}, Height {}", swapchainInfo.imageExtent.width,
-                    swapchainInfo.imageExtent.height);
-
   if (vkCreateSwapchainKHR(Device, &swapchainInfo, nullptr,
                            &Swapchain.Handle) != VK_SUCCESS) {
     throw std::runtime_error("Failed to Create SwapChain");

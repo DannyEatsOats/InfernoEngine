@@ -117,9 +117,6 @@ VulkanUtils::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities,
     actualExtent.height =
         std::clamp(actualExtent.height, capabilities.minImageExtent.height,
                    capabilities.maxImageExtent.height);
-    INFERNO_LOG_INFO("Surface extent: {} x {}",
-                     capabilities.currentExtent.width,
-                     capabilities.currentExtent.height);
 
     return actualExtent;
   }

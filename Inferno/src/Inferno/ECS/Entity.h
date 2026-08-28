@@ -63,7 +63,7 @@ public:
       m_ComponentMap.erase(it);
 
       for (auto compIt = m_Components.begin(); compIt != m_Components.end();
-           ++it) {
+           ++compIt) {
         if (compIt->get() == componentPtr) {
           m_Components.erase(compIt);
           return true;
@@ -72,6 +72,33 @@ public:
     }
 
     return false;
+  }
+
+  Entity *Clone() const {
+    Entity *clonedEntity = new Entity(m_Name);
+    clonedEntity->m_Active = m_Active;
+
+    for (const auto &comp : m_Components) {
+      if (!comp) continue;
+
+      std::unique_ptr<Component> clonedComp = comp->Clone();
+      Component *compPtr = clonedComp.get();
+
+      compPtr->SetEntity(clonedEntity);
+
+      size_t typeID = 0;
+      for (const auto &[id, ptr] : m_ComponentMap) {
+        if (ptr == comp.get()) {
+          typeID = id;
+          break;
+        }
+      }
+
+      clonedEntity->m_ComponentMap[typeID] = compPtr;
+      clonedEntity->m_Components.push_back(std::move(clonedComp));
+    }
+
+    return clonedEntity;
   }
 
 private:

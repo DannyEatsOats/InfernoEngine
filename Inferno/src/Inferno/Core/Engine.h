@@ -36,6 +36,9 @@ private:
   bool OnWindowClosed(WindowCloseEvent &event);
   bool OnWindowResize(WindowResizeEvent &event);
 
+  void OnRuntimeStart();
+  void OnRuntimeStop();
+
   void SwitchScene();
 
 private:
@@ -50,6 +53,7 @@ private:
 
   Scope<Scene> m_ActiveScene = nullptr;
   Scope<Scene> m_NextScene = nullptr;
+  Scope<Scene> m_SceneSnapshop = nullptr;
 
   bool m_Running = true;
   bool m_Minimized = false;

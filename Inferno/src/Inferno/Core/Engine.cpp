@@ -14,34 +14,20 @@
 namespace Inferno {
 class FrameLimiter {
 public:
-  /**
-   * @brief Construct a new Frame Limiter object
-   * @param targetFps The desired maximum frame rate (e.g., 60.0)
-   */
   FrameLimiter(double targetFps) {
     setTargetFps(targetFps);
     m_FrameStart = std::chrono::high_resolution_clock::now();
   }
 
-  /**
-   * @brief Dynamically change the target frame rate at runtime
-   */
   void setTargetFps(double targetFps) {
     m_TargetFps = targetFps;
     m_TargetDuration = std::chrono::duration<double>(1.0 / targetFps);
   }
 
-  /**
-   * @brief Call at the absolute beginning of your main loop iteration
-   */
   void startFrame() {
     m_FrameStart = std::chrono::high_resolution_clock::now();
   }
 
-  /**
-   * @brief Call at the absolute end of your main loop iteration
-   * Uses a high-precision hybrid sleep/spin-lock tailored for Linux.
-   */
   void endFrame() {
     const auto frameEnd = std::chrono::high_resolution_clock::now();
     const auto elapsed = frameEnd - m_FrameStart;
@@ -49,22 +35,13 @@ public:
     if (elapsed < m_TargetDuration) {
       const auto remainingTime = m_TargetDuration - elapsed;
 
-      // 1. Precise OS Sleep
-      // Linux kernel high-resolution timers (hrtimers) are incredibly sharp.
-      // We sleep for the majority of the time, leaving a tiny 0.5ms (500us)
-      // buffer.
       if (remainingTime > std::chrono::microseconds(500)) {
         std::this_thread::sleep_for(remainingTime -
                                     std::chrono::microseconds(500));
       }
 
-      // 2. Precise Spin-lock
-      // Burn the remaining <0.5ms in a tight loop to hit the exact microsecond
-      // target.
       while (std::chrono::high_resolution_clock::now() - m_FrameStart <
              m_TargetDuration) {
-// Emit a NOP instruction to let the CPU pipeline optimize hyper-threading
-// and avoid burning excessive watt-hours while spinning.
 #if defined(__GNUC__) || defined(__clang__)
         asm volatile("nop");
 #elif defined(_MSC_VER)
@@ -74,9 +51,6 @@ public:
     }
   }
 
-  /**
-   * @brief Get the current target FPS
-   */
   double getTargetFps() const { return m_TargetFps; }
 
 private:
@@ -108,7 +82,9 @@ void Engine::StartUp() {
 
 void Engine::ShutDown() {
   INFERNO_LOG_INFO("Shutting Down Engine...");
-  m_ActiveScene->OnDetach();
+  if (m_ActiveScene) {
+    m_ActiveScene->OnDetach();
+  }
 
   m_Renderer->ShutDown();
   m_ResourceManager->UnloadAll();
@@ -120,8 +96,6 @@ void Engine::Run() {
   FrameLimiter limiter(160.0);
 
   while (m_Running) {
-    // limiter.startFrame();
-
     ZoneScopedN("Frame Start");
 
     static auto lastTime = std::chrono::high_resolution_clock::now();
@@ -130,17 +104,10 @@ void Engine::Run() {
     lastTime = currentTime;
     const DeltaTime deltaTime = std::min(dt, 0.05f);
 
-    // INFERNO_LOG_INFO("Duration (ms): {}", deltaTime.GetMilliseconds());
-    // INFERNO_LOG_INFO("FPTS:: {}", 1000.0f / deltaTime.GetMilliseconds());
-
     if (!m_Minimized) {
       if (m_NextScene) {
         SwitchScene();
       }
-
-      // TODO: Maybe I could query the active camera component from the ECS
-      // world and pass that here, so Renderer doesn't have to know about editor
-      // state
 
       switch (m_RuntimeMode) {
       case Inferno::RuntimeMode::EDITOR:
@@ -148,21 +115,26 @@ void Engine::Run() {
         m_Renderer->SetActiveCamera(
             {m_EditorCamera->GetViewMat(), m_EditorCamera->GetProjectionMat()});
         break;
+
       case Inferno::RuntimeMode::GAME:
         if (!m_ActiveScene) {
           INFERNO_LOG_WARN("Active Scene Is Not Set");
           break;
         }
+
         m_ActiveScene->OnUpdate(deltaTime);
-        auto activeCamera = m_ActiveScene->GetActiveCamera();
-        auto cameraComponent = activeCamera->GetComponent<CameraComponent>();
 
-        if (!cameraComponent) {
-          INFERNO_LOG_ERROR("Active Camera Has No Camera Component");
+        // Safe null checks for game camera during gameplay
+        if (auto activeCamera = m_ActiveScene->GetActiveCamera()) {
+          if (auto cameraComponent =
+                  activeCamera->GetComponent<CameraComponent>()) {
+            m_Renderer->SetActiveCamera(
+                {cameraComponent->GetViewMatrix(),
+                 cameraComponent->GetProjectionMatrix()});
+          } else {
+            INFERNO_LOG_ERROR("Active Camera Has No Camera Component");
+          }
         }
-
-        m_Renderer->SetActiveCamera({cameraComponent->GetViewMatrix(),
-                                     cameraComponent->GetProjectionMatrix()});
         break;
       }
 
@@ -170,7 +142,6 @@ void Engine::Run() {
         m_Renderer->Render(m_ActiveScene->GetEntities());
 
       m_Window->OnUpdate();
-      // limiter.endFrame();
       FrameMark;
     }
   }
@@ -200,14 +171,6 @@ void Engine::OnEvent(Event &event) {
     }
     return false;
   });
-
-  /*
-  dispatcher.Dispatch<SetLightingDebugModeEvent>(
-      [this](SetLightingDebugModeEvent &event) {
-        m_Renderer->SetLightingDebugMode(event.Mode);
-        return true;
-      });
-  */
 
   switch (m_RuntimeMode) {
   case Inferno::RuntimeMode::EDITOR:
@@ -257,8 +220,10 @@ bool Engine::OnWindowResize(WindowResizeEvent &event) {
   m_EditorCamera->SetViewPortSize((float)event.GetWidth(),
                                   (float)event.GetHeight());
 
-  m_ActiveScene->SetViewPortSize((float)event.GetWidth(),
-                                 (float)event.GetHeight());
+  if (m_ActiveScene) {
+    m_ActiveScene->SetViewPortSize((float)event.GetWidth(),
+                                   (float)event.GetHeight());
+  }
 
   return false;
 }
@@ -269,11 +234,23 @@ void Engine::OnRuntimeStart() {
     return;
   }
 
-  m_SceneSnapshop = m_ActiveScene->Clone();
+  m_ActiveScene->OnDetach();
+
+  m_SceneSnapshop = std::move(m_ActiveScene);
+
+  m_ActiveScene = m_SceneSnapshop->Clone();
+
+  m_ActiveScene->SetResourceManager(m_ResourceManager.get());
+  m_ActiveScene->SetEventCallback([this](Event &e) { this->OnEvent(e); });
+
+  m_ActiveScene->OnAttach();
+
+  m_ActiveScene->SetViewPortSize((float)m_Window->GetWidth(),
+                                 (float)m_Window->GetHeight());
 
   m_RuntimeMode = RuntimeMode::GAME;
 
-  INFERNO_LOG_INFO("Started Gamplay Runtime");
+  INFERNO_LOG_INFO("Started Gameplay Runtime");
 }
 
 void Engine::OnRuntimeStop() {
@@ -282,11 +259,24 @@ void Engine::OnRuntimeStop() {
     return;
   }
 
+  // 1. Shut down live gameplay systems (stop sounds, physics, scripts)
+  if (m_ActiveScene) {
+    m_ActiveScene->OnDetach();
+  }
+
+  // 2. Restore unmutated Editor Scene snapshot (deletes mutated gameplay scene)
   m_ActiveScene = std::move(m_SceneSnapshop);
   m_SceneSnapshop = nullptr;
 
+  // 3. Re-bind engine pointers & callbacks to restored editor instance
+  m_ActiveScene->SetResourceManager(m_ResourceManager.get());
+  m_ActiveScene->SetEventCallback([this](Event &e) { this->OnEvent(e); });
+
+  // 4. Re-initialize editor systems / gizmos
+  m_ActiveScene->OnAttach();
+
   m_RuntimeMode = RuntimeMode::EDITOR;
 
-  INFERNO_LOG_INFO("Stoped Gamplay Runtime");
+  INFERNO_LOG_INFO("Stopped Gameplay Runtime");
 }
 } // namespace Inferno

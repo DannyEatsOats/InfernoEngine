@@ -143,7 +143,8 @@ void Renderer::Render(const std::vector<Entity *> &entities) {
 }
 
 void Renderer::CreateForwardPipeline() {
-  ImageSpec imageSpec{
+  // Depth Image Creation
+  ImageSpec depthImageSpec{
       .Width = m_Context->Swapchain.Extent.width,
       .Height = m_Context->Swapchain.Extent.height,
       .MipLevels = 1,
@@ -154,7 +155,22 @@ void Renderer::CreateForwardPipeline() {
   };
 
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-    m_DepthImages[i] = Image(m_Context, imageSpec);
+    m_DepthImages[i] = Image(m_Context, depthImageSpec);
+  }
+
+  // Entity Picking Image Creation
+  ImageSpec pickingImageSpec{
+      .Width = m_Context->Swapchain.Extent.width,
+      .Height = m_Context->Swapchain.Extent.height,
+      .MipLevels = 1,
+      .Format = VK_FORMAT_R32_UINT,
+      .Usage =
+          VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+      .Aspect = VK_IMAGE_ASPECT_COLOR_BIT,
+  };
+
+  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+    m_EntityPickingImages[i] = Image(m_Context, pickingImageSpec);
   }
 
   // Shader Stages
@@ -626,6 +642,35 @@ void Renderer::RecordForwardPass(const std::vector<Entity *> &entities) {
       .clearValue = clearColor,
   };
 
+  VkClearValue clearEntityPicking{
+      .color = {-1.0f},
+  };
+  VkRenderingAttachmentInfo entityPickingAttachment{
+      .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+      .imageView = m_EntityPickingImages[m_FrameIndex].GetView(),
+      .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+      .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+      .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+      .clearValue = clearEntityPicking,
+  };
+  std::array<VkRenderingAttachmentInfo, 2> colorAttachments{};
+  colorAttachments[0] = {
+      .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+      .imageView = m_Context->Swapchain.ImageViews[m_ImageIndex],
+      .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+      .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+      .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+      .clearValue = clearColor,
+  };
+  colorAttachments[1] = {
+      .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+      .imageView = m_EntityPickingImages[m_FrameIndex].GetView(),
+      .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+      .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+      .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+      .clearValue = clearEntityPicking,
+  };
+
   VkClearValue clearDepth{
       .depthStencil = {1.0f, 0},
   };
@@ -642,8 +687,8 @@ void Renderer::RecordForwardPass(const std::vector<Entity *> &entities) {
       .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
       .renderArea = {.offset = {0, 0}, .extent = m_Context->Swapchain.Extent},
       .layerCount = 1,
-      .colorAttachmentCount = 1,
-      .pColorAttachments = &colorAttachment,
+      .colorAttachmentCount = static_cast<uint32_t>(colorAttachments.size()),
+      .pColorAttachments = colorAttachments.data(),
       .pDepthAttachment = &depthAttachment,
   };
 

@@ -74,6 +74,8 @@ private:
   std::array<VkCommandBuffer, MAX_FRAMES_IN_FLIGHT> m_CommandBuffers;
   std::array<Image, MAX_FRAMES_IN_FLIGHT> m_DepthImages;
 
+  std::array<Image, MAX_FRAMES_IN_FLIGHT> m_EntityPickingImages;
+
   VkDescriptorPool m_TextureDescriptorPool = VK_NULL_HANDLE;
   VkDescriptorSetLayout m_TextureDescriptorSetLayout = VK_NULL_HANDLE;
 

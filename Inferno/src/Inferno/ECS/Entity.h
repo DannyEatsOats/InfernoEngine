@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <type_traits>
 #include <unordered_map>
@@ -12,9 +13,14 @@
 namespace Inferno {
 class Entity {
 public:
-  explicit Entity(const std::string &name) : m_Name(name) {}
+  static constexpr uint32_t NULL_ENTITY = 0;
+
+  explicit Entity(const std::string &name) : m_Name(name) {
+    m_ID = NEXT_ENTITY_ID++;
+  }
 
   const std::string &GetName() const { return m_Name; }
+  const uint32_t GetID() const {return m_ID;}
   bool IsActive() const { return m_Active; }
   void SetActive(bool isActive) { m_Active = isActive; }
 
@@ -79,7 +85,8 @@ public:
     clonedEntity->m_Active = m_Active;
 
     for (const auto &comp : m_Components) {
-      if (!comp) continue;
+      if (!comp)
+        continue;
 
       std::unique_ptr<Component> clonedComp = comp->Clone();
       Component *compPtr = clonedComp.get();
@@ -102,9 +109,12 @@ public:
   }
 
 private:
+  uint32_t m_ID;
   std::string m_Name;
   bool m_Active = true;
   std::vector<std::unique_ptr<Component>> m_Components;
   std::unordered_map<size_t, Component *> m_ComponentMap;
+
+  static uint32_t NEXT_ENTITY_ID;
 };
 } // namespace Inferno

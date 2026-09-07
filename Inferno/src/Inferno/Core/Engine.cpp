@@ -72,6 +72,8 @@ void Engine::StartUp() {
   m_ResourceManager = MakeScope<ResourceManager>(m_RenderingContext.get());
   m_Renderer = MakeScope<Renderer>(m_RenderingContext.get());
   m_Renderer->StartUp(m_ResourceManager.get());
+  m_EditorSystem = MakeScope<EditorSystem>();
+  m_EditorSystem->StartUp(m_Renderer.get());
   m_EditorCamera = MakeScope<DannyCamera>();
   m_EditorCamera->Init((float)m_Window->GetWidth() /
                        (float)m_Window->GetHeight());
@@ -86,6 +88,7 @@ void Engine::ShutDown() {
     m_ActiveScene->OnDetach();
   }
 
+  m_EditorSystem->ShutDown();
   m_Renderer->ShutDown();
   m_ResourceManager->UnloadAll();
   m_RenderingContext->ShutDown();
@@ -176,6 +179,7 @@ void Engine::OnEvent(Event &event) {
   case Inferno::RuntimeMode::EDITOR:
     if (!event.IsHandled()) {
       m_EditorCamera->OnEvent(event);
+      m_EditorSystem->OnEvent(event);
     }
     break;
   case Inferno::RuntimeMode::GAME:

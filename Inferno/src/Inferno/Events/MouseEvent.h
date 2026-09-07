@@ -48,18 +48,24 @@ private:
 class MouseButtonEvent : public Event {
 public:
   inline int GetMouseButton() const { return m_Button; }
+  inline int GetMouseX() const { return m_XPos; }
+  inline int GetMouseY() const { return m_YPos; }
 
   EVENT_CLASS_CATEGORY(EventCategoryMouse | EventCategoryInput |
                        EventCategoryMouseButton)
 protected:
-  MouseButtonEvent(int button) : m_Button(button) {}
+  MouseButtonEvent(int button, int xpos, int ypos)
+      : m_Button(button), m_XPos(xpos), m_YPos(ypos) {}
 
   int m_Button;
+  int m_XPos;
+  int m_YPos;
 };
 
 class MouseButtonPressedEvent : public MouseButtonEvent {
 public:
-  MouseButtonPressedEvent(int button) : MouseButtonEvent(button) {}
+  MouseButtonPressedEvent(int button, int xpos, int ypos)
+      : MouseButtonEvent(button, xpos, ypos) {}
 
   std::string ToString() const override {
     std::stringstream ss;
@@ -72,7 +78,8 @@ public:
 
 class MouseButtonReleasedEvent : public MouseButtonEvent {
 public:
-  MouseButtonReleasedEvent(int button) : MouseButtonEvent(button) {}
+  MouseButtonReleasedEvent(int button, int xpos, int ypos)
+      : MouseButtonEvent(button, xpos, ypos) {}
 
   std::string ToString() const override {
     std::stringstream ss;
@@ -82,4 +89,4 @@ public:
 
   EVENT_CLASS_TYPE(MouseButtonReleased)
 };
-} // namespace Engine
+} // namespace Inferno

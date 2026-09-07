@@ -101,14 +101,25 @@ void Window::Init(const WindowProperties &properties) {
       m_Window, [](GLFWwindow *window, int button, int action, int mods) {
         WindowData &data =
             *static_cast<WindowData *>(glfwGetWindowUserPointer(window));
+        double xpos, ypos;
+        glfwGetCursorPos(window, &xpos, &ypos);
+
+        // INFO: This Might need to be scaled on high DPI screens
+        int mouseX = static_cast<int>(xpos);
+        int mouseY = static_cast<int>(ypos);
+
         switch (action) {
         case GLFW_PRESS: {
-          MouseButtonPressedEvent event(button);
+
+          int mouseX = static_cast<int>(xpos);
+          int mouseY = static_cast<int>(ypos);
+
+          MouseButtonPressedEvent event(button, mouseX, mouseY);
           data.EventCallback(event);
           break;
         }
         case GLFW_RELEASE: {
-          MouseButtonReleasedEvent event(button);
+          MouseButtonReleasedEvent event(button, mouseX, mouseY);
           data.EventCallback(event);
           break;
         }

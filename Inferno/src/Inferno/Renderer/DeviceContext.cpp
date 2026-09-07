@@ -292,6 +292,7 @@ void DeviceContext::CreateLogicalDevice() {
 
   VkPhysicalDeviceFeatures deviceFeatures{};
   deviceFeatures.samplerAnisotropy = VK_TRUE;
+  deviceFeatures.independentBlend = VK_TRUE;
 
   VkPhysicalDeviceVulkan11Features features11{
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,

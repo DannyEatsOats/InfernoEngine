@@ -1,10 +1,15 @@
 #include "Inferno/ECS/Entity.h"
 #include "Inferno/Renderer/Image.h"
 #include "Inferno/Renderer/Mesh.h"
+#include "Inferno/Renderer/Pipeline.h"
+#include "Inferno/Renderer/VulkanUtils.h"
 #include "glm/ext/matrix_float4x4.hpp"
 #include "glm/matrix.hpp"
 #include "tracy/Tracy.hpp"
+#include <array>
 #include <cstdint>
+#include <cstring>
+#include <optional>
 #include <stdexcept>
 #include <vector>
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -23,6 +28,7 @@ namespace Inferno {
 struct MeshPushConstants {
   glm::mat4 Mvp;
   glm::mat4 Model;
+  uint32_t EntityID;
 };
 
 void Renderer::StartUp(ResourceManager *resourceManager) {
@@ -64,11 +70,12 @@ void Renderer::ShutDown() {
       m_DepthImages[i] = Image();
     }
 
-    vkDestroyPipelineLayout(m_Context->Device, m_GridLayout, nullptr);
-    vkDestroyPipeline(m_Context->Device, m_GridPipeline, nullptr);
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+      m_EntityPickingImages[i] = Image();
+    }
 
-    vkDestroyPipelineLayout(m_Context->Device, m_ForwardLayout, nullptr);
-    vkDestroyPipeline(m_Context->Device, m_ForwardPipeline, nullptr);
+    m_GridPipeline.Destroy(m_Context->Device);
+    m_ForwardPipeline.Destroy(m_Context->Device);
   }
 }
 
@@ -165,7 +172,7 @@ void Renderer::CreateForwardPipeline() {
       .MipLevels = 1,
       .Format = VK_FORMAT_R32_UINT,
       .Usage =
-          VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+          VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
       .Aspect = VK_IMAGE_ASPECT_COLOR_BIT,
   };
 
@@ -183,74 +190,8 @@ void Renderer::CreateForwardPipeline() {
       .pName = "main",
   };
 
-  VkPipelineShaderStageCreateInfo fragmentShaderInfo{
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-      .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-      .module = shader->GetFragmentShaderModule(),
-      .pName = "main",
-  };
-  VkPipelineShaderStageCreateInfo shaderStages[]{vertexShaderInfo,
-                                                 fragmentShaderInfo};
-
   // Vertex Input
   auto meshVertex = MeshVertex::GetLayout();
-  VkVertexInputBindingDescription bindingDescription =
-      meshVertex.GetBindingDescription();
-  std::vector<VkVertexInputAttributeDescription> attributeDescriptions =
-      meshVertex.GetAttributeDescriptions();
-
-  VkPipelineVertexInputStateCreateInfo vertexInfo{
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-      .vertexBindingDescriptionCount = 1,
-      .pVertexBindingDescriptions = &bindingDescription,
-      .vertexAttributeDescriptionCount =
-          static_cast<uint32_t>(attributeDescriptions.size()),
-      .pVertexAttributeDescriptions = attributeDescriptions.data(),
-  };
-
-  // Input Assembly
-  VkPipelineInputAssemblyStateCreateInfo assemblyInfo{
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-      .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-      .primitiveRestartEnable = VK_FALSE,
-  };
-
-  // Viewport (ignoring cuz of dynamic states dawgh)
-  VkPipelineViewportStateCreateInfo viewportInfo{
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-      .viewportCount = 1,
-      .pViewports = nullptr,
-      .scissorCount = 1,
-      .pScissors = nullptr,
-  };
-
-  // Rasterizer
-  VkPipelineRasterizationStateCreateInfo rasterizationInfo{
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-      .depthClampEnable = VK_FALSE,
-      .rasterizerDiscardEnable = VK_FALSE,
-      .polygonMode = VK_POLYGON_MODE_FILL,
-      .cullMode = VK_CULL_MODE_BACK_BIT,
-      .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
-      .depthBiasEnable = VK_FALSE,
-      .lineWidth = 1.0f,
-  };
-
-  // Multisampling
-  VkPipelineMultisampleStateCreateInfo multisampleInfo{
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-      .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
-      .sampleShadingEnable = VK_FALSE,
-  };
-
-  // Depth Stencil
-  VkPipelineDepthStencilStateCreateInfo depthInfo{
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-      .depthTestEnable = VK_TRUE,
-      .depthWriteEnable = VK_TRUE,
-      .depthCompareOp = VK_COMPARE_OP_LESS,
-      .stencilTestEnable = VK_FALSE,
-  };
 
   // Color Blending
   VkPipelineColorBlendAttachmentState colorBlendAttachment{
@@ -265,17 +206,27 @@ void Renderer::CreateForwardPipeline() {
                         VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
   };
 
+  VkPipelineColorBlendAttachmentState pickingBlendAttachment{
+      .blendEnable = VK_FALSE,
+      .colorWriteMask = 0,
+  };
+
+  std::vector<VkPipelineColorBlendAttachmentState> blendAttachments = {
+      colorBlendAttachment,
+      pickingBlendAttachment,
+  };
+
   VkPipelineColorBlendStateCreateInfo colorBlendInfo{
       .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
       .logicOpEnable = VK_FALSE,
       .logicOp = VK_LOGIC_OP_COPY,
-      .attachmentCount = 1,
-      .pAttachments = &colorBlendAttachment,
+      .attachmentCount = static_cast<uint32_t>(blendAttachments.size()),
+      .pAttachments = blendAttachments.data(),
   };
 
   // Pipeline Layout
   VkPushConstantRange pushConstantRange{
-      .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+      .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
       .offset = 0,
       .size = sizeof(MeshPushConstants),
   };
@@ -320,128 +271,31 @@ void Renderer::CreateForwardPipeline() {
     throw std::runtime_error("Failed to create Texture Descriptor Pool");
   }
 
-  VkPipelineLayoutCreateInfo layoutInfo{
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-      .setLayoutCount = 1,
-      .pSetLayouts = &m_TextureDescriptorSetLayout,
-      .pushConstantRangeCount = 1,
-      .pPushConstantRanges = &pushConstantRange,
+  std::vector<VkFormat> colorFormats = {
+      m_Context->Swapchain.Format,
+      VK_FORMAT_R32_UINT,
   };
 
-  if (vkCreatePipelineLayout(m_Context->Device, &layoutInfo, nullptr,
-                             &m_ForwardLayout) != VK_SUCCESS) {
-    throw std::runtime_error("Failed To Create Forward Pipeline");
-  }
-
-  // Dynamic Rendering
-  VkPipelineRenderingCreateInfo renderingInfo{
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-      .colorAttachmentCount = 1,
-      .pColorAttachmentFormats = &m_Context->Swapchain.Format,
-      .depthAttachmentFormat =
-          VK_FORMAT_D32_SFLOAT, // TODO: Query this in startup
+  PipelineDescription description{
+      .VertexShader = shader->GetVertexShaderModule(),
+      .FragmentShader = shader->GetFragmentShaderModule(),
+      .VertexBinding = meshVertex.GetBindingDescription(),
+      .VertexAttributes = meshVertex.GetAttributeDescriptions(),
+      .CullMode = VK_CULL_MODE_BACK_BIT,
+      .DepthTest = VK_TRUE,
+      .DepthWrite = VK_TRUE,
+      .DepthFormat = VK_FORMAT_D32_SFLOAT,
+      .ColorFormats = colorFormats,
+      .BlendAttachments = blendAttachments,
+      .DescriptorSetLayouts = {m_TextureDescriptorSetLayout},
+      .PushConstantRanges = {pushConstantRange},
   };
 
-  // Dynamic State
-  std::vector<VkDynamicState> dynamicState{VK_DYNAMIC_STATE_VIEWPORT,
-                                           VK_DYNAMIC_STATE_SCISSOR};
-  VkPipelineDynamicStateCreateInfo dynamicStateInfo{
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-      .dynamicStateCount = static_cast<uint32_t>(dynamicState.size()),
-      .pDynamicStates = dynamicState.data(),
-  };
-
-  // Pipeline Creation
-  VkGraphicsPipelineCreateInfo pipelineInfo{
-      .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-      .pNext = &renderingInfo,
-      .stageCount = 2,
-      .pStages = shaderStages,
-      .pVertexInputState = &vertexInfo,
-      .pInputAssemblyState = &assemblyInfo,
-      .pViewportState = &viewportInfo,
-      .pRasterizationState = &rasterizationInfo,
-      .pMultisampleState = &multisampleInfo,
-      .pDepthStencilState = &depthInfo,
-      .pColorBlendState = &colorBlendInfo,
-      .pDynamicState = &dynamicStateInfo,
-      .layout = m_ForwardLayout,
-      .renderPass = nullptr,
-  };
-
-  if (vkCreateGraphicsPipelines(m_Context->Device, nullptr, 1, &pipelineInfo,
-                                nullptr, &m_ForwardPipeline) != VK_SUCCESS) {
-    throw std::runtime_error("Failed To Create Forward Pipeline");
-  }
+  m_ForwardPipeline.Init(m_Context->Device, description);
 }
 
 void Renderer::CreateGridPipeline() {
   auto *shader = m_ResourceManager->Load<Shader>("grid");
-
-  // Shader Stages
-  VkPipelineShaderStageCreateInfo shaderStages[]{
-      {
-          .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-          .stage = VK_SHADER_STAGE_VERTEX_BIT,
-          .module = shader->GetVertexShaderModule(),
-          .pName = "main",
-      },
-      {
-          .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-          .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-          .module = shader->GetFragmentShaderModule(),
-          .pName = "main",
-      }};
-
-  // Vertex Input
-  VkPipelineVertexInputStateCreateInfo vertexInfo{
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-      .vertexBindingDescriptionCount = 0,
-      .vertexAttributeDescriptionCount = 0,
-  };
-
-  // Input Assembly
-  VkPipelineInputAssemblyStateCreateInfo assemblyInfo{
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-      .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-      .primitiveRestartEnable = VK_FALSE,
-  };
-
-  // Viewport (ignoring cuz of dynamic states dawgh)
-  VkPipelineViewportStateCreateInfo viewportInfo{
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-      .viewportCount = 1,
-      .pViewports = nullptr,
-      .scissorCount = 1,
-      .pScissors = nullptr,
-  };
-
-  // Rasterizer
-  VkPipelineRasterizationStateCreateInfo rasterizationInfo{
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-      .depthClampEnable = VK_FALSE,
-      .rasterizerDiscardEnable = VK_FALSE,
-      .polygonMode = VK_POLYGON_MODE_FILL,
-      .cullMode = VK_CULL_MODE_NONE,
-      .depthBiasEnable = VK_FALSE,
-      .lineWidth = 1.0f,
-  };
-
-  // Multisampling
-  VkPipelineMultisampleStateCreateInfo multisampleInfo{
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-      .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
-      .sampleShadingEnable = VK_FALSE,
-  };
-
-  // Depth Stencil
-  VkPipelineDepthStencilStateCreateInfo depthInfo{
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-      .depthTestEnable = VK_TRUE,
-      .depthWriteEnable = VK_TRUE,
-      .depthCompareOp = VK_COMPARE_OP_LESS,
-      .stencilTestEnable = VK_FALSE,
-  };
 
   // Color Blending
   VkPipelineColorBlendAttachmentState colorBlendAttachment{
@@ -456,12 +310,14 @@ void Renderer::CreateGridPipeline() {
                         VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
   };
 
-  VkPipelineColorBlendStateCreateInfo colorBlendInfo{
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-      .logicOpEnable = VK_FALSE,
-      .logicOp = VK_LOGIC_OP_COPY,
-      .attachmentCount = 1,
-      .pAttachments = &colorBlendAttachment,
+  VkPipelineColorBlendAttachmentState pickingBlendAttachment{
+      .blendEnable = VK_FALSE,
+      .colorWriteMask = 0,
+  };
+
+  std::vector<VkPipelineColorBlendAttachmentState> blendAttachments = {
+      colorBlendAttachment,
+      pickingBlendAttachment,
   };
 
   // Pipeline Layout
@@ -471,58 +327,24 @@ void Renderer::CreateGridPipeline() {
       .size = sizeof(GridPushConstants),
   };
 
-  VkPipelineLayoutCreateInfo layoutInfo{
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-      .setLayoutCount = 0,
-      .pushConstantRangeCount = 1,
-      .pPushConstantRanges = &pushConstantRange,
+  std::vector<VkFormat> colorFormats = {
+      m_Context->Swapchain.Format,
+      VK_FORMAT_R32_UINT,
   };
 
-  if (vkCreatePipelineLayout(m_Context->Device, &layoutInfo, nullptr,
-                             &m_GridLayout) != VK_SUCCESS) {
-    throw std::runtime_error("Failed To Create Forward Pipeline");
-  }
-
-  // Dynamic Rendering
-  VkPipelineRenderingCreateInfo renderingInfo{
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-      .colorAttachmentCount = 1,
-      .pColorAttachmentFormats = &m_Context->Swapchain.Format,
-      .depthAttachmentFormat =
-          VK_FORMAT_D32_SFLOAT, // TODO: Query this in startup
+  PipelineDescription description{
+      .VertexShader = shader->GetVertexShaderModule(),
+      .FragmentShader = shader->GetFragmentShaderModule(),
+      .CullMode = VK_CULL_MODE_NONE,
+      .DepthTest = VK_TRUE,
+      .DepthWrite = VK_TRUE,
+      .DepthFormat = VK_FORMAT_D32_SFLOAT,
+      .ColorFormats = colorFormats,
+      .BlendAttachments = blendAttachments,
+      .PushConstantRanges = {pushConstantRange},
   };
 
-  // Dynamic State
-  std::vector<VkDynamicState> dynamicState{VK_DYNAMIC_STATE_VIEWPORT,
-                                           VK_DYNAMIC_STATE_SCISSOR};
-  VkPipelineDynamicStateCreateInfo dynamicStateInfo{
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-      .dynamicStateCount = static_cast<uint32_t>(dynamicState.size()),
-      .pDynamicStates = dynamicState.data(),
-  };
-
-  // Pipeline Creation
-  VkGraphicsPipelineCreateInfo pipelineInfo{
-      .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-      .pNext = &renderingInfo,
-      .stageCount = 2,
-      .pStages = shaderStages,
-      .pVertexInputState = &vertexInfo,
-      .pInputAssemblyState = &assemblyInfo,
-      .pViewportState = &viewportInfo,
-      .pRasterizationState = &rasterizationInfo,
-      .pMultisampleState = &multisampleInfo,
-      .pDepthStencilState = &depthInfo,
-      .pColorBlendState = &colorBlendInfo,
-      .pDynamicState = &dynamicStateInfo,
-      .layout = m_GridLayout,
-      .renderPass = nullptr,
-  };
-
-  if (vkCreateGraphicsPipelines(m_Context->Device, nullptr, 1, &pipelineInfo,
-                                nullptr, &m_GridPipeline) != VK_SUCCESS) {
-    throw std::runtime_error("Failed To Create Grid Pipeline");
-  }
+  m_GridPipeline.Init(m_Context->Device, description);
 }
 
 void Renderer::AllocateCommandBuffer() {
@@ -568,13 +390,14 @@ void Renderer::CreateSyncObjects() {
   }
 }
 
-void Renderer::TransitionImageLayout(VkImage image, VkImageAspectFlags aspect,
+void Renderer::TransitionImageLayout(VkCommandBuffer cmd, VkImage image,
+                                     VkImageAspectFlags aspect,
                                      VkImageLayout oldLayout,
                                      VkImageLayout newLayout,
                                      VkAccessFlags2 srcAccessMask,
                                      VkAccessFlags2 dstAccessMask,
                                      VkPipelineStageFlags2 srcStageMask,
-                                     VkPipelineStageFlags2 dstStageMask) {
+                                     VkPipelineStageFlags2 dstStageMask) const {
   VkImageMemoryBarrier2 barrier{
       .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
       .srcStageMask = srcStageMask,
@@ -601,7 +424,7 @@ void Renderer::TransitionImageLayout(VkImage image, VkImageAspectFlags aspect,
       .pImageMemoryBarriers = &barrier,
   };
 
-  vkCmdPipelineBarrier2(m_CommandBuffers[m_FrameIndex], &dependencyInfo);
+  vkCmdPipelineBarrier2(cmd, &dependencyInfo);
 }
 
 void Renderer::RecordForwardPass(const std::vector<Entity *> &entities) {
@@ -616,43 +439,41 @@ void Renderer::RecordForwardPass(const std::vector<Entity *> &entities) {
     throw std::runtime_error("Failed To start Forward Pass Command Buffer");
   }
 
-  TransitionImageLayout(m_Context->Swapchain.Images[m_ImageIndex],
+  TransitionImageLayout(m_CommandBuffers[m_FrameIndex],
+                        m_Context->Swapchain.Images[m_ImageIndex],
                         VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, {},
                         VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
                         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
 
-  TransitionImageLayout(m_DepthImages[m_FrameIndex].GetImage(),
+  TransitionImageLayout(m_CommandBuffers[m_FrameIndex],
+                        m_DepthImages[m_FrameIndex].GetImage(),
                         VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                         VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, {},
                         VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
                         VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
                         VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT);
 
+  TransitionImageLayout(m_CommandBuffers[m_FrameIndex],
+                        m_EntityPickingImages[m_FrameIndex].GetImage(),
+                        VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, {},
+                        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
+
   VkClearValue clearColor{
       .color = {{0.14f, 0.14f, 0.14f, 1.0f}},
   };
-  VkRenderingAttachmentInfo colorAttachment{
-      .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-      .imageView = m_Context->Swapchain.ImageViews[m_ImageIndex],
-      .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-      .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-      .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-      .clearValue = clearColor,
-  };
 
   VkClearValue clearEntityPicking{
-      .color = {-1.0f},
+      .color =
+          {
+              .uint32 = {0, 0, 0, 0},
+          },
   };
-  VkRenderingAttachmentInfo entityPickingAttachment{
-      .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-      .imageView = m_EntityPickingImages[m_FrameIndex].GetView(),
-      .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-      .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-      .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-      .clearValue = clearEntityPicking,
-  };
+
   std::array<VkRenderingAttachmentInfo, 2> colorAttachments{};
   colorAttachments[0] = {
       .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
@@ -695,7 +516,7 @@ void Renderer::RecordForwardPass(const std::vector<Entity *> &entities) {
   vkCmdBeginRendering(m_CommandBuffers[m_FrameIndex], &renderingInfo);
 
   vkCmdBindPipeline(m_CommandBuffers[m_FrameIndex],
-                    VK_PIPELINE_BIND_POINT_GRAPHICS, m_ForwardPipeline);
+                    VK_PIPELINE_BIND_POINT_GRAPHICS, m_ForwardPipeline.Handle);
 
   VkViewport viewport{
       .x = 0.0f,
@@ -727,10 +548,12 @@ void Renderer::RecordForwardPass(const std::vector<Entity *> &entities) {
     MeshPushConstants push{};
     push.Mvp = m_ActiveCamera.Proj * m_ActiveCamera.View * model;
     push.Model = model;
+    push.EntityID = entity->GetID();
 
-    vkCmdPushConstants(m_CommandBuffers[m_FrameIndex], m_ForwardLayout,
-                       VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPushConstants),
-                       &push);
+    vkCmdPushConstants(m_CommandBuffers[m_FrameIndex], m_ForwardPipeline.Layout,
+                       VK_SHADER_STAGE_VERTEX_BIT |
+                           VK_SHADER_STAGE_FRAGMENT_BIT,
+                       0, sizeof(MeshPushConstants), &push);
 
     VkBuffer vertexBuffers[] = {
         meshComponent->GetMesh()->GetVertexBuffer()->Get()};
@@ -749,9 +572,9 @@ void Renderer::RecordForwardPass(const std::vector<Entity *> &entities) {
                                    m_TextureDescriptorSetLayout);
       textureSet = texture->GetDescriptorSet();
     }
-    vkCmdBindDescriptorSets(m_CommandBuffers[m_FrameIndex],
-                            VK_PIPELINE_BIND_POINT_GRAPHICS, m_ForwardLayout, 0,
-                            1, &textureSet, 0, nullptr);
+    vkCmdBindDescriptorSets(
+        m_CommandBuffers[m_FrameIndex], VK_PIPELINE_BIND_POINT_GRAPHICS,
+        m_ForwardPipeline.Layout, 0, 1, &textureSet, 0, nullptr);
 
     vkCmdDrawIndexed(m_CommandBuffers[m_FrameIndex],
                      meshComponent->GetMesh()->GetIndexCount(), 1, 0, 0, 0);
@@ -760,7 +583,7 @@ void Renderer::RecordForwardPass(const std::vector<Entity *> &entities) {
   // Drawing Grid
   {
     vkCmdBindPipeline(m_CommandBuffers[m_FrameIndex],
-                      VK_PIPELINE_BIND_POINT_GRAPHICS, m_GridPipeline);
+                      VK_PIPELINE_BIND_POINT_GRAPHICS, m_GridPipeline.Handle);
 
     // TODO: Inverse should not be calculated per frame
     GridPushConstants gridPushConstants{
@@ -769,7 +592,7 @@ void Renderer::RecordForwardPass(const std::vector<Entity *> &entities) {
         .ViewInv = glm::inverse(m_ActiveCamera.View),
         .ProjInv = glm::inverse(m_ActiveCamera.Proj),
     };
-    vkCmdPushConstants(m_CommandBuffers[m_FrameIndex], m_GridLayout,
+    vkCmdPushConstants(m_CommandBuffers[m_FrameIndex], m_GridPipeline.Layout,
                        VK_SHADER_STAGE_VERTEX_BIT |
                            VK_SHADER_STAGE_FRAGMENT_BIT,
                        0, sizeof(GridPushConstants), &gridPushConstants);
@@ -782,10 +605,10 @@ void Renderer::RecordForwardPass(const std::vector<Entity *> &entities) {
   vkCmdEndRendering(m_CommandBuffers[m_FrameIndex]);
 
   TransitionImageLayout(
-      m_Context->Swapchain.Images[m_ImageIndex], VK_IMAGE_ASPECT_COLOR_BIT,
-      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-      VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, {},
-      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+      m_CommandBuffers[m_FrameIndex], m_Context->Swapchain.Images[m_ImageIndex],
+      VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+      VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+      {}, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
       VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT);
 
   vkEndCommandBuffer(m_CommandBuffers[m_FrameIndex]);
@@ -800,7 +623,7 @@ void Renderer::Resize() {
   vkDeviceWaitIdle(m_Context->Device);
   m_Context->RecreateSwapchain();
 
-  ImageSpec imageSpec{
+  ImageSpec depthImageSpec{
       .Width = m_Context->Swapchain.Extent.width,
       .Height = m_Context->Swapchain.Extent.height,
       .MipLevels = 1,
@@ -810,11 +633,77 @@ void Renderer::Resize() {
       .Aspect = VK_IMAGE_ASPECT_DEPTH_BIT,
   };
 
+  ImageSpec pickingImageSpec{
+      .Width = m_Context->Swapchain.Extent.width,
+      .Height = m_Context->Swapchain.Extent.height,
+      .MipLevels = 1,
+      .Format = VK_FORMAT_R32_UINT,
+      .Usage =
+          VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+      .Aspect = VK_IMAGE_ASPECT_COLOR_BIT,
+  };
+
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-    Image newDepth = Image(m_Context, imageSpec);
+    Image newDepth = Image(m_Context, depthImageSpec);
+    Image newPicking = Image(m_Context, pickingImageSpec);
     m_DepthImages[i] = std::move(newDepth);
+    m_EntityPickingImages[i] = std::move(newPicking);
   }
 
   m_Resized = false;
+}
+
+// Event Methods
+std::optional<uint32_t> Renderer::PickEntity(int32_t mouseX,
+                                             int32_t mouseY) const {
+  VkImage pickingImage = m_EntityPickingImages[m_FrameIndex].GetImage();
+
+  uint32_t width = m_Context->Swapchain.Extent.width;
+  uint32_t height = m_Context->Swapchain.Extent.height;
+
+  VkDeviceSize size = width * height * sizeof(int32_t);
+
+  Buffer stagingBuffer(m_Context, size, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                           VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+  VkCommandBuffer cmdBuffer = VulkanUtils::BeginSingleTimeCommands(m_Context);
+
+  TransitionImageLayout(cmdBuffer, pickingImage, VK_IMAGE_ASPECT_COLOR_BIT,
+                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                        VK_ACCESS_2_TRANSFER_READ_BIT,
+                        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                        VK_PIPELINE_STAGE_2_COPY_BIT);
+
+  VkBufferImageCopy copyRegion{
+      .bufferOffset = 0,
+      .bufferRowLength = 0,
+      .bufferImageHeight = 0,
+      .imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+      .imageOffset = {0, 0, 0},
+      .imageExtent = {width, height, 1},
+  };
+
+  vkCmdCopyImageToBuffer(cmdBuffer, pickingImage,
+                         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                         stagingBuffer.Get(), 1, &copyRegion);
+
+  VulkanUtils::EndSingleTimeCommands(m_Context, cmdBuffer);
+
+  void *mapped;
+  vkMapMemory(m_Context->Device, stagingBuffer.GetMemory(), 0, size, 0,
+              &mapped);
+
+  uint32_t *data = static_cast<uint32_t *>(mapped);
+  uint32_t entityID = data[mouseY * width + mouseX];
+  vkUnmapMemory(m_Context->Device, stagingBuffer.GetMemory());
+
+  if (entityID == Entity::NULL_ENTITY) {
+    return std::nullopt;
+  }
+
+  return std::make_optional(entityID);
 }
 } // namespace Inferno

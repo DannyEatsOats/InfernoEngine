@@ -35,6 +35,8 @@ add_library(Inferno
         src/Inferno/Renderer/Mesh.cpp
         src/Inferno/Renderer/Renderer.h
         src/Inferno/Renderer/Renderer.cpp
+        src/Inferno/Renderer/Pipeline.h
+        src/Inferno/Renderer/Pipeline.cpp
         src/Inferno/Renderer/RenderGraph.h
         src/Inferno/Renderer/RenderGraph.cpp
         src/Inferno/Resource/Resource.h
@@ -49,6 +51,8 @@ add_library(Inferno
         # TOOLS
         src/Inferno/Tools/GeometryGenerator.h
         src/Inferno/Tools/GeometryGenerator.cpp
+        src/Inferno/Tools/EditorSystem.h
+        src/Inferno/Tools/EditorSystem.cpp
         src/Inferno/Tools/EditorCamera.h
         src/Inferno/Tools/EditorCamera.cpp
         # EVENTS

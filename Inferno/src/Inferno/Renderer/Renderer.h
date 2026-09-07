@@ -2,8 +2,11 @@
 
 #include "Inferno/ECS/Entity.h"
 #include "Inferno/Renderer/DeviceContext.h"
+#include "Inferno/Renderer/Pipeline.h"
 #include "Inferno/Resource/ResourceManager.h"
 #include <array>
+#include <cstdint>
+#include <optional>
 #include <vector>
 #include <vulkan/vulkan_core.h>
 
@@ -19,6 +22,14 @@ struct GridPushConstants {
 struct RenderCamera {
   glm::mat4 View;
   glm::mat4 Proj;
+};
+
+struct FrameData {
+  VkCommandBuffer m_CommandBuffers = VK_NULL_HANDLE;
+  Image m_DepthImages;
+  Image m_EntityPickingImages;
+  VkSemaphore m_PresentCompleteSemaphores = VK_NULL_HANDLE;
+  VkFence m_DrawFences = VK_NULL_HANDLE;
 };
 
 class Renderer {
@@ -40,6 +51,8 @@ public:
 
   void SetActiveCamera(RenderCamera camera) { m_ActiveCamera = camera; }
 
+  std::optional<uint32_t> PickEntity(int32_t mouseX, int32_t mouseY) const;
+
 private:
   void CreateForwardPipeline();
   void CreateGridPipeline();
@@ -47,46 +60,47 @@ private:
   void AllocateCommandBuffer();
   void CreateSyncObjects();
 
-  void TransitionImageLayout(VkImage image, VkImageAspectFlags aspect,
-                             VkImageLayout oldLayout, VkImageLayout newLayout,
+  void TransitionImageLayout(VkCommandBuffer cmd, VkImage image,
+                             VkImageAspectFlags aspect, VkImageLayout oldLayout,
+                             VkImageLayout newLayout,
                              VkAccessFlags2 srcAccessMask,
                              VkAccessFlags2 dstAccessMask,
                              VkPipelineStageFlags2 srcStageMask,
-                             VkPipelineStageFlags2 dstStageMask);
+                             VkPipelineStageFlags2 dstStageMask) const;
 
   void RecordForwardPass(const std::vector<Entity *> &entities);
 
   void Resize();
 
 private:
-  DeviceContext *m_Context = nullptr;
-
   static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
 
+  // References
+  DeviceContext *m_Context = nullptr;
   ResourceManager *m_ResourceManager = nullptr;
 
-  VkPipeline m_ForwardPipeline = VK_NULL_HANDLE;
-  VkPipelineLayout m_ForwardLayout = VK_NULL_HANDLE;
+  // Pipelines
+  Pipeline m_ForwardPipeline{};
+  Pipeline m_GridPipeline{};
 
-  VkPipeline m_GridPipeline = VK_NULL_HANDLE;
-  VkPipelineLayout m_GridLayout = VK_NULL_HANDLE;
-
+  // Frame Data
   std::array<VkCommandBuffer, MAX_FRAMES_IN_FLIGHT> m_CommandBuffers;
   std::array<Image, MAX_FRAMES_IN_FLIGHT> m_DepthImages;
-
   std::array<Image, MAX_FRAMES_IN_FLIGHT> m_EntityPickingImages;
+  std::array<VkSemaphore, MAX_FRAMES_IN_FLIGHT> m_PresentCompleteSemaphores;
+  std::array<VkFence, MAX_FRAMES_IN_FLIGHT> m_DrawFences;
+  std::array<FrameData, MAX_FRAMES_IN_FLIGHT> m_Frames;
 
+  // Texture Descriptor
   VkDescriptorPool m_TextureDescriptorPool = VK_NULL_HANDLE;
   VkDescriptorSetLayout m_TextureDescriptorSetLayout = VK_NULL_HANDLE;
 
-  std::array<VkSemaphore, MAX_FRAMES_IN_FLIGHT> m_PresentCompleteSemaphores;
   std::vector<VkSemaphore> m_RenderFinishedSemaphores;
-  std::array<VkFence, MAX_FRAMES_IN_FLIGHT> m_DrawFences;
   uint32_t m_FrameIndex = 0;
   uint32_t m_ImageIndex = 0;
 
   bool m_Resized = false;
 
-  RenderCamera m_ActiveCamera;
+  RenderCamera m_ActiveCamera{};
 };
 } // namespace Inferno

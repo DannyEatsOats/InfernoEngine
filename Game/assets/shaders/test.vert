@@ -13,6 +13,7 @@ layout(location = 3) out vec2 outTexCoord;
 layout(push_constant) uniform Constants {
     mat4 mvp;
     mat4 model;
+    uint id;
 } push;
 
 void main() {

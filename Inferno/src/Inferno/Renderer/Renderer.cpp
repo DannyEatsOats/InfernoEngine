@@ -1,3 +1,4 @@
+#include "Inferno/Core/Log.h"
 #include "Inferno/ECS/Entity.h"
 #include "Inferno/Renderer/Image.h"
 #include "Inferno/Renderer/Mesh.h"
@@ -183,13 +184,6 @@ void Renderer::CreateForwardPipeline() {
   // Shader Stages
   auto *shader = m_ResourceManager->Load<Shader>("test");
 
-  VkPipelineShaderStageCreateInfo vertexShaderInfo{
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-      .stage = VK_SHADER_STAGE_VERTEX_BIT,
-      .module = shader->GetVertexShaderModule(),
-      .pName = "main",
-  };
-
   // Vertex Input
   auto meshVertex = MeshVertex::GetLayout();
 
@@ -208,7 +202,7 @@ void Renderer::CreateForwardPipeline() {
 
   VkPipelineColorBlendAttachmentState pickingBlendAttachment{
       .blendEnable = VK_FALSE,
-      .colorWriteMask = 0,
+      .colorWriteMask = VK_COLOR_COMPONENT_R_BIT,
   };
 
   std::vector<VkPipelineColorBlendAttachmentState> blendAttachments = {
@@ -656,7 +650,9 @@ void Renderer::Resize() {
 // Event Methods
 std::optional<uint32_t> Renderer::PickEntity(int32_t mouseX,
                                              int32_t mouseY) const {
-  VkImage pickingImage = m_EntityPickingImages[m_FrameIndex].GetImage();
+  uint32_t lastFrameIndex =
+      (m_FrameIndex + MAX_FRAMES_IN_FLIGHT - 1) % MAX_FRAMES_IN_FLIGHT;
+  VkImage pickingImage = m_EntityPickingImages[lastFrameIndex].GetImage();
 
   uint32_t width = m_Context->Swapchain.Extent.width;
   uint32_t height = m_Context->Swapchain.Extent.height;
@@ -699,6 +695,8 @@ std::optional<uint32_t> Renderer::PickEntity(int32_t mouseX,
   uint32_t *data = static_cast<uint32_t *>(mapped);
   uint32_t entityID = data[mouseY * width + mouseX];
   vkUnmapMemory(m_Context->Device, stagingBuffer.GetMemory());
+
+  INFERNO_LOG_INFO("EntityID:{}", entityID);
 
   if (entityID == Entity::NULL_ENTITY) {
     return std::nullopt;

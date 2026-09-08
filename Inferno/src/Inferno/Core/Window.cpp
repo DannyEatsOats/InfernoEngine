@@ -110,10 +110,6 @@ void Window::Init(const WindowProperties &properties) {
 
         switch (action) {
         case GLFW_PRESS: {
-
-          int mouseX = static_cast<int>(xpos);
-          int mouseY = static_cast<int>(ypos);
-
           MouseButtonPressedEvent event(button, mouseX, mouseY);
           data.EventCallback(event);
           break;

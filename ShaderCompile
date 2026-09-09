@@ -11,3 +11,5 @@ glslc Game/assets/shaders/test.frag -o Game/assets/shaders/test.frag.spv
 glslc Game/assets/shaders/grid.vert -o Game/assets/shaders/grid.vert.spv
 glslc Game/assets/shaders/grid.frag -o Game/assets/shaders/grid.frag.spv
 
+glslc Game/assets/shaders/editor_outline.vert -o Game/assets/shaders/editor_outline.vert.spv
+glslc Game/assets/shaders/editor_outline.frag -o Game/assets/shaders/editor_outline.frag.spv

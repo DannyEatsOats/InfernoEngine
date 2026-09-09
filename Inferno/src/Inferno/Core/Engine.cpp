@@ -71,8 +71,8 @@ void Engine::StartUp() {
   m_RenderingContext->StartUp(m_Window->GetNativeWindow());
   m_ResourceManager = MakeScope<ResourceManager>(m_RenderingContext.get());
   m_Renderer = MakeScope<Renderer>(m_RenderingContext.get());
-  m_Renderer->StartUp(m_ResourceManager.get());
   m_EditorSystem = MakeScope<EditorSystem>();
+  m_Renderer->StartUp(m_ResourceManager.get(), m_EditorSystem.get());
   m_EditorSystem->StartUp(m_Renderer.get());
   m_EditorCamera = MakeScope<DannyCamera>();
   m_EditorCamera->Init((float)m_Window->GetWidth() /

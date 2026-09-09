@@ -2,6 +2,7 @@
 
 #include "EditorSystem.h"
 #include "Inferno/Core/Log.h"
+#include "Inferno/ECS/Entity.h"
 #include "Inferno/Events/KeyCodes.h"
 #include "Inferno/Events/MouseEvent.h"
 #include "Inferno/Renderer/Renderer.h"
@@ -29,6 +30,8 @@ void EditorSystem::OnEvent(Event &event) {
             INFERNO_LOG_INFO("Optional Entity: {}", m_SelectedEntityID);
 
             return true;
+          } else {
+            m_SelectedEntityID = Entity::NULL_ENTITY;
           }
         }
 

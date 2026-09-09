@@ -6,7 +6,7 @@ layout(location = 2) in vec3 inColor;
 layout(location = 3) in vec2 inTexCoord;
 
 layout(location = 0) out vec4 outFinalColor;
-layout(location = 1) flat out uint outEntityID;
+layout(location = 1) out uint outEntityID;
 
 layout(set = 0, binding = 0) uniform sampler2D albedoTexture;
 

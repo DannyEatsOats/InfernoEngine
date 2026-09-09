@@ -1,9 +1,9 @@
 #pragma once
 
 #include "Inferno/ECS/Entity.h"
+#include "Inferno/Events/Event.h"
 #include "Inferno/Renderer/Renderer.h"
 #include "Inferno/Utils/DeltaTime.h"
-#include "Inferno/Events/Event.h"
 
 namespace Inferno {
 class EditorSystem {
@@ -16,6 +16,8 @@ public:
 
   void OnEvent(Event &event);
   void Update(DeltaTime deltaTime);
+
+  uint32_t GetSelectedEntity() { return m_SelectedEntityID; }
 
 private:
   const Renderer *m_Renderer = nullptr;

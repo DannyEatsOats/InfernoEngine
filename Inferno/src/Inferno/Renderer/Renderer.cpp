@@ -21,22 +21,21 @@
 
 #include "Inferno/ECS/Component.h"
 #include "Inferno/Resource/ResourceManager.h"
+#include "Inferno/Tools/EditorSystem.h"
 #include "Renderer.h"
 
 #include <glm/glm.hpp>
 
 namespace Inferno {
-struct MeshPushConstants {
-  glm::mat4 Mvp;
-  glm::mat4 Model;
-  uint32_t EntityID;
-};
-
-void Renderer::StartUp(ResourceManager *resourceManager) {
+void Renderer::StartUp(ResourceManager *resourceManager,
+                       EditorSystem *editorSystem) {
   m_ResourceManager = resourceManager;
+  m_EditorSystem = editorSystem;
 
   CreateForwardPipeline();
   CreateGridPipeline();
+  CreateOutlineDescriptorResources();
+  CreateOutlinePipeline();
   AllocateCommandBuffer();
   CreateSyncObjects();
   // TODO: SET CAMERA
@@ -47,7 +46,7 @@ void Renderer::ShutDown() {
     vkDeviceWaitIdle(m_Context->Device);
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-      vkDestroyFence(m_Context->Device, m_DrawFences[i], nullptr);
+      vkDestroyFence(m_Context->Device, m_Frames[i].DrawFence, nullptr);
     }
 
     size_t swapchanSize = m_Context->Swapchain.Images.size();
@@ -57,8 +56,8 @@ void Renderer::ShutDown() {
     }
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-      vkDestroySemaphore(m_Context->Device, m_PresentCompleteSemaphores[i],
-                         nullptr);
+      vkDestroySemaphore(m_Context->Device,
+                         m_Frames[i].PresentCompleteSemaphore, nullptr);
     }
 
     vkDestroyDescriptorSetLayout(m_Context->Device,
@@ -67,14 +66,22 @@ void Renderer::ShutDown() {
     vkDestroyDescriptorPool(m_Context->Device, m_TextureDescriptorPool,
                             nullptr);
 
+    vkDestroySampler(m_Context->Device, m_OutlineSampler, nullptr);
+
+    vkDestroyDescriptorSetLayout(m_Context->Device,
+                                 m_OutlineDescriptorSetLayout, nullptr);
+    vkDestroyDescriptorPool(m_Context->Device, m_OutlineDescriptorPool,
+                            nullptr);
+
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-      m_DepthImages[i] = Image();
+      m_Frames[i].DepthImage = Image();
     }
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-      m_EntityPickingImages[i] = Image();
+      m_Frames[i].EntityPickingImage = Image();
     }
 
+    m_OutlinePipeline.Destroy(m_Context->Device);
     m_GridPipeline.Destroy(m_Context->Device);
     m_ForwardPipeline.Destroy(m_Context->Device);
   }
@@ -88,15 +95,15 @@ void Renderer::Render(const std::vector<Entity *> &entities) {
   bool success = true;
 
   // Draw Frame
-  if (vkWaitForFences(m_Context->Device, 1, &m_DrawFences[m_FrameIndex],
+  if (vkWaitForFences(m_Context->Device, 1, &m_Frames[m_FrameIndex].DrawFence,
                       VK_TRUE, UINT64_MAX) != VK_SUCCESS) {
     throw std::runtime_error("Failed to Wait on Draw Fence");
   }
 
   {
     ZoneScopedN("FelRobban a Fing");
-    auto [result, imageIndex] =
-        m_Context->AcquireNextImage(m_PresentCompleteSemaphores[m_FrameIndex]);
+    auto [result, imageIndex] = m_Context->AcquireNextImage(
+        m_Frames[m_FrameIndex].PresentCompleteSemaphore);
     m_ImageIndex = imageIndex;
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
@@ -105,7 +112,7 @@ void Renderer::Render(const std::vector<Entity *> &entities) {
     } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
       throw std::runtime_error("Failed to acquire swapchain image!");
     }
-    vkResetFences(m_Context->Device, 1, &m_DrawFences[m_FrameIndex]);
+    vkResetFences(m_Context->Device, 1, &m_Frames[m_FrameIndex].DrawFence);
   }
 
   RecordForwardPass(entities);
@@ -116,16 +123,16 @@ void Renderer::Render(const std::vector<Entity *> &entities) {
   VkSubmitInfo submitInfo{
       .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
       .waitSemaphoreCount = 1,
-      .pWaitSemaphores = &m_PresentCompleteSemaphores[m_FrameIndex],
+      .pWaitSemaphores = &m_Frames[m_FrameIndex].PresentCompleteSemaphore,
       .pWaitDstStageMask = &waitDstStageMask,
       .commandBufferCount = 1,
-      .pCommandBuffers = &m_CommandBuffers[m_FrameIndex],
+      .pCommandBuffers = &m_Frames[m_FrameIndex].CommandBuffer,
       .signalSemaphoreCount = 1,
       .pSignalSemaphores = &m_RenderFinishedSemaphores[m_ImageIndex],
   };
 
   if (vkQueueSubmit(m_Context->GraphicsQueue, 1, &submitInfo,
-                    m_DrawFences[m_FrameIndex]) != VK_SUCCESS) {
+                    m_Frames[m_FrameIndex].DrawFence) != VK_SUCCESS) {
     throw std::runtime_error("Failed To Submit To Graphics Queue");
   }
 
@@ -163,7 +170,7 @@ void Renderer::CreateForwardPipeline() {
   };
 
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-    m_DepthImages[i] = Image(m_Context, depthImageSpec);
+    m_Frames[i].DepthImage = Image(m_Context, depthImageSpec);
   }
 
   // Entity Picking Image Creation
@@ -172,13 +179,13 @@ void Renderer::CreateForwardPipeline() {
       .Height = m_Context->Swapchain.Extent.height,
       .MipLevels = 1,
       .Format = VK_FORMAT_R32_UINT,
-      .Usage =
-          VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+      .Usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+               VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
       .Aspect = VK_IMAGE_ASPECT_COLOR_BIT,
   };
 
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-    m_EntityPickingImages[i] = Image(m_Context, pickingImageSpec);
+    m_Frames[i].EntityPickingImage = Image(m_Context, pickingImageSpec);
   }
 
   // Shader Stages
@@ -341,17 +348,123 @@ void Renderer::CreateGridPipeline() {
   m_GridPipeline.Init(m_Context->Device, description);
 }
 
+void Renderer::CreateOutlinePipeline() {
+  auto *shader = m_ResourceManager->Load<Shader>("editor_outline");
+
+  // TODO: I'm not sure the outline needs blending
+  VkPipelineColorBlendAttachmentState blendAttachment{
+      .blendEnable = VK_TRUE,
+      .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+      .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+      .colorBlendOp = VK_BLEND_OP_ADD,
+      .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+      .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+      .alphaBlendOp = VK_BLEND_OP_ADD,
+      .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                        VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+  };
+
+  VkPushConstantRange pushConstantRange{
+      .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+      .offset = 0,
+      .size = sizeof(OutlinePushConstants),
+  };
+
+  PipelineDescription description{
+      .VertexShader = shader->GetVertexShaderModule(),
+      .FragmentShader = shader->GetFragmentShaderModule(),
+      .CullMode = VK_CULL_MODE_NONE,
+      .DepthTest = VK_FALSE,
+      .DepthWrite = VK_FALSE,
+      .ColorFormats = {m_Context->Swapchain.Format},
+      .BlendAttachments = {blendAttachment},
+      .DescriptorSetLayouts = {m_OutlineDescriptorSetLayout},
+      .PushConstantRanges = {pushConstantRange},
+  };
+
+  m_OutlinePipeline.Init(m_Context->Device, description);
+}
+
+void Renderer::CreateOutlineDescriptorResources() {
+  VkSamplerCreateInfo samplerInfo{
+      .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+      .magFilter = VK_FILTER_NEAREST,
+      .minFilter = VK_FILTER_NEAREST,
+      .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+      .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+      .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+  };
+  if (vkCreateSampler(m_Context->Device, &samplerInfo, nullptr,
+                      &m_OutlineSampler) != VK_SUCCESS) {
+    throw std::runtime_error("Failed To Create Outline Sampler");
+  }
+
+  VkDescriptorSetLayoutBinding entityIDBufferBinding{
+      .binding = 0,
+      .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+      .descriptorCount = 1,
+      .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+  };
+
+  VkDescriptorSetLayoutCreateInfo layoutInfo{
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+      .bindingCount = 1,
+      .pBindings = &entityIDBufferBinding,
+  };
+
+  if (vkCreateDescriptorSetLayout(m_Context->Device, &layoutInfo, nullptr,
+                                  &m_OutlineDescriptorSetLayout) !=
+      VK_SUCCESS) {
+    throw std::runtime_error("Failed to Create Outline Descriptor Set Layout");
+  }
+
+  VkDescriptorPoolSize poolSize{
+      .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+      .descriptorCount = MAX_FRAMES_IN_FLIGHT,
+  };
+  VkDescriptorPoolCreateInfo poolInfo{
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+      .maxSets = MAX_FRAMES_IN_FLIGHT,
+      .poolSizeCount = 1,
+      .pPoolSizes = &poolSize,
+  };
+
+  if (vkCreateDescriptorPool(m_Context->Device, &poolInfo, nullptr,
+                             &m_OutlineDescriptorPool) != VK_SUCCESS) {
+    throw std::runtime_error("Failed To Create Outline Descriptor Pool");
+  }
+
+  std::array<VkDescriptorSetLayout, MAX_FRAMES_IN_FLIGHT> layouts;
+  layouts.fill(m_OutlineDescriptorSetLayout);
+
+  VkDescriptorSetAllocateInfo allocInfo{
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+      .descriptorPool = m_OutlineDescriptorPool,
+      .descriptorSetCount = MAX_FRAMES_IN_FLIGHT,
+      .pSetLayouts = layouts.data(),
+  };
+
+  if (vkAllocateDescriptorSets(m_Context->Device, &allocInfo,
+                               m_OutlineDescriptorSets.data()) != VK_SUCCESS) {
+    throw std::runtime_error("Failed To Allocate Outline DescriptorSets");
+  }
+
+  UpdateOutlineDescriptorSets();
+}
+
 void Renderer::AllocateCommandBuffer() {
   VkCommandBufferAllocateInfo allocInfo{
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
       .commandPool = m_Context->GraphicsCommandPool,
       .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-      .commandBufferCount = MAX_FRAMES_IN_FLIGHT,
+      .commandBufferCount = 1,
   };
 
-  if (vkAllocateCommandBuffers(m_Context->Device, &allocInfo,
-                               m_CommandBuffers.data()) != VK_SUCCESS) {
-    throw std::runtime_error("Failed To Allocate Command Buffers");
+  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+    if (vkAllocateCommandBuffers(m_Context->Device, &allocInfo,
+                                 &m_Frames[i].CommandBuffer) != VK_SUCCESS) {
+      throw std::runtime_error("Failed To Allocate Command Buffers");
+    }
   }
 }
 
@@ -361,7 +474,8 @@ void Renderer::CreateSyncObjects() {
   };
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
     if (vkCreateSemaphore(m_Context->Device, &semaphoreInfo, nullptr,
-                          &m_PresentCompleteSemaphores[i]) != VK_SUCCESS) {
+                          &m_Frames[i].PresentCompleteSemaphore) !=
+        VK_SUCCESS) {
       throw std::runtime_error("Failed To Create Present Complete Semaphore");
     }
     VkFenceCreateInfo fenceInfo{
@@ -369,7 +483,7 @@ void Renderer::CreateSyncObjects() {
         .flags = VK_FENCE_CREATE_SIGNALED_BIT,
     };
     if (vkCreateFence(m_Context->Device, &fenceInfo, nullptr,
-                      &m_DrawFences[i]) != VK_SUCCESS) {
+                      &m_Frames[i].DrawFence) != VK_SUCCESS) {
       throw std::runtime_error("Failed To Create Draw Fence");
     }
   }
@@ -428,29 +542,28 @@ void Renderer::RecordForwardPass(const std::vector<Entity *> &entities) {
       .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
   };
 
-  if (vkBeginCommandBuffer(m_CommandBuffers[m_FrameIndex], &beginInfo) !=
-      VK_SUCCESS) {
+  VkCommandBuffer cmd = m_Frames[m_FrameIndex].CommandBuffer;
+
+  if (vkBeginCommandBuffer(cmd, &beginInfo) != VK_SUCCESS) {
     throw std::runtime_error("Failed To start Forward Pass Command Buffer");
   }
 
-  TransitionImageLayout(m_CommandBuffers[m_FrameIndex],
-                        m_Context->Swapchain.Images[m_ImageIndex],
+  TransitionImageLayout(cmd, m_Context->Swapchain.Images[m_ImageIndex],
                         VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, {},
                         VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
                         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
 
-  TransitionImageLayout(m_CommandBuffers[m_FrameIndex],
-                        m_DepthImages[m_FrameIndex].GetImage(),
+  TransitionImageLayout(cmd, m_Frames[m_FrameIndex].DepthImage.GetImage(),
                         VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                         VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, {},
                         VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
                         VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
                         VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT);
 
-  TransitionImageLayout(m_CommandBuffers[m_FrameIndex],
-                        m_EntityPickingImages[m_FrameIndex].GetImage(),
+  TransitionImageLayout(cmd,
+                        m_Frames[m_FrameIndex].EntityPickingImage.GetImage(),
                         VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, {},
                         VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
@@ -479,7 +592,7 @@ void Renderer::RecordForwardPass(const std::vector<Entity *> &entities) {
   };
   colorAttachments[1] = {
       .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-      .imageView = m_EntityPickingImages[m_FrameIndex].GetView(),
+      .imageView = m_Frames[m_FrameIndex].EntityPickingImage.GetView(),
       .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
       .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
       .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -491,7 +604,7 @@ void Renderer::RecordForwardPass(const std::vector<Entity *> &entities) {
   };
   VkRenderingAttachmentInfo depthAttachment{
       .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-      .imageView = m_DepthImages[m_FrameIndex].GetView(),
+      .imageView = m_Frames[m_FrameIndex].DepthImage.GetView(),
       .imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
       .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
       .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -507,10 +620,10 @@ void Renderer::RecordForwardPass(const std::vector<Entity *> &entities) {
       .pDepthAttachment = &depthAttachment,
   };
 
-  vkCmdBeginRendering(m_CommandBuffers[m_FrameIndex], &renderingInfo);
+  vkCmdBeginRendering(cmd, &renderingInfo);
 
-  vkCmdBindPipeline(m_CommandBuffers[m_FrameIndex],
-                    VK_PIPELINE_BIND_POINT_GRAPHICS, m_ForwardPipeline.Handle);
+  vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                    m_ForwardPipeline.Handle);
 
   VkViewport viewport{
       .x = 0.0f,
@@ -520,13 +633,13 @@ void Renderer::RecordForwardPass(const std::vector<Entity *> &entities) {
       .minDepth = 0.0f,
       .maxDepth = 1.0f,
   };
-  vkCmdSetViewport(m_CommandBuffers[m_FrameIndex], 0, 1, &viewport);
+  vkCmdSetViewport(cmd, 0, 1, &viewport);
 
   VkRect2D scissor{
       .offset{0, 0},
       .extent = m_Context->Swapchain.Extent,
   };
-  vkCmdSetScissor(m_CommandBuffers[m_FrameIndex], 0, 1, &scissor);
+  vkCmdSetScissor(cmd, 0, 1, &scissor);
 
   for (auto *entity : entities) {
     MeshComponent *meshComponent = entity->GetComponent<MeshComponent>();
@@ -539,12 +652,13 @@ void Renderer::RecordForwardPass(const std::vector<Entity *> &entities) {
     glm::mat4 model =
         entity->GetComponent<TransformComponent>()->GetTransformmatrix();
 
-    MeshPushConstants push{};
-    push.Mvp = m_ActiveCamera.Proj * m_ActiveCamera.View * model;
-    push.Model = model;
-    push.EntityID = entity->GetID();
+    MeshPushConstants push{
+        .Mvp = m_ActiveCamera.Proj * m_ActiveCamera.View * model,
+        .Model = model,
+        .EntityID = entity->GetID(),
+    };
 
-    vkCmdPushConstants(m_CommandBuffers[m_FrameIndex], m_ForwardPipeline.Layout,
+    vkCmdPushConstants(cmd, m_ForwardPipeline.Layout,
                        VK_SHADER_STAGE_VERTEX_BIT |
                            VK_SHADER_STAGE_FRAGMENT_BIT,
                        0, sizeof(MeshPushConstants), &push);
@@ -552,11 +666,9 @@ void Renderer::RecordForwardPass(const std::vector<Entity *> &entities) {
     VkBuffer vertexBuffers[] = {
         meshComponent->GetMesh()->GetVertexBuffer()->Get()};
     VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(m_CommandBuffers[m_FrameIndex], 0, 1, vertexBuffers,
-                           offsets);
+    vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
     vkCmdBindIndexBuffer(
-        m_CommandBuffers[m_FrameIndex],
-        meshComponent->GetMesh()->GetIndexBuffer()->Get(), 0,
+        cmd, meshComponent->GetMesh()->GetIndexBuffer()->Get(), 0,
         meshComponent->GetMesh()->GetIndexBuffer()->GetIndexType());
 
     VkDescriptorSet textureSet = texture->GetDescriptorSet();
@@ -566,18 +678,18 @@ void Renderer::RecordForwardPass(const std::vector<Entity *> &entities) {
                                    m_TextureDescriptorSetLayout);
       textureSet = texture->GetDescriptorSet();
     }
-    vkCmdBindDescriptorSets(
-        m_CommandBuffers[m_FrameIndex], VK_PIPELINE_BIND_POINT_GRAPHICS,
-        m_ForwardPipeline.Layout, 0, 1, &textureSet, 0, nullptr);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            m_ForwardPipeline.Layout, 0, 1, &textureSet, 0,
+                            nullptr);
 
-    vkCmdDrawIndexed(m_CommandBuffers[m_FrameIndex],
-                     meshComponent->GetMesh()->GetIndexCount(), 1, 0, 0, 0);
+    vkCmdDrawIndexed(cmd, meshComponent->GetMesh()->GetIndexCount(), 1, 0, 0,
+                     0);
   }
 
   // Drawing Grid
   {
-    vkCmdBindPipeline(m_CommandBuffers[m_FrameIndex],
-                      VK_PIPELINE_BIND_POINT_GRAPHICS, m_GridPipeline.Handle);
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                      m_GridPipeline.Handle);
 
     // TODO: Inverse should not be calculated per frame
     GridPushConstants gridPushConstants{
@@ -586,27 +698,116 @@ void Renderer::RecordForwardPass(const std::vector<Entity *> &entities) {
         .ViewInv = glm::inverse(m_ActiveCamera.View),
         .ProjInv = glm::inverse(m_ActiveCamera.Proj),
     };
-    vkCmdPushConstants(m_CommandBuffers[m_FrameIndex], m_GridPipeline.Layout,
+    vkCmdPushConstants(cmd, m_GridPipeline.Layout,
                        VK_SHADER_STAGE_VERTEX_BIT |
                            VK_SHADER_STAGE_FRAGMENT_BIT,
                        0, sizeof(GridPushConstants), &gridPushConstants);
 
-    vkCmdDraw(m_CommandBuffers[m_FrameIndex], 6, 1, 0, 0);
+    vkCmdDraw(cmd, 6, 1, 0, 0);
   }
 
   // Rendering End
 
-  vkCmdEndRendering(m_CommandBuffers[m_FrameIndex]);
+  vkCmdEndRendering(cmd);
+
+  RecordOutlinePass(cmd, m_Frames[m_FrameIndex]);
 
   TransitionImageLayout(
-      m_CommandBuffers[m_FrameIndex], m_Context->Swapchain.Images[m_ImageIndex],
-      VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-      VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-      {}, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+      cmd, m_Context->Swapchain.Images[m_ImageIndex], VK_IMAGE_ASPECT_COLOR_BIT,
+      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+      VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, {},
+      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
       VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT);
 
-  vkEndCommandBuffer(m_CommandBuffers[m_FrameIndex]);
+  vkEndCommandBuffer(cmd);
 };
+
+void Renderer::RecordOutlinePass(VkCommandBuffer cmd, FrameData &frame) {
+  TransitionImageLayout(
+      cmd, frame.EntityPickingImage.GetImage(), VK_IMAGE_ASPECT_COLOR_BIT,
+      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+      VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_2_SHADER_READ_BIT,
+      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+      VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
+
+  VkRenderingAttachmentInfo colorAttachment{
+      .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+      .imageView = m_Context->Swapchain.ImageViews[m_ImageIndex],
+      .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+      .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+      .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+  };
+
+  VkRenderingInfo renderingInfo{
+      .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+      .renderArea =
+          {
+              .offset = {0, 0},
+              .extent = m_Context->Swapchain.Extent,
+          },
+      .layerCount = 1,
+      .colorAttachmentCount = 1,
+      .pColorAttachments = &colorAttachment,
+  };
+
+  vkCmdBeginRendering(cmd, &renderingInfo);
+  uint32_t selectedEntity = m_EditorSystem->GetSelectedEntity();
+
+  if (selectedEntity != Entity::NULL_ENTITY) {
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                      m_OutlinePipeline.Handle);
+
+    VkViewport viewport{
+        .width = static_cast<float>(m_Context->Swapchain.Extent.width),
+        .height = static_cast<float>(m_Context->Swapchain.Extent.height),
+        .minDepth = 0.0f,
+        .maxDepth = 1.0f,
+    };
+    vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+    VkRect2D scissor{
+        .extent = m_Context->Swapchain.Extent,
+    };
+    vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            m_OutlinePipeline.Layout, 0, 1,
+                            &m_OutlineDescriptorSets[m_FrameIndex], 0, nullptr);
+
+    OutlinePushConstants pushConstants{
+        .Color = {1.0f, 0.6f, 0.0f},
+        .EntityID = selectedEntity,
+        .ThicknessPX = 2,
+    };
+    vkCmdPushConstants(cmd, m_OutlinePipeline.Layout,
+                       VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pushConstants),
+                       &pushConstants);
+
+    vkCmdDraw(cmd, 3, 1, 0, 0);
+  }
+
+  vkCmdEndRendering(cmd);
+}
+
+void Renderer::UpdateOutlineDescriptorSets() {
+  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+    VkDescriptorImageInfo imageInfo{
+        .sampler = m_OutlineSampler,
+        .imageView = m_Frames[i].EntityPickingImage.GetView(),
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+    };
+    VkWriteDescriptorSet write{
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = m_OutlineDescriptorSets[i],
+        .dstBinding = 0,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        .pImageInfo = &imageInfo,
+    };
+    vkUpdateDescriptorSets(m_Context->Device, 1, &write, 0, nullptr);
+  }
+}
 
 void Renderer::Resize() {
   if (m_Context->Swapchain.Extent.width == 0 ||
@@ -632,17 +833,19 @@ void Renderer::Resize() {
       .Height = m_Context->Swapchain.Extent.height,
       .MipLevels = 1,
       .Format = VK_FORMAT_R32_UINT,
-      .Usage =
-          VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+      .Usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+               VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
       .Aspect = VK_IMAGE_ASPECT_COLOR_BIT,
   };
 
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
     Image newDepth = Image(m_Context, depthImageSpec);
     Image newPicking = Image(m_Context, pickingImageSpec);
-    m_DepthImages[i] = std::move(newDepth);
-    m_EntityPickingImages[i] = std::move(newPicking);
+    m_Frames[i].DepthImage = std::move(newDepth);
+    m_Frames[i].EntityPickingImage = std::move(newPicking);
   }
+
+  UpdateOutlineDescriptorSets();
 
   m_Resized = false;
 }
@@ -652,7 +855,7 @@ std::optional<uint32_t> Renderer::PickEntity(int32_t mouseX,
                                              int32_t mouseY) const {
   uint32_t lastFrameIndex =
       (m_FrameIndex + MAX_FRAMES_IN_FLIGHT - 1) % MAX_FRAMES_IN_FLIGHT;
-  VkImage pickingImage = m_EntityPickingImages[lastFrameIndex].GetImage();
+  VkImage pickingImage = m_Frames[lastFrameIndex].EntityPickingImage.GetImage();
 
   uint32_t width = m_Context->Swapchain.Extent.width;
   uint32_t height = m_Context->Swapchain.Extent.height;
@@ -665,13 +868,12 @@ std::optional<uint32_t> Renderer::PickEntity(int32_t mouseX,
 
   VkCommandBuffer cmdBuffer = VulkanUtils::BeginSingleTimeCommands(m_Context);
 
-  TransitionImageLayout(cmdBuffer, pickingImage, VK_IMAGE_ASPECT_COLOR_BIT,
-                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-                        VK_ACCESS_2_TRANSFER_READ_BIT,
-                        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                        VK_PIPELINE_STAGE_2_COPY_BIT);
+  TransitionImageLayout(
+      cmdBuffer, pickingImage, VK_IMAGE_ASPECT_COLOR_BIT,
+      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_ACCESS_2_SHADER_READ_BIT,
+      VK_ACCESS_2_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+      VK_PIPELINE_STAGE_2_COPY_BIT);
 
   VkBufferImageCopy copyRegion{
       .bufferOffset = 0,

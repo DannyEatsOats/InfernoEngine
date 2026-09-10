@@ -27,7 +27,6 @@ void EditorSystem::OnEvent(Event &event) {
 
           if (optionalEntity.has_value()) {
             m_SelectedEntityID = optionalEntity.value();
-            INFERNO_LOG_INFO("Optional Entity: {}", m_SelectedEntityID);
 
             return true;
           } else {

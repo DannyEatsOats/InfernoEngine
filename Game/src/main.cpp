@@ -68,6 +68,29 @@ public:
       auto texture = m_ResourceManager->Load<Texture>("zsamo");
       knight->AddComponent<MeshComponent>(mesh, texture);
     }
+
+    {
+      Entity *knight = CreateEntity("viking");
+      auto *transform = knight->AddComponent<TransformComponent>();
+
+      auto rotation = transform->GetRotation();
+      glm::quat rotationInc =
+          glm::angleAxis(glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+      glm::quat newRotation = rotationInc * rotation;
+      transform->SetRotation(newRotation);
+
+      rotation = transform->GetRotation();
+      rotationInc =
+          glm::angleAxis(glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+      newRotation = rotationInc * rotation;
+      transform->SetRotation(newRotation);
+      transform->SetPosition(transform->GetPosition() + glm::vec3(0.0f, 0.0f, -3.0f));
+
+      auto mesh = m_ResourceManager->Load<Mesh>("viking_room");
+      auto texture = m_ResourceManager->Load<Texture>("viking_room");
+      knight->AddComponent<MeshComponent>(mesh, texture);
+
+    }
   }
 
   void OnDetach() override {}

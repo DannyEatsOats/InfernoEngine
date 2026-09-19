@@ -9,6 +9,7 @@
 #include "Inferno/Resource/ResourceManager.h"
 #include "Inferno/Tools/EditorCamera.h"
 #include "Inferno/Tools/EditorSystem.h"
+#include "Inferno/Tools/GUISystem.h"
 #include "Window.h"
 
 namespace Inferno {
@@ -50,6 +51,7 @@ private:
   Scope<DeviceContext> m_RenderingContext;
   Scope<Renderer> m_Renderer;
   Scope<ResourceManager> m_ResourceManager;
+  Scope<GUISystem> m_GUISystem;
   Scope<EditorSystem> m_EditorSystem;
   // TODO: Move EditorCamera to EditorSystem
   Scope<DannyCamera> m_EditorCamera;

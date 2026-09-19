@@ -53,6 +53,8 @@ add_library(Inferno
         src/Inferno/Tools/GeometryGenerator.cpp
         src/Inferno/Tools/EditorSystem.h
         src/Inferno/Tools/EditorSystem.cpp
+        src/Inferno/Tools/GUISystem.h
+        src/Inferno/Tools/GUISystem.cpp
         src/Inferno/Tools/EditorCamera.h
         src/Inferno/Tools/EditorCamera.cpp
         # EVENTS

@@ -81,6 +81,8 @@ add_library(imgui STATIC
     imgui/backends/imgui_impl_vulkan.cpp
 )
 
+set_target_properties(imgui PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 target_compile_definitions(imgui PUBLIC
     IMGUI_IMPL_VULKAN_USE_VOLK
     #VK_NO_PROTOTYPES

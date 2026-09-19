@@ -28,9 +28,10 @@
 
 namespace Inferno {
 void Renderer::StartUp(ResourceManager *resourceManager,
-                       EditorSystem *editorSystem) {
+                       EditorSystem *editorSystem, GUISystem *guiSystem) {
   m_ResourceManager = resourceManager;
   m_EditorSystem = editorSystem;
+  m_GUISystem = guiSystem;
 
   CreateForwardPipeline();
   CreateGridPipeline();
@@ -711,6 +712,10 @@ void Renderer::RecordForwardPass(const std::vector<Entity *> &entities) {
   vkCmdEndRendering(cmd);
 
   RecordOutlinePass(cmd, m_Frames[m_FrameIndex]);
+
+  m_GUISystem->RenderGUI(cmd,
+                         m_Context->Swapchain.ImageViews[m_ImageIndex],
+                         m_Context->Swapchain.Extent);
 
   TransitionImageLayout(
       cmd, m_Context->Swapchain.Images[m_ImageIndex], VK_IMAGE_ASPECT_COLOR_BIT,

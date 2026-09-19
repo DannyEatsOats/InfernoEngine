@@ -279,6 +279,8 @@ void DeviceContext::CreateLogicalDevice() {
       deviceIndices.graphicsFamily.value(),
       deviceIndices.presentFamily.value()};
 
+  GraphicsQueueFamily = deviceIndices.graphicsFamily.value();
+
   float queuePriority = 1.0f;
   for (uint32_t queueFamily : uniqueQueueFamilies) {
     VkDeviceQueueCreateInfo queueCreateInfo = {

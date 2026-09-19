@@ -27,6 +27,7 @@ struct DeviceContext {
   PhysicalDeviceProperties PhysicalDeviceProps{};
   VkCommandPool GraphicsCommandPool = VK_NULL_HANDLE;
   VkCommandPool TransientCommandPool = VK_NULL_HANDLE;
+  uint32_t GraphicsQueueFamily = 0;
 
   void *WindowHandle = nullptr;
 

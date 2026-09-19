@@ -4,6 +4,7 @@
 #include "Inferno/Renderer/DeviceContext.h"
 #include "Inferno/Renderer/Pipeline.h"
 #include "Inferno/Resource/ResourceManager.h"
+#include "Inferno/Tools/GUISystem.h"
 #include "glm/ext/vector_float3.hpp"
 #include <array>
 #include <cstdint>
@@ -58,7 +59,8 @@ public:
   Renderer &operator=(const Renderer &) = delete;
   Renderer &operator=(Renderer &&) = delete;
 
-  void StartUp(ResourceManager *resourceManager, EditorSystem *editorSystem);
+  void StartUp(ResourceManager *resourceManager, EditorSystem *editorSystem,
+               GUISystem *guiSystem);
   void ShutDown();
 
   void Render(const std::vector<Entity *> &entities);
@@ -101,6 +103,7 @@ private:
   DeviceContext *m_Context = nullptr;
   ResourceManager *m_ResourceManager = nullptr;
   EditorSystem *m_EditorSystem = nullptr;
+  GUISystem *m_GUISystem = nullptr;
 
   // Pipelines
   Pipeline m_ForwardPipeline{};

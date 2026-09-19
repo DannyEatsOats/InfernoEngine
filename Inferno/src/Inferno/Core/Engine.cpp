@@ -71,8 +71,11 @@ void Engine::StartUp() {
   m_RenderingContext->StartUp(m_Window->GetNativeWindow());
   m_ResourceManager = MakeScope<ResourceManager>(m_RenderingContext.get());
   m_Renderer = MakeScope<Renderer>(m_RenderingContext.get());
+  m_GUISystem = MakeScope<GUISystem>();
+  m_GUISystem->StartUp(m_RenderingContext.get(), m_Window.get());
   m_EditorSystem = MakeScope<EditorSystem>();
-  m_Renderer->StartUp(m_ResourceManager.get(), m_EditorSystem.get());
+  m_Renderer->StartUp(m_ResourceManager.get(), m_EditorSystem.get(),
+                      m_GUISystem.get());
   m_EditorSystem->StartUp(m_Renderer.get());
   m_EditorCamera = MakeScope<DannyCamera>();
   m_EditorCamera->Init((float)m_Window->GetWidth() /
@@ -89,6 +92,7 @@ void Engine::ShutDown() {
   }
 
   m_EditorSystem->ShutDown();
+  m_GUISystem->ShutDown();
   m_Renderer->ShutDown();
   m_ResourceManager->UnloadAll();
   m_RenderingContext->ShutDown();
@@ -114,6 +118,7 @@ void Engine::Run() {
 
       switch (m_RuntimeMode) {
       case Inferno::RuntimeMode::EDITOR:
+        m_GUISystem->NewFrame();
         m_EditorCamera->OnUpdate(deltaTime);
         m_Renderer->SetActiveCamera(
             {m_EditorCamera->GetViewMat(), m_EditorCamera->GetProjectionMat()});
@@ -141,8 +146,9 @@ void Engine::Run() {
         break;
       }
 
-      if (m_ActiveScene)
+      if (m_ActiveScene) {
         m_Renderer->Render(m_ActiveScene->GetEntities());
+      }
 
       m_Window->OnUpdate();
       FrameMark;

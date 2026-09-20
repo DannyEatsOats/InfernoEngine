@@ -1,3 +1,4 @@
+#include "Inferno/Core/Engine.h"
 #include "Inferno/Core/Log.h"
 #include "Inferno/ECS/Entity.h"
 #include "Inferno/Renderer/Image.h"
@@ -88,7 +89,8 @@ void Renderer::ShutDown() {
   }
 }
 
-void Renderer::Render(const std::vector<Entity *> &entities) {
+void Renderer::Render(const std::vector<Entity *> &entities,
+                      RuntimeMode runtimeMode) {
   if (m_Resized) {
     Resize();
   }
@@ -116,7 +118,25 @@ void Renderer::Render(const std::vector<Entity *> &entities) {
     vkResetFences(m_Context->Device, 1, &m_Frames[m_FrameIndex].DrawFence);
   }
 
-  RecordForwardPass(entities);
+  {
+    FrameData &frame = BeginFrame();
+
+    switch (runtimeMode) {
+    case Inferno::RuntimeMode::EDITOR:
+      EDITOR_Frame(frame, entities);
+      break;
+
+    case Inferno::RuntimeMode::GAME:
+      GAME_Frame(frame, entities);
+      break;
+    }
+
+    m_GUISystem->RenderGUI(frame.CommandBuffer,
+                           m_Context->Swapchain.ImageViews[m_ImageIndex],
+                           m_Context->Swapchain.Extent);
+
+    EndFrame(frame);
+  }
 
   VkPipelineStageFlags waitDstStageMask =
       VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -536,34 +556,63 @@ void Renderer::TransitionImageLayout(VkCommandBuffer cmd, VkImage image,
   vkCmdPipelineBarrier2(cmd, &dependencyInfo);
 }
 
-void Renderer::RecordForwardPass(const std::vector<Entity *> &entities) {
-
+FrameData &Renderer::BeginFrame() {
   VkCommandBufferBeginInfo beginInfo{
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
       .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
   };
 
-  VkCommandBuffer cmd = m_Frames[m_FrameIndex].CommandBuffer;
+  FrameData &frameData = m_Frames[m_FrameIndex];
 
-  if (vkBeginCommandBuffer(cmd, &beginInfo) != VK_SUCCESS) {
+  if (vkBeginCommandBuffer(frameData.CommandBuffer, &beginInfo) != VK_SUCCESS) {
     throw std::runtime_error("Failed To start Forward Pass Command Buffer");
   }
 
-  TransitionImageLayout(cmd, m_Context->Swapchain.Images[m_ImageIndex],
+  return frameData;
+}
+
+void Renderer::EndFrame(FrameData &frame) {
+  TransitionImageLayout(
+      frame.CommandBuffer, m_Context->Swapchain.Images[m_ImageIndex],
+      VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+      VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+      {}, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+      VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT);
+
+  vkEndCommandBuffer(frame.CommandBuffer);
+}
+
+void Renderer::EDITOR_Frame(FrameData &frame,
+                            const std::vector<Entity *> &entities) {
+  RecordForwardPass(frame, entities);
+  RecordOutlinePass(frame);
+}
+
+void Renderer::GAME_Frame(FrameData &frame,
+                          const std::vector<Entity *> &entities) {
+  RecordForwardPass(frame, entities);
+}
+
+void Renderer::RecordForwardPass(FrameData &frame,
+                                 const std::vector<Entity *> &entities) {
+
+  TransitionImageLayout(frame.CommandBuffer,
+                        m_Context->Swapchain.Images[m_ImageIndex],
                         VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, {},
                         VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
                         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
 
-  TransitionImageLayout(cmd, m_Frames[m_FrameIndex].DepthImage.GetImage(),
+  TransitionImageLayout(frame.CommandBuffer,
+                        m_Frames[m_FrameIndex].DepthImage.GetImage(),
                         VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                         VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, {},
                         VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
                         VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
                         VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT);
 
-  TransitionImageLayout(cmd,
+  TransitionImageLayout(frame.CommandBuffer,
                         m_Frames[m_FrameIndex].EntityPickingImage.GetImage(),
                         VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, {},
@@ -621,9 +670,9 @@ void Renderer::RecordForwardPass(const std::vector<Entity *> &entities) {
       .pDepthAttachment = &depthAttachment,
   };
 
-  vkCmdBeginRendering(cmd, &renderingInfo);
+  vkCmdBeginRendering(frame.CommandBuffer, &renderingInfo);
 
-  vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+  vkCmdBindPipeline(frame.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                     m_ForwardPipeline.Handle);
 
   VkViewport viewport{
@@ -634,13 +683,13 @@ void Renderer::RecordForwardPass(const std::vector<Entity *> &entities) {
       .minDepth = 0.0f,
       .maxDepth = 1.0f,
   };
-  vkCmdSetViewport(cmd, 0, 1, &viewport);
+  vkCmdSetViewport(frame.CommandBuffer, 0, 1, &viewport);
 
   VkRect2D scissor{
       .offset{0, 0},
       .extent = m_Context->Swapchain.Extent,
   };
-  vkCmdSetScissor(cmd, 0, 1, &scissor);
+  vkCmdSetScissor(frame.CommandBuffer, 0, 1, &scissor);
 
   for (auto *entity : entities) {
     MeshComponent *meshComponent = entity->GetComponent<MeshComponent>();
@@ -659,7 +708,7 @@ void Renderer::RecordForwardPass(const std::vector<Entity *> &entities) {
         .EntityID = entity->GetID(),
     };
 
-    vkCmdPushConstants(cmd, m_ForwardPipeline.Layout,
+    vkCmdPushConstants(frame.CommandBuffer, m_ForwardPipeline.Layout,
                        VK_SHADER_STAGE_VERTEX_BIT |
                            VK_SHADER_STAGE_FRAGMENT_BIT,
                        0, sizeof(MeshPushConstants), &push);
@@ -667,10 +716,10 @@ void Renderer::RecordForwardPass(const std::vector<Entity *> &entities) {
     VkBuffer vertexBuffers[] = {
         meshComponent->GetMesh()->GetVertexBuffer()->Get()};
     VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
+    vkCmdBindVertexBuffers(frame.CommandBuffer, 0, 1, vertexBuffers, offsets);
     vkCmdBindIndexBuffer(
-        cmd, meshComponent->GetMesh()->GetIndexBuffer()->Get(), 0,
-        meshComponent->GetMesh()->GetIndexBuffer()->GetIndexType());
+        frame.CommandBuffer, meshComponent->GetMesh()->GetIndexBuffer()->Get(),
+        0, meshComponent->GetMesh()->GetIndexBuffer()->GetIndexType());
 
     VkDescriptorSet textureSet = texture->GetDescriptorSet();
     // TODO: Fix This On multithreading
@@ -679,17 +728,17 @@ void Renderer::RecordForwardPass(const std::vector<Entity *> &entities) {
                                    m_TextureDescriptorSetLayout);
       textureSet = texture->GetDescriptorSet();
     }
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            m_ForwardPipeline.Layout, 0, 1, &textureSet, 0,
-                            nullptr);
+    vkCmdBindDescriptorSets(
+        frame.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+        m_ForwardPipeline.Layout, 0, 1, &textureSet, 0, nullptr);
 
-    vkCmdDrawIndexed(cmd, meshComponent->GetMesh()->GetIndexCount(), 1, 0, 0,
-                     0);
+    vkCmdDrawIndexed(frame.CommandBuffer,
+                     meshComponent->GetMesh()->GetIndexCount(), 1, 0, 0, 0);
   }
 
   // Drawing Grid
   {
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+    vkCmdBindPipeline(frame.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                       m_GridPipeline.Handle);
 
     // TODO: Inverse should not be calculated per frame
@@ -699,38 +748,23 @@ void Renderer::RecordForwardPass(const std::vector<Entity *> &entities) {
         .ViewInv = glm::inverse(m_ActiveCamera.View),
         .ProjInv = glm::inverse(m_ActiveCamera.Proj),
     };
-    vkCmdPushConstants(cmd, m_GridPipeline.Layout,
+    vkCmdPushConstants(frame.CommandBuffer, m_GridPipeline.Layout,
                        VK_SHADER_STAGE_VERTEX_BIT |
                            VK_SHADER_STAGE_FRAGMENT_BIT,
                        0, sizeof(GridPushConstants), &gridPushConstants);
 
-    vkCmdDraw(cmd, 6, 1, 0, 0);
+    vkCmdDraw(frame.CommandBuffer, 6, 1, 0, 0);
   }
 
   // Rendering End
 
-  vkCmdEndRendering(cmd);
-
-  RecordOutlinePass(cmd, m_Frames[m_FrameIndex]);
-
-  m_GUISystem->RenderGUI(cmd,
-                         m_Context->Swapchain.ImageViews[m_ImageIndex],
-                         m_Context->Swapchain.Extent);
-
-  TransitionImageLayout(
-      cmd, m_Context->Swapchain.Images[m_ImageIndex], VK_IMAGE_ASPECT_COLOR_BIT,
-      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-      VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, {},
-      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-      VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT);
-
-  vkEndCommandBuffer(cmd);
+  vkCmdEndRendering(frame.CommandBuffer);
 };
 
-void Renderer::RecordOutlinePass(VkCommandBuffer cmd, FrameData &frame) {
+void Renderer::RecordOutlinePass(FrameData &frame) {
   TransitionImageLayout(
-      cmd, frame.EntityPickingImage.GetImage(), VK_IMAGE_ASPECT_COLOR_BIT,
-      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+      frame.CommandBuffer, frame.EntityPickingImage.GetImage(),
+      VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
       VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_2_SHADER_READ_BIT,
       VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -756,11 +790,11 @@ void Renderer::RecordOutlinePass(VkCommandBuffer cmd, FrameData &frame) {
       .pColorAttachments = &colorAttachment,
   };
 
-  vkCmdBeginRendering(cmd, &renderingInfo);
+  vkCmdBeginRendering(frame.CommandBuffer, &renderingInfo);
   uint32_t selectedEntity = m_EditorSystem->GetSelectedEntity();
 
   if (selectedEntity != Entity::NULL_ENTITY) {
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+    vkCmdBindPipeline(frame.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                       m_OutlinePipeline.Handle);
 
     VkViewport viewport{
@@ -769,14 +803,15 @@ void Renderer::RecordOutlinePass(VkCommandBuffer cmd, FrameData &frame) {
         .minDepth = 0.0f,
         .maxDepth = 1.0f,
     };
-    vkCmdSetViewport(cmd, 0, 1, &viewport);
+    vkCmdSetViewport(frame.CommandBuffer, 0, 1, &viewport);
 
     VkRect2D scissor{
         .extent = m_Context->Swapchain.Extent,
     };
-    vkCmdSetScissor(cmd, 0, 1, &scissor);
+    vkCmdSetScissor(frame.CommandBuffer, 0, 1, &scissor);
 
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+    vkCmdBindDescriptorSets(frame.CommandBuffer,
+                            VK_PIPELINE_BIND_POINT_GRAPHICS,
                             m_OutlinePipeline.Layout, 0, 1,
                             &m_OutlineDescriptorSets[m_FrameIndex], 0, nullptr);
 
@@ -785,14 +820,14 @@ void Renderer::RecordOutlinePass(VkCommandBuffer cmd, FrameData &frame) {
         .EntityID = selectedEntity,
         .ThicknessPX = 2,
     };
-    vkCmdPushConstants(cmd, m_OutlinePipeline.Layout,
+    vkCmdPushConstants(frame.CommandBuffer, m_OutlinePipeline.Layout,
                        VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pushConstants),
                        &pushConstants);
 
-    vkCmdDraw(cmd, 3, 1, 0, 0);
+    vkCmdDraw(frame.CommandBuffer, 3, 1, 0, 0);
   }
 
-  vkCmdEndRendering(cmd);
+  vkCmdEndRendering(frame.CommandBuffer);
 }
 
 void Renderer::UpdateOutlineDescriptorSets() {

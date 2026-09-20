@@ -129,7 +129,7 @@ void Engine::Run() {
       }
 
       if (m_ActiveScene) {
-        m_Renderer->Render(m_ActiveScene->GetEntities());
+        m_Renderer->Render(m_ActiveScene->GetEntities(), m_RuntimeMode);
       }
 
       m_Window->OnUpdate();

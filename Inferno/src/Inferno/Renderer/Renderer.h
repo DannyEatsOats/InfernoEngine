@@ -49,6 +49,8 @@ struct FrameData {
   VkFence DrawFence = VK_NULL_HANDLE;
 };
 
+enum class RuntimeMode;
+
 class Renderer {
 public:
   Renderer(DeviceContext *context) : m_Context(context) {}
@@ -63,7 +65,7 @@ public:
                GUISystem *guiSystem);
   void ShutDown();
 
-  void Render(const std::vector<Entity *> &entities);
+  void Render(const std::vector<Entity *> &entities, RuntimeMode runtimeMode);
 
   void SignalResize() { m_Resized = true; }
 
@@ -89,8 +91,18 @@ private:
                              VkPipelineStageFlags2 srcStageMask,
                              VkPipelineStageFlags2 dstStageMask) const;
 
-  void RecordForwardPass(const std::vector<Entity *> &entities);
-  void RecordOutlinePass(VkCommandBuffer cmd, FrameData &frame);
+  FrameData &BeginFrame();
+  void EndFrame(FrameData &frame);
+
+  // Selecting the Passes and Updates based on Engine Runtime Mode
+  void EDITOR_Frame(FrameData &frame, const std::vector<Entity *> &entities);
+  void GAME_Frame(FrameData &frame, const std::vector<Entity *> &entities);
+  void EDITOR_Update();
+  void GAME_Update();
+
+  void RecordForwardPass(FrameData &frame,
+                         const std::vector<Entity *> &entities);
+  void RecordOutlinePass(FrameData &frame);
 
   void UpdateOutlineDescriptorSets();
 

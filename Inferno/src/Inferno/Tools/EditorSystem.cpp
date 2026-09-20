@@ -39,5 +39,17 @@ void EditorSystem::OnEvent(Event &event) {
       });
 }
 
-void EditorSystem::Update(DeltaTime deltaTime) { ImGui::ShowDemoWindow(); }
+void EditorSystem::Update(DeltaTime deltaTime,
+                          const std::vector<Entity *> &entities) {
+  ImGui::ShowDemoWindow();
+
+  ImGui::Begin("Scene Hierarchy");
+
+  for (auto entity : entities) {
+    if (ImGui::TreeNodeEx(entity->GetName().data())) {
+    }
+  }
+
+  ImGui::End();
+}
 } // namespace Inferno

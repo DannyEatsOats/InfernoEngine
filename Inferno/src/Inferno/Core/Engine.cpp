@@ -182,7 +182,7 @@ void Engine::EDITOR_Update(DeltaTime deltaTime) {
   m_EditorCamera->OnUpdate(deltaTime);
   m_Renderer->SetActiveCamera(
       {m_EditorCamera->GetViewMat(), m_EditorCamera->GetProjectionMat()});
-  m_EditorSystem->Update(deltaTime);
+  m_EditorSystem->Update(deltaTime, m_ActiveScene->GetEntities());
 }
 
 void Engine::GAME_Update(DeltaTime deltaTime) {

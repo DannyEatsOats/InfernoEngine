@@ -15,7 +15,7 @@ public:
   void ShutDown();
 
   void OnEvent(Event &event);
-  void Update(DeltaTime deltaTime);
+  void Update(DeltaTime deltaTime, const std::vector<Entity *> &entities);
 
   uint32_t GetSelectedEntity() { return m_SelectedEntityID; }
 

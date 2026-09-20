@@ -1,4 +1,5 @@
 #include "GUISystem.h"
+#include "Inferno/Core/Log.h"
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
@@ -12,10 +13,15 @@ namespace Inferno {
 void GUISystem::StartUp(DeviceContext *context, Window *window) {
   m_Context = context;
 
-  std::array<VkDescriptorPoolSize, 1> poolSizes{{{
-      .type = VK_DESCRIPTOR_TYPE_SAMPLER,
-      .descriptorCount = IMGUI_IMPL_VULKAN_MINIMUM_SAMPLED_IMAGE_POOL_SIZE,
-  }}};
+  std::array<VkDescriptorPoolSize, 2> poolSizes{
+      {{
+           .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+           .descriptorCount = IMGUI_IMPL_VULKAN_MINIMUM_SAMPLED_IMAGE_POOL_SIZE,
+       },
+       {
+           .type = VK_DESCRIPTOR_TYPE_SAMPLER,
+           .descriptorCount = IMGUI_IMPL_VULKAN_MINIMUM_SAMPLED_IMAGE_POOL_SIZE,
+       }}};
 
   VkDescriptorPoolCreateInfo poolInfo{
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
@@ -78,6 +84,8 @@ void GUISystem::StartUp(DeviceContext *context, Window *window) {
 }
 
 void GUISystem::ShutDown() {
+  vkDeviceWaitIdle(m_Context->Device);
+
   ImGui_ImplVulkan_Shutdown();
   ImGui_ImplGlfw_Shutdown();
   ImGui::DestroyContext();
@@ -98,7 +106,7 @@ void GUISystem::RenderGUI(VkCommandBuffer cmd, VkImageView targetView,
   const bool isMinimized =
       (drawData->DisplaySize.x <= 0.0f || drawData->DisplaySize.y <= 0.0f);
 
-  if (!isMinimized) {
+  if (isMinimized) {
     return;
   }
 

@@ -6,6 +6,7 @@
 #include "Inferno/Events/Input.h"
 #include "Inferno/Events/KeyCodes.h"
 #include "Inferno/Events/KeyEvent.h"
+#include "Inferno/Tools/EditorSystem.h"
 #include "Inferno/Utils/DeltaTime.h"
 #include "Log.h"
 
@@ -116,33 +117,14 @@ void Engine::Run() {
         SwitchScene();
       }
 
+      m_GUISystem->NewFrame();
+
       switch (m_RuntimeMode) {
       case Inferno::RuntimeMode::EDITOR:
-        m_GUISystem->NewFrame();
-        m_EditorCamera->OnUpdate(deltaTime);
-        m_Renderer->SetActiveCamera(
-            {m_EditorCamera->GetViewMat(), m_EditorCamera->GetProjectionMat()});
+        EDITOR_Update(deltaTime);
         break;
-
       case Inferno::RuntimeMode::GAME:
-        if (!m_ActiveScene) {
-          INFERNO_LOG_WARN("Active Scene Is Not Set");
-          break;
-        }
-
-        m_ActiveScene->OnUpdate(deltaTime);
-
-        // Safe null checks for game camera during gameplay
-        if (auto activeCamera = m_ActiveScene->GetActiveCamera()) {
-          if (auto cameraComponent =
-                  activeCamera->GetComponent<CameraComponent>()) {
-            m_Renderer->SetActiveCamera(
-                {cameraComponent->GetViewMatrix(),
-                 cameraComponent->GetProjectionMatrix()});
-          } else {
-            INFERNO_LOG_ERROR("Active Camera Has No Camera Component");
-          }
-        }
+        GAME_Update(deltaTime);
         break;
       }
 
@@ -170,10 +152,10 @@ void Engine::OnEvent(Event &event) {
     if (event.GetKeyCode() == ENGINE_KEY_F12) {
       switch (m_RuntimeMode) {
       case Inferno::RuntimeMode::EDITOR:
-        OnRuntimeStart();
+        OnGameRuntimeStart();
         break;
       case Inferno::RuntimeMode::GAME:
-        OnRuntimeStop();
+        OnGameRuntimeStop();
         break;
       }
       return true;
@@ -193,6 +175,32 @@ void Engine::OnEvent(Event &event) {
       m_ActiveScene->OnEvent(event);
     }
     break;
+  }
+}
+
+void Engine::EDITOR_Update(DeltaTime deltaTime) {
+  m_EditorCamera->OnUpdate(deltaTime);
+  m_Renderer->SetActiveCamera(
+      {m_EditorCamera->GetViewMat(), m_EditorCamera->GetProjectionMat()});
+  m_EditorSystem->Update(deltaTime);
+}
+
+void Engine::GAME_Update(DeltaTime deltaTime) {
+  if (!m_ActiveScene) {
+    INFERNO_LOG_WARN("Active Scene Is Not Set");
+    return;
+  }
+
+  m_ActiveScene->OnUpdate(deltaTime);
+
+  // Safe null checks for game camera during gameplay
+  if (auto activeCamera = m_ActiveScene->GetActiveCamera()) {
+    if (auto cameraComponent = activeCamera->GetComponent<CameraComponent>()) {
+      m_Renderer->SetActiveCamera({cameraComponent->GetViewMatrix(),
+                                   cameraComponent->GetProjectionMatrix()});
+    } else {
+      INFERNO_LOG_ERROR("Active Camera Has No Camera Component");
+    }
   }
 }
 
@@ -238,7 +246,7 @@ bool Engine::OnWindowResize(WindowResizeEvent &event) {
   return false;
 }
 
-void Engine::OnRuntimeStart() {
+void Engine::OnGameRuntimeStart() {
   if (!m_ActiveScene) {
     INFERNO_LOG_ERROR("[OnRuntimeStart] Active Scene is Not set");
     return;
@@ -263,7 +271,7 @@ void Engine::OnRuntimeStart() {
   INFERNO_LOG_INFO("Started Gameplay Runtime");
 }
 
-void Engine::OnRuntimeStop() {
+void Engine::OnGameRuntimeStop() {
   if (!m_SceneSnapshop) {
     INFERNO_LOG_ERROR("[OnRuntimeStop] Scene Snapshot has not been created");
     return;

@@ -6,6 +6,7 @@
 #include "Inferno/Events/KeyCodes.h"
 #include "Inferno/Events/MouseEvent.h"
 #include "Inferno/Renderer/Renderer.h"
+#include <imgui.h>
 
 namespace Inferno {
 void EditorSystem::StartUp(Renderer *renderer) { m_Renderer = renderer; }
@@ -38,5 +39,5 @@ void EditorSystem::OnEvent(Event &event) {
       });
 }
 
-void EditorSystem::Update(DeltaTime deltaTime) {}
+void EditorSystem::Update(DeltaTime deltaTime) { ImGui::ShowDemoWindow(); }
 } // namespace Inferno

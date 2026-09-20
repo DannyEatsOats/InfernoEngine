@@ -38,8 +38,11 @@ private:
   bool OnWindowClosed(WindowCloseEvent &event);
   bool OnWindowResize(WindowResizeEvent &event);
 
-  void OnRuntimeStart();
-  void OnRuntimeStop();
+  void OnGameRuntimeStart();
+  void OnGameRuntimeStop();
+
+  void EDITOR_Update(DeltaTime deltaTime);
+  void GAME_Update(DeltaTime deltaTime);
 
   void SwitchScene();
 

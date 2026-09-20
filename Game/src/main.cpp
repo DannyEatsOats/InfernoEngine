@@ -9,6 +9,7 @@
 #include "glm/ext/vector_float3.hpp"
 #include "glm/trigonometric.hpp"
 #include <Inferno.h>
+#include <imgui.h>
 
 namespace Inferno {
 class GameScene : public Inferno::Scene {

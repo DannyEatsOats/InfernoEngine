@@ -31,9 +31,10 @@ private:
   uint32_t m_SelectedEntityID = Entity::NULL_ENTITY;
 
   struct TransformEditorState {
-    glm::vec3 RotationEuler{0.0f};
-    glm::quat Rotation{1.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec3 EulerDegrees{0.0f};
+    glm::quat LastRotation{1.0f, 0.0f, 0.0f, 0.0f};
     bool Initialized = false;
+    bool Editing = false;
   };
 
   std::unordered_map<uint32_t, TransformEditorState> m_TransformEditorStates;

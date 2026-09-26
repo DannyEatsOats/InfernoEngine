@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cstdlib>
 #include <pch.h>
 
 #include "EditorSystem.h"
@@ -7,14 +8,83 @@
 #include "Inferno/Events/KeyCodes.h"
 #include "Inferno/Events/MouseEvent.h"
 #include "Inferno/Renderer/Renderer.h"
+#include "glm/ext/quaternion_trigonometric.hpp"
 #include "glm/ext/vector_float3.hpp"
 #include "glm/fwd.hpp"
+#include "glm/geometric.hpp"
 #include "glm/gtc/quaternion.hpp"
 #include "glm/gtc/type_ptr.hpp"
 #include "glm/trigonometric.hpp"
 #include <imgui.h>
 
 namespace Inferno {
+glm::quat EulerDegToQuat(const glm::vec3 &eulerDegrees) {
+  const glm::vec3 eulerRadians = glm::radians(eulerDegrees);
+
+  const glm::quat rotationX =
+      glm::angleAxis(eulerRadians.x, glm::vec3(1.0f, 0.0f, 0.0f));
+
+  const glm::quat rotationY =
+      glm::angleAxis(eulerRadians.y, glm::vec3(0.0f, 1.0f, 0.0f));
+
+  const glm::quat rotationZ =
+      glm::angleAxis(eulerRadians.z, glm::vec3(0.0f, 0.0f, 1.0f));
+
+  return glm::normalize(rotationZ * rotationY * rotationX);
+}
+
+bool SameOrientation(const glm::quat &a, const glm::quat &b) {
+  const glm::quat normalizedA = glm::normalize(a);
+  const glm::quat normalizedB = glm::normalize(b);
+
+  const float similarity = std::abs(glm::dot(normalizedA, normalizedB));
+
+  return similarity < 0.000001f;
+}
+
+float UnwrapAngleNear(float angle, float referece) {
+  return angle + std::round((referece - angle) / 360.0f);
+}
+
+glm::vec3 UnwrapEulerNear(glm::vec3 euler, const glm::vec3 &reference) {
+  euler.x = UnwrapAngleNear(euler.x, reference.x);
+  euler.y = UnwrapAngleNear(euler.y, reference.y);
+  euler.z = UnwrapAngleNear(euler.z, reference.z);
+
+  return euler;
+}
+
+glm::vec3 ClosestEulerRepresentation(const glm::quat &rotation,
+                                     const glm::vec3 &previousEulerDegrees) {
+  const glm::quat normalizedRotation = glm::normalize(rotation);
+
+  glm::vec3 primary = glm::degrees(glm::eulerAngles(normalizedRotation));
+
+  glm::vec3 alternate{
+      primary.x + 180.0f,
+      180.0f - primary.y,
+      primary.z + 180.0f,
+  };
+
+  primary = UnwrapEulerNear(primary, previousEulerDegrees);
+  alternate = UnwrapEulerNear(alternate, previousEulerDegrees);
+
+  const glm::vec3 primaryDifference = primary - previousEulerDegrees;
+
+  const glm::vec3 alternateDifference = alternate - previousEulerDegrees;
+
+  const float primaryDistanceSquared =
+      glm::dot(primaryDifference, primaryDifference);
+
+  const float alternateDistanceSquared =
+      glm::dot(alternateDifference, alternateDifference);
+
+  if (primaryDistanceSquared <= alternateDistanceSquared) {
+    return primary;
+  }
+
+  return alternate;
+}
 void EditorSystem::StartUp(Renderer *renderer) { m_Renderer = renderer; }
 
 void EditorSystem::ShutDown() {}
@@ -56,15 +126,21 @@ void EditorSystem::Update(DeltaTime deltaTime,
 
   DrawSceneHierarchy(entities);
 
-  if (m_SelectedEntityID != Entity::NULL_ENTITY) {
+  if (m_SelectedEntityID == Entity::NULL_ENTITY)
+    return;
 
-    auto entity =
-        *std::find_if(entities.begin(), entities.end(), [&](Entity *entity) {
-          return entity->GetID() == m_SelectedEntityID;
-        });
+  auto entity =
+      std::find_if(entities.begin(), entities.end(), [&](Entity *entity) {
+        return entity->GetID() == m_SelectedEntityID;
+      });
 
-    DrawComponentsPantel(entity);
+  if (entity == entities.end()) {
+    m_TransformEditorStates.erase(m_SelectedEntityID);
+    m_SelectedEntityID = Entity::NULL_ENTITY;
+    return;
   }
+
+  DrawComponentsPantel(*entity);
 }
 
 void EditorSystem::DrawSceneHierarchy(const std::vector<Entity *> &entities) {
@@ -105,37 +181,53 @@ void EditorSystem::DrawComponentsPantel(Entity *entity) {
 }
 
 void EditorSystem::DrawTransformComponent(TransformComponent *transform) {
-  if (!transform)
+  if (!transform) {
     return;
+  }
 
   glm::vec3 position = transform->GetPosition();
   glm::vec3 scale = transform->GetScale();
 
-  if (ImGui::DragFloat3("Position: ", &position.x, 0.01f)) {
+  ImGui::TextUnformatted("Transform");
+
+  if (ImGui::DragFloat3("Position", glm::value_ptr(position), 0.01f)) {
     transform->SetPosition(position);
   }
 
-  auto &rotState = m_TransformEditorStates[m_SelectedEntityID];
+  TransformEditorState &rotationState =
+      m_TransformEditorStates[m_SelectedEntityID];
 
-  if (!rotState.Initialized) {
-    rotState.Rotation = glm::normalize(transform->GetRotation());
+  const glm::quat componentRotation = glm::normalize(transform->GetRotation());
 
-    rotState.RotationEuler = glm::degrees(glm::eulerAngles(rotState.Rotation));
+  if (!rotationState.Initialized) {
+    rotationState.EulerDegrees =
+        glm::degrees(glm::eulerAngles(componentRotation));
 
-    rotState.Initialized = true;
+    rotationState.LastRotation = componentRotation;
+    rotationState.Initialized = true;
+  } else if (!rotationState.Editing &&
+             !SameOrientation(componentRotation, rotationState.LastRotation)) {
+    rotationState.EulerDegrees = ClosestEulerRepresentation(
+        componentRotation, rotationState.EulerDegrees);
+
+    rotationState.LastRotation = componentRotation;
   }
 
-  glm::vec3 oldEuler = rotState.RotationEuler;
+  const bool rotationChanged = ImGui::DragFloat3(
+      "Rotation", glm::value_ptr(rotationState.EulerDegrees), 0.25f);
 
-  if (ImGui::DragFloat3("Rotation", &rotState.RotationEuler.x, 1.0f)) {
-    glm::vec3 delta = rotState.RotationEuler - oldEuler;
+  rotationState.Editing = ImGui::IsItemActive();
 
-    // ApplyRotationDelta(transform, delta);
+  if (rotationChanged) {
+    const glm::quat editedRotation = EulerDegToQuat(rotationState.EulerDegrees);
+
+    transform->SetRotation(editedRotation);
+
+    rotationState.LastRotation = transform->GetRotation();
   }
 
-  if (ImGui::DragFloat3("Scale: ", &scale.x, 0.01f)) {
+  if (ImGui::DragFloat3("Scale", glm::value_ptr(scale), 0.01f)) {
     transform->SetScale(scale);
   }
 }
-
 } // namespace Inferno

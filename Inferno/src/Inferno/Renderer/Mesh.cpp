@@ -102,27 +102,18 @@ bool Mesh::LoadMeshData(std::string &filePath,
     for (const auto &index : shape.mesh.indices) {
       MeshVertex vertex{};
 
-      float rawX = attrib.vertices[3 * index.vertex_index + 0];
-      float rawY = attrib.vertices[3 * index.vertex_index + 1];
-      float rawZ = attrib.vertices[3 * index.vertex_index + 2];
+      float X = attrib.vertices[3 * index.vertex_index + 0];
+      float Y = attrib.vertices[3 * index.vertex_index + 1];
+      float Z = attrib.vertices[3 * index.vertex_index + 2];
 
-      float currentX = rawX;
-      float currentY = rawZ;
-      float currentZ = -rawY;
-
-      vertex.Position = {-currentZ, currentY, currentX};
+      vertex.Position = {X, Y, Z};
 
       if (!attrib.normals.empty() && index.normal_index >= 0) {
         float nX = attrib.normals[3 * index.normal_index + 0];
         float nY = attrib.normals[3 * index.normal_index + 1];
         float nZ = attrib.normals[3 * index.normal_index + 2];
 
-        float currentNX = nX;
-        float currentNY = nZ;
-        float currentNZ = -nY;
-
-        vertex.Normal =
-            glm::normalize(glm::vec3(-currentNZ, currentNY, currentNX));
+        vertex.Normal = glm::normalize(glm::vec3(nX, nY, nZ));
 
       } else {
         vertex.Normal = {0.0f, 1.0f, 0.0f};
@@ -155,7 +146,7 @@ bool Mesh::LoadMeshData(std::string &filePath,
   return true;
 }
 
-void Mesh::SetGeometryData(std::vector<MeshVertex>& vertexBufferData,
+void Mesh::SetGeometryData(std::vector<MeshVertex> &vertexBufferData,
                            std::vector<uint32_t> &indexBufferData) {
   m_VertexCount = static_cast<uint32_t>(vertexBufferData.size());
   m_IndexCount = static_cast<uint32_t>(indexBufferData.size());

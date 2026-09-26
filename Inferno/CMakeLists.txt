@@ -63,6 +63,9 @@ add_library(Inferno
         src/Inferno/Events/KeyEvent.h
         src/Inferno/Events/MouseEvent.h
         src/Inferno/Events/KeyCodes.h
+        # UI
+        src/Inferno/UI/ComponentUI.h
+        src/Inferno/UI/ComponentUI.cpp
         # CORE UTILS
         src/Inferno/Utils/DeltaTime.h
         # VENDOR

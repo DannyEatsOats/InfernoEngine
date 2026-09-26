@@ -8,6 +8,13 @@
 #include <unordered_map>
 
 namespace Inferno {
+struct TransformEditorState {
+  glm::vec3 EulerDegrees{0.0f};
+  glm::quat LastRotation{1.0f, 0.0f, 0.0f, 0.0f};
+  bool Initialized = false;
+  bool Editing = false;
+};
+
 class EditorSystem {
 public:
   EditorSystem() = default;
@@ -24,18 +31,10 @@ public:
   // INFO: Temp
   void DrawSceneHierarchy(const std::vector<Entity *> &entities);
   void DrawComponentsPantel(Entity *entity);
-  void DrawTransformComponent(TransformComponent *transform);
 
 private:
   const Renderer *m_Renderer = nullptr;
   uint32_t m_SelectedEntityID = Entity::NULL_ENTITY;
-
-  struct TransformEditorState {
-    glm::vec3 EulerDegrees{0.0f};
-    glm::quat LastRotation{1.0f, 0.0f, 0.0f, 0.0f};
-    bool Initialized = false;
-    bool Editing = false;
-  };
 
   std::unordered_map<uint32_t, TransformEditorState> m_TransformEditorStates;
 };

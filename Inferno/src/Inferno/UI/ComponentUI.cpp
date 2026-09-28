@@ -1,4 +1,5 @@
 #include "ComponentUI.h"
+#include "Inferno/ECS/Component.h"
 #include "glm/gtc/type_ptr.hpp"
 #include "imgui.h"
 #include <pch.h>
@@ -13,8 +14,12 @@ void UI::DrawTransformComponent(TransformComponent *transform,
   glm::vec3 position = transform->GetPosition();
   glm::vec3 scale = transform->GetScale();
 
+  const float labelWidth = 100.0f;
+
   if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
-    if (ImGui::DragFloat3("Position", glm::value_ptr(position), 0.01f)) {
+    ImGui::Text("Position");
+    ImGui::SameLine(labelWidth);
+    if (ImGui::DragFloat3("##Position", glm::value_ptr(position), 0.01f)) {
       transform->SetPosition(position);
     }
 
@@ -38,8 +43,10 @@ void UI::DrawTransformComponent(TransformComponent *transform,
       rotationState.LastRotation = componentRotation;
     }
 
+    ImGui::Text("Rotation");
+    ImGui::SameLine(labelWidth);
     const bool rotationChanged = ImGui::DragFloat3(
-        "Rotation", glm::value_ptr(rotationState.EulerDegrees), 0.25f);
+        "##Rotation", glm::value_ptr(rotationState.EulerDegrees), 0.25f);
 
     rotationState.Editing = ImGui::IsItemActive();
 
@@ -52,7 +59,9 @@ void UI::DrawTransformComponent(TransformComponent *transform,
       rotationState.LastRotation = transform->GetRotation();
     }
 
-    if (ImGui::DragFloat3("Scale", glm::value_ptr(scale), 0.01f)) {
+    ImGui::Text("Scale");
+    ImGui::SameLine(labelWidth);
+    if (ImGui::DragFloat3("##Scale", glm::value_ptr(scale), 0.01f)) {
       transform->SetScale(scale);
     }
   }
@@ -65,14 +74,31 @@ void UI::DrawCameraComponent(CameraComponent *camera) {
   ImGui::PushID(camera);
 
   if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen)) {
-    auto& cam = camera->GetCamera();
+    auto &cam = camera->GetCamera();
     float fov = cam.GetFOV();
     float near = cam.GetNear();
     float far = cam.GetFar();
+    float aspect = cam.GetAspect();
 
-    ImGui::DragFloat("FOV: ", &fov);
-    ImGui::DragFloat("Near: ", &near);
-    ImGui::DragFloat("Far: ", &far);
+    const float labelWidth = 100.0f;
+
+    ImGui::Text("FOV");
+    ImGui::SameLine(labelWidth);
+    if (ImGui::DragFloat("##FOV", &fov)) {
+      camera->SetPerspective(fov, aspect, near, far);
+    }
+
+    ImGui::Text("Near");
+    ImGui::SameLine(labelWidth);
+    if (ImGui::DragFloat("##Near", &near)) {
+      camera->SetPerspective(fov, aspect, near, far);
+    }
+
+    ImGui::Text("Far");
+    ImGui::SameLine(labelWidth);
+    if (ImGui::DragFloat("##Far", &far)) {
+      camera->SetPerspective(fov, aspect, near, far);
+    }
   }
 
   ImGui::PopID();

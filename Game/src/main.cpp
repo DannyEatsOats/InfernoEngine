@@ -98,8 +98,8 @@ public:
     */
 
     {
-      Entity *knight = CreateEntity("boat");
-      auto *transform = knight->AddComponent<TransformComponent>();
+      Entity *ship = CreateEntity("ship");
+      auto *transform = ship->AddComponent<TransformComponent>();
 
       /*
       auto rotation = transform->GetRotation();
@@ -123,7 +123,33 @@ public:
           "kenney/Models/OBJ format/ship-pirate-large");
       auto texture =
           m_ResourceManager->Load<Texture>("kenney/Textures/colormap");
-      knight->AddComponent<MeshComponent>(mesh, texture);
+      ship->AddComponent<MeshComponent>(mesh, texture);
+    }
+
+    {
+      Entity *island1 = CreateEntity("island1");
+      auto *transform = island1->AddComponent<TransformComponent>();
+
+      transform->SetPosition(glm::vec3(-6.0f, 0.0f, 0.0f));
+
+      auto mesh = m_ResourceManager->Load<Mesh>(
+          "kenney/Models/OBJ format/patch-sand-foliage");
+      auto texture =
+          m_ResourceManager->Load<Texture>("kenney/Textures/colormap");
+      island1->AddComponent<MeshComponent>(mesh, texture);
+    }
+
+    {
+      Entity *palm1 = CreateEntity("palm1");
+      auto *transform = palm1->AddComponent<TransformComponent>();
+
+      transform->SetPosition(glm::vec3(-6.0f, 0.0f, 0.0f));
+
+      auto mesh = m_ResourceManager->Load<Mesh>(
+          "kenney/Models/OBJ format/palm-bend");
+      auto texture =
+          m_ResourceManager->Load<Texture>("kenney/Textures/colormap");
+      palm1->AddComponent<MeshComponent>(mesh, texture);
     }
   }
 

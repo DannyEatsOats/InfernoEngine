@@ -122,6 +122,7 @@ public:
   float GetFOV() const { return m_FOV; }
   float GetNear() const { return m_NearPlane; }
   float GetFar() const { return m_FarPlane; }
+  float GetAspect() const { return m_AspectRatio; }
 
 private:
   mutable glm::mat4 m_ProjectionMatrix = glm::mat4(1.0f);

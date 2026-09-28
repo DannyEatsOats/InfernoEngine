@@ -35,7 +35,15 @@ public:
     return snapshot;
   }
 
-  void OnAttach() override {
+  void OnAttach() override {}
+
+  void OnDetach() override {}
+
+  void OnGuiRender() override {}
+
+  void SaveScene() override {}
+
+  void LoadScene() override {
     // Setting Active Gameplay Camera
     {
       Entity *mainCamera = CreateEntity("MainCamera");
@@ -118,14 +126,6 @@ public:
       knight->AddComponent<MeshComponent>(mesh, texture);
     }
   }
-
-  void OnDetach() override {}
-
-  void OnGuiRender() override {}
-
-  void SaveScene() override {}
-
-  void LoadScene() override {}
 
   void OnUpdate(DeltaTime deltaTime) override {
     float moveSpeed = 2.0f * deltaTime;
@@ -217,7 +217,7 @@ public:
 
 int main() {
   Inferno::Engine app = Inferno::Engine();
-  app.QueueActiveScene(
-      std::move(Inferno::MakeScope<Inferno::GameScene>("GameScene")));
+  auto scene = Inferno::MakeScope<Inferno::GameScene>("GameScene");
+  app.QueueActiveScene(std::move(scene));
   app.Run();
 }

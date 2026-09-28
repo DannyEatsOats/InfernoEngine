@@ -7,6 +7,8 @@ namespace Inferno {
 namespace UI {
 void DrawTransformComponent(TransformComponent *transform,
                             TransformEditorState &transformEditorState);
+void DrawCameraComponent(CameraComponent *camera);
+void DrawMeshComponent(MeshComponent *mesh);
 
 // Helpers
 

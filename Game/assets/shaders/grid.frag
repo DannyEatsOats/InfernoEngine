@@ -37,8 +37,8 @@ void main() {
 
     float linearDepth = ComputeLinearDepth(gl_FragDepth);
     float normalizedDepth = linearDepth / 15.0;
-    float fading = max(0.0, 0.5 - normalizedDepth);
+    float fading = max(0.0, 0.65 - normalizedDepth);
 
-    FragColor = ComputeGrid(worldPos, 2.0) + ComputeGrid(worldPos, 0.1);
+    FragColor = ComputeGrid(worldPos, 1.0) + ComputeGrid(worldPos, 0.1);
     FragColor.a *= fading;
 }

@@ -3,6 +3,7 @@
 #include <pch.h>
 
 #include "EditorSystem.h"
+#include "Inferno/ECS/Component.h"
 #include "Inferno/ECS/Entity.h"
 #include "Inferno/Events/KeyCodes.h"
 #include "Inferno/Events/MouseEvent.h"
@@ -109,6 +110,10 @@ void EditorSystem::DrawComponentsPantel(Entity *entity) {
   if (auto *transform = entity->GetComponent<TransformComponent>()) {
     UI::DrawTransformComponent(transform,
                                m_TransformEditorStates[m_SelectedEntityID]);
+  }
+
+  if (auto *camera = entity->GetComponent<CameraComponent>()) {
+    UI::DrawCameraComponent(camera);
   }
 
   ImGui::End();

@@ -216,6 +216,7 @@ void Engine::SwitchScene() {
 
   m_ActiveScene->SetResourceManager(m_ResourceManager.get());
   m_ActiveScene->SetEventCallback([this](Event &e) { this->OnEvent(e); });
+  m_ActiveScene->LoadScene();
   m_ActiveScene->OnAttach();
 }
 

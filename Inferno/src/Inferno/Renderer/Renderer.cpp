@@ -97,7 +97,6 @@ void Renderer::Render(const std::vector<Entity *> &entities,
 
   bool success = true;
 
-  // Draw Frame
   if (vkWaitForFences(m_Context->Device, 1, &m_Frames[m_FrameIndex].DrawFence,
                       VK_TRUE, UINT64_MAX) != VK_SUCCESS) {
     throw std::runtime_error("Failed to Wait on Draw Fence");
@@ -118,6 +117,7 @@ void Renderer::Render(const std::vector<Entity *> &entities,
     vkResetFences(m_Context->Device, 1, &m_Frames[m_FrameIndex].DrawFence);
   }
 
+  // Draw Frame
   {
     FrameData &frame = BeginFrame();
 

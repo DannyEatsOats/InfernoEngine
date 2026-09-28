@@ -5,7 +5,7 @@
 
 namespace Inferno {
 void UI::DrawTransformComponent(TransformComponent *transform,
-                                TransformEditorState& transformEditorState) {
+                                TransformEditorState &transformEditorState) {
   if (!transform) {
     return;
   }
@@ -13,47 +13,72 @@ void UI::DrawTransformComponent(TransformComponent *transform,
   glm::vec3 position = transform->GetPosition();
   glm::vec3 scale = transform->GetScale();
 
-  ImGui::TextUnformatted("Transform");
+  if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (ImGui::DragFloat3("Position", glm::value_ptr(position), 0.01f)) {
+      transform->SetPosition(position);
+    }
 
-  if (ImGui::DragFloat3("Position", glm::value_ptr(position), 0.01f)) {
-    transform->SetPosition(position);
-  }
+    TransformEditorState &rotationState = transformEditorState;
 
-  TransformEditorState &rotationState = transformEditorState;
+    const glm::quat componentRotation =
+        glm::normalize(transform->GetRotation());
 
-  const glm::quat componentRotation = glm::normalize(transform->GetRotation());
+    if (!rotationState.Initialized) {
+      rotationState.EulerDegrees =
+          glm::degrees(glm::eulerAngles(componentRotation));
 
-  if (!rotationState.Initialized) {
-    rotationState.EulerDegrees =
-        glm::degrees(glm::eulerAngles(componentRotation));
+      rotationState.LastRotation = componentRotation;
+      rotationState.Initialized = true;
+    } else if (!rotationState.Editing &&
+               !SameOrientation(componentRotation,
+                                rotationState.LastRotation)) {
+      rotationState.EulerDegrees = ClosestEulerRepresentation(
+          componentRotation, rotationState.EulerDegrees);
 
-    rotationState.LastRotation = componentRotation;
-    rotationState.Initialized = true;
-  } else if (!rotationState.Editing &&
-             !SameOrientation(componentRotation, rotationState.LastRotation)) {
-    rotationState.EulerDegrees = ClosestEulerRepresentation(
-        componentRotation, rotationState.EulerDegrees);
+      rotationState.LastRotation = componentRotation;
+    }
 
-    rotationState.LastRotation = componentRotation;
-  }
+    const bool rotationChanged = ImGui::DragFloat3(
+        "Rotation", glm::value_ptr(rotationState.EulerDegrees), 0.25f);
 
-  const bool rotationChanged = ImGui::DragFloat3(
-      "Rotation", glm::value_ptr(rotationState.EulerDegrees), 0.25f);
+    rotationState.Editing = ImGui::IsItemActive();
 
-  rotationState.Editing = ImGui::IsItemActive();
+    if (rotationChanged) {
+      const glm::quat editedRotation =
+          EulerDegToQuat(rotationState.EulerDegrees);
 
-  if (rotationChanged) {
-    const glm::quat editedRotation = EulerDegToQuat(rotationState.EulerDegrees);
+      transform->SetRotation(editedRotation);
 
-    transform->SetRotation(editedRotation);
+      rotationState.LastRotation = transform->GetRotation();
+    }
 
-    rotationState.LastRotation = transform->GetRotation();
-  }
-
-  if (ImGui::DragFloat3("Scale", glm::value_ptr(scale), 0.01f)) {
-    transform->SetScale(scale);
+    if (ImGui::DragFloat3("Scale", glm::value_ptr(scale), 0.01f)) {
+      transform->SetScale(scale);
+    }
   }
 }
+
+void UI::DrawCameraComponent(CameraComponent *camera) {
+  if (!camera)
+    return;
+
+  ImGui::PushID(camera);
+
+  if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen)) {
+    auto& cam = camera->GetCamera();
+    float fov = cam.GetFOV();
+    float near = cam.GetNear();
+    float far = cam.GetFar();
+
+    ImGui::DragFloat("FOV: ", &fov);
+    ImGui::DragFloat("Near: ", &near);
+    ImGui::DragFloat("Far: ", &far);
+  }
+
+  ImGui::PopID();
+}
+
+void UI::DrawMeshComponent(MeshComponent *mesh) {}
 
 // Helpers
 glm::quat UI::EulerDegToQuat(const glm::vec3 &eulerDegrees) {

@@ -6,6 +6,7 @@
 #include "Inferno/Events/Input.h"
 #include "Inferno/Events/KeyCodes.h"
 #include "Inferno/Events/KeyEvent.h"
+#include "Inferno/Renderer/Renderer.h"
 #include "Inferno/Tools/EditorSystem.h"
 #include "Inferno/Utils/DeltaTime.h"
 #include "Log.h"
@@ -180,9 +181,12 @@ void Engine::OnEvent(Event &event) {
 
 void Engine::EDITOR_Update(DeltaTime deltaTime) {
   m_EditorCamera->OnUpdate(deltaTime);
-  m_Renderer->SetActiveCamera(
-      {m_EditorCamera->GetViewMat(), m_EditorCamera->GetProjectionMat()});
-  m_EditorSystem->Update(deltaTime, m_ActiveScene->GetEntities());
+
+  const RenderCamera editorCamera = {m_EditorCamera->GetViewMat(),
+                                     m_EditorCamera->GetProjectionMat()};
+
+  m_Renderer->SetActiveCamera(editorCamera);
+  m_EditorSystem->Update(deltaTime, m_ActiveScene->GetEntities(), editorCamera);
 }
 
 void Engine::GAME_Update(DeltaTime deltaTime) {

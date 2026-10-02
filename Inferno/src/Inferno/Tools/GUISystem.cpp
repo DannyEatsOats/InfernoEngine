@@ -1,9 +1,9 @@
 #include "GUISystem.h"
-#include "Inferno/Core/Log.h"
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
 #include "vulkan/vulkan_core.h"
+#include <ImGuizmo.h>
 #include <pch.h>
 #include <stdexcept>
 #include <volk/volk.h>
@@ -38,6 +38,9 @@ void GUISystem::StartUp(DeviceContext *context, Window *window) {
 
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
+
+  ImGuizmo::SetImGuiContext(ImGui::GetCurrentContext());
+
   ImGuiIO &io = ImGui::GetIO();
   io.ConfigFlags |=
       ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
@@ -96,6 +99,7 @@ void GUISystem::NewFrame() {
   ImGui_ImplVulkan_NewFrame();
   ImGui_ImplGlfw_NewFrame();
   ImGui::NewFrame();
+  ImGuizmo::BeginFrame();
 }
 
 void GUISystem::RenderGUI(VkCommandBuffer cmd, VkImageView targetView,

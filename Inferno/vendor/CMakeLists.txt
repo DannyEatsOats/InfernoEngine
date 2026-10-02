@@ -95,10 +95,21 @@ target_include_directories(imgui PUBLIC
     ${Vulkan_INCLUDE_DIRS}/volk
 )
 
+
 target_link_libraries(imgui PUBLIC
     glfw
     Vulkan::Vulkan
 )
+
+# ------------------------
+# ImGuizmo
+# ------------------------
+
+add_subdirectory(imguizmo)
+
+set_target_properties(imguizmo PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+target_link_libraries(imguizmo PUBLIC imgui)
 
 # ------------------------
 # Tracy

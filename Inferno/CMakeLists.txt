@@ -97,6 +97,7 @@ target_link_libraries(Inferno
         ktx
         imgui
         tracy
+        imguizmo
 )
 
 target_compile_definitions(Inferno

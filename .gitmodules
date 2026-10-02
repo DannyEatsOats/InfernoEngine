@@ -34,3 +34,6 @@
 [submodule "Inferno/vendor/glfw"]
 	path = Inferno/vendor/glfw
 	url = https://github.com/glfw/glfw.git
+[submodule "Inferno/vendor/imguizmo"]
+	path = Inferno/vendor/imguizmo
+	url = git@github.com:CedricGuillemet/ImGuizmo.git

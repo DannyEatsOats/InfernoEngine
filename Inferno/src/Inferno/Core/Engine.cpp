@@ -187,6 +187,8 @@ void Engine::EDITOR_Update(DeltaTime deltaTime) {
 
   m_Renderer->SetActiveCamera(editorCamera);
   m_EditorSystem->Update(deltaTime, m_ActiveScene->GetEntities(), editorCamera);
+  //TODO: Refactor this 
+  m_Renderer->EDITOR_Update(m_ActiveScene->GetEntities());
 }
 
 void Engine::GAME_Update(DeltaTime deltaTime) {

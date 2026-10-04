@@ -4,6 +4,7 @@
 #include "Inferno/Renderer/BoundingBox.h"
 #include "Inferno/Renderer/Buffer.h"
 #include "Inferno/Renderer/DeviceContext.h"
+#include "Inferno/Renderer/Vertices.h"
 #include "Inferno/Resource/Resource.h"
 #include <vector>
 #include <vulkan/vulkan_core.h>
@@ -14,26 +15,7 @@
 namespace Inferno {
 class GeometryGenerator;
 
-struct MeshVertex {
-  glm::vec3 Position;
-  glm::vec3 Normal;
-  glm::vec3 Color;
-  glm::vec2 TexCoord;
 
-  bool operator==(const MeshVertex &other) const {
-    return Position == other.Position && Normal == other.Normal &&
-           Color == other.Color && TexCoord == other.TexCoord;
-  }
-
-  static BufferLayout<MeshVertex> GetLayout() {
-    return {
-        {"a_Position", ShaderDataType::Float3, offsetof(MeshVertex, Position)},
-        {"a_Normal", ShaderDataType::Float3, offsetof(MeshVertex, Normal)},
-        {"a_Color", ShaderDataType::Float3, offsetof(MeshVertex, Color)},
-        {"a_TexCoord", ShaderDataType::Float2, offsetof(MeshVertex, TexCoord)},
-    };
-  }
-};
 
 class Mesh : public Resource {
 public:

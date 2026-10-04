@@ -1,11 +1,11 @@
 #pragma once
 
 #include "Inferno/ECS/Entity.h"
+#include "Inferno/Renderer/Buffer.h"
 #include "Inferno/Renderer/DeviceContext.h"
 #include "Inferno/Renderer/Pipeline.h"
 #include "Inferno/Resource/ResourceManager.h"
 #include "Inferno/Tools/GUISystem.h"
-#include "glm/ext/vector_float3.hpp"
 #include <array>
 #include <cstdint>
 #include <optional>
@@ -14,26 +14,6 @@
 
 namespace Inferno {
 class EditorSystem;
-
-// Push Constants
-struct MeshPushConstants {
-  glm::mat4 Mvp;
-  glm::mat4 Model;
-  uint32_t EntityID;
-};
-
-struct OutlinePushConstants {
-  glm::vec3 Color;
-  uint32_t EntityID;
-  uint32_t ThicknessPX;
-};
-
-struct GridPushConstants {
-  glm::mat4 View;
-  glm::mat4 Proj;
-  glm::mat4 ViewInv;
-  glm::mat4 ProjInv;
-};
 // ==========================
 
 struct RenderCamera {
@@ -73,10 +53,15 @@ public:
 
   std::optional<uint32_t> PickEntity(int32_t mouseX, int32_t mouseY) const;
 
+  // TODO: Refactor this
+  void EDITOR_Update(const std::vector<Entity*>& entities);
+  void GAME_Update();
+
 private:
   void CreateForwardPipeline();
   void CreateGridPipeline();
   void CreateOutlinePipeline();
+  void CreateGizmoPipeline();
 
   void CreateOutlineDescriptorResources();
 
@@ -97,8 +82,6 @@ private:
   // Selecting the Passes and Updates based on Engine Runtime Mode
   void EDITOR_Frame(FrameData &frame, const std::vector<Entity *> &entities);
   void GAME_Frame(FrameData &frame, const std::vector<Entity *> &entities);
-  void EDITOR_Update();
-  void GAME_Update();
 
   void RecordForwardPass(FrameData &frame,
                          const std::vector<Entity *> &entities);
@@ -107,6 +90,12 @@ private:
   void UpdateOutlineDescriptorSets();
 
   void Resize();
+
+  // NOTE: TEMPORARY CODE, MOVE THIS TO AN EDITOR/DEBUG RENDERER!!!!!!!!!!!!!!!
+  void UpdateFrustumGizmo(const glm::mat4 &view, const glm::mat4 &proj);
+  void RecordGizmoPass(FrameData &frame, const std::vector<Entity *> &entities);
+  std::array<Scope<VertexBuffer<GizmoVertex>>, 2> m_GizmoVertexBuffers;
+  // NOTE: TEMPORARY CODE END
 
 private:
   static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
@@ -121,6 +110,7 @@ private:
   Pipeline m_ForwardPipeline{};
   Pipeline m_GridPipeline{};
   Pipeline m_OutlinePipeline{};
+  Pipeline m_GizmoPipeline{};
 
   // Frame Data
   std::array<FrameData, MAX_FRAMES_IN_FLIGHT> m_Frames;

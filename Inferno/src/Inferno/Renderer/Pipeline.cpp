@@ -37,7 +37,7 @@ void Pipeline::Init(VkDevice device, PipelineDescription &description) {
   // Input Assembly Stage
   VkPipelineInputAssemblyStateCreateInfo assemblyInfo{
       .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-      .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+      .topology = description.Topology,
       .primitiveRestartEnable = VK_FALSE,
   };
 

@@ -22,6 +22,8 @@ struct PipelineDescription {
 
   std::vector<VkDescriptorSetLayout> DescriptorSetLayouts{};
   std::vector<VkPushConstantRange> PushConstantRanges{};
+
+  VkPrimitiveTopology Topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 };
 
 struct Pipeline {

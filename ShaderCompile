@@ -13,3 +13,6 @@ glslc Game/assets/shaders/grid.frag -o Game/assets/shaders/grid.frag.spv
 
 glslc Game/assets/shaders/editor_outline.vert -o Game/assets/shaders/editor_outline.vert.spv
 glslc Game/assets/shaders/editor_outline.frag -o Game/assets/shaders/editor_outline.frag.spv
+
+glslc Game/assets/shaders/gizmo.vert -o Game/assets/shaders/gizmo.vert.spv
+glslc Game/assets/shaders/gizmo.frag -o Game/assets/shaders/gizmo.frag.spv

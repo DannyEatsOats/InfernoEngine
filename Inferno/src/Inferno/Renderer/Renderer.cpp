@@ -1,28 +1,32 @@
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include "Inferno/Core/Engine.h"
 #include "Inferno/Core/Log.h"
+#include "Inferno/Core/Memory.h"
 #include "Inferno/ECS/Entity.h"
 #include "Inferno/Renderer/Image.h"
 #include "Inferno/Renderer/Mesh.h"
 #include "Inferno/Renderer/Pipeline.h"
+#include "Inferno/Renderer/Vertices.h"
 #include "Inferno/Renderer/VulkanUtils.h"
 #include "glm/ext/matrix_float4x4.hpp"
 #include "glm/matrix.hpp"
 #include "tracy/Tracy.hpp"
+#include <GLFW/glfw3.h>
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <cstring>
 #include <optional>
+#include <pch.h>
 #include <stdexcept>
 #include <vector>
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
-#include <GLFW/glfw3.h>
-#include <pch.h>
 #include <volk/volk.h>
 #include <vulkan/vulkan_core.h>
 
 #include "Inferno/ECS/Component.h"
 #include "Inferno/Resource/ResourceManager.h"
 #include "Inferno/Tools/EditorSystem.h"
+#include "PushConstants.h"
 #include "Renderer.h"
 
 #include <glm/glm.hpp>
@@ -38,6 +42,7 @@ void Renderer::StartUp(ResourceManager *resourceManager,
   CreateGridPipeline();
   CreateOutlineDescriptorResources();
   CreateOutlinePipeline();
+  CreateGizmoPipeline();
   AllocateCommandBuffer();
   CreateSyncObjects();
   // TODO: SET CAMERA
@@ -83,6 +88,7 @@ void Renderer::ShutDown() {
       m_Frames[i].EntityPickingImage = Image();
     }
 
+    m_GizmoPipeline.Destroy(m_Context->Device);
     m_OutlinePipeline.Destroy(m_Context->Device);
     m_GridPipeline.Destroy(m_Context->Device);
     m_ForwardPipeline.Destroy(m_Context->Device);
@@ -473,6 +479,38 @@ void Renderer::CreateOutlineDescriptorResources() {
   UpdateOutlineDescriptorSets();
 }
 
+void Renderer::CreateGizmoPipeline() {
+  auto *shader = m_ResourceManager->Load<Shader>("gizmo");
+
+  auto vertex = GizmoVertex::GetLayout();
+
+  VkPipelineColorBlendAttachmentState blendAttachment{
+      .blendEnable = VK_FALSE,
+  };
+
+  VkPushConstantRange pushConstantRange{
+      .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+      .offset = 0,
+      .size = sizeof(GizmoPushConstants),
+  };
+
+  PipelineDescription description{
+      .VertexShader = shader->GetVertexShaderModule(),
+      .FragmentShader = shader->GetFragmentShaderModule(),
+      .VertexBinding = vertex.GetBindingDescription(),
+      .VertexAttributes = vertex.GetAttributeDescriptions(),
+      .CullMode = VK_CULL_MODE_NONE,
+      .DepthTest = VK_FALSE,
+      .DepthWrite = VK_FALSE,
+      .ColorFormats = {m_Context->Swapchain.Format},
+      .BlendAttachments = {blendAttachment},
+      .PushConstantRanges = {pushConstantRange},
+      .Topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
+  };
+
+  m_GizmoPipeline.Init(m_Context->Device, description);
+}
+
 void Renderer::AllocateCommandBuffer() {
   VkCommandBufferAllocateInfo allocInfo{
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -585,6 +623,7 @@ void Renderer::EndFrame(FrameData &frame) {
 void Renderer::EDITOR_Frame(FrameData &frame,
                             const std::vector<Entity *> &entities) {
   RecordForwardPass(frame, entities);
+  RecordGizmoPass(frame, entities);
   RecordOutlinePass(frame);
 }
 
@@ -945,5 +984,165 @@ std::optional<uint32_t> Renderer::PickEntity(int32_t mouseX,
   }
 
   return std::make_optional(entityID);
+}
+
+void Renderer::EDITOR_Update(const std::vector<Entity *> &entities) {
+  auto entityIt =
+      std::find_if(entities.begin(), entities.end(), [](Entity *entity) {
+        return entity->GetComponent<CameraComponent>() != nullptr;
+      });
+
+  if (entityIt == entities.end())
+    return;
+
+  auto camera = (*entityIt)->GetComponent<CameraComponent>();
+
+  UpdateFrustumGizmo(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+}
+
+// NOTE: TEMPORARY CODE, MOVE THIS TO AN EDITOR/DEBUG RENDERER!!!!!!!!!!!!!!!
+void Renderer::UpdateFrustumGizmo(const glm::mat4 &view,
+                                  const glm::mat4 &proj) {
+  vkWaitForFences(m_Context->Device, 1, &m_Frames[m_FrameIndex].DrawFence,
+                  VK_TRUE, UINT64_MAX);
+
+  std::vector<GizmoVertex> vertices;
+
+  glm::mat4 inverseVP = glm::inverse(proj * view);
+
+  std::array<glm::vec4, 8> ndcCorners = {// Near plane
+                                         {
+                                             {-1.0f, -1.0f, 0.0f, 1.0f},
+                                             {1.0f, -1.0f, 0.0f, 1.0f},
+                                             {1.0f, 1.0f, 0.0f, 1.0f},
+                                             {-1.0f, 1.0f, 0.0f, 1.0f},
+
+                                             // Far plane
+                                             {-1, -1, 0.1f, 1},
+                                             {1, -1, 0.1f, 1},
+                                             {1, 1, 0.1f, 1},
+                                             {-1, 1, 0.1f, 1},
+                                         }};
+
+  std::array<glm::vec3, 8> corners;
+
+  for (size_t i = 0; i < 8; ++i) {
+    glm::vec4 world = inverseVP * ndcCorners[i];
+    corners[i] = glm::vec3(world) / world.w;
+  }
+
+  constexpr uint32_t edges[][2] = {
+      // Near plane
+      {0, 1},
+      {1, 2},
+      {2, 3},
+      {3, 0},
+
+      // Far plane
+      {4, 5},
+      {5, 6},
+      {6, 7},
+      {7, 4},
+
+      // Near -> far
+      {0, 4},
+      {1, 5},
+      {2, 6},
+      {3, 7},
+  };
+
+  glm::vec4 color = {1.0f, 1.0f, 0.0f, 1.0f};
+
+  for (auto [a, b] : edges) {
+    vertices.push_back({.Position = corners[a], .Color = color});
+    vertices.push_back({.Position = corners[b], .Color = color});
+  }
+
+  for (size_t i = 0; i < corners.size(); ++i) {
+    INFERNO_LOG_INFO("Corner {}: {}, {}, {}", i, corners[i].x, corners[i].y,
+                     corners[i].z);
+  }
+
+  uint32_t count = static_cast<uint32_t>(vertices.size());
+
+  for (auto &vertexBuffer : m_GizmoVertexBuffers) {
+    if (!vertexBuffer) {
+      vertexBuffer = MakeScope<VertexBuffer<GizmoVertex>>(
+          m_Context, sizeof(GizmoVertex) * count);
+    }
+  }
+
+  m_GizmoVertexBuffers[m_FrameIndex]->Upload(vertices.data());
+}
+
+void Renderer::RecordGizmoPass(FrameData &frame,
+                               const std::vector<Entity *> &entities) {
+  auto entityIt =
+      std::find_if(entities.begin(), entities.end(), [&](Entity *entity) {
+        return entity->GetComponent<CameraComponent>() != nullptr;
+      });
+
+  if (entityIt == entities.end())
+    return;
+
+  auto camera = (*entityIt)->GetComponent<CameraComponent>();
+
+  VkRenderingAttachmentInfo colorAttachment{
+      .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+      .imageView = m_Context->Swapchain.ImageViews[m_ImageIndex],
+      .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+      .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+      .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+  };
+
+  VkRenderingInfo renderingInfo{
+      .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+      .renderArea =
+          {
+              .offset = {0, 0},
+              .extent = m_Context->Swapchain.Extent,
+          },
+      .layerCount = 1,
+      .colorAttachmentCount = 1,
+      .pColorAttachments = &colorAttachment,
+  };
+
+  vkCmdBeginRendering(frame.CommandBuffer, &renderingInfo);
+
+  vkCmdBindPipeline(frame.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                    m_GizmoPipeline.Handle);
+
+  VkViewport viewport{
+      .x = 0.0f,
+      .y = 0.0f,
+      .width = static_cast<float>(m_Context->Swapchain.Extent.width),
+      .height = static_cast<float>(m_Context->Swapchain.Extent.height),
+      .minDepth = 0.0f,
+      .maxDepth = 1.0f,
+  };
+  vkCmdSetViewport(frame.CommandBuffer, 0, 1, &viewport);
+
+  VkRect2D scissor{
+      .offset{0, 0},
+      .extent = m_Context->Swapchain.Extent,
+  };
+  vkCmdSetScissor(frame.CommandBuffer, 0, 1, &scissor);
+
+  GizmoPushConstants push{
+      .View = m_ActiveCamera.View,
+      .Proj = m_ActiveCamera.Proj,
+  };
+
+  vkCmdPushConstants(frame.CommandBuffer, m_GizmoPipeline.Layout,
+                     VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GizmoPushConstants),
+                     &push);
+
+  VkBuffer vertexBuffers[] = {m_GizmoVertexBuffers[m_FrameIndex]->Get()};
+  VkDeviceSize offsets[] = {0};
+  vkCmdBindVertexBuffers(frame.CommandBuffer, 0, 1, vertexBuffers, offsets);
+
+  vkCmdDraw(frame.CommandBuffer, 24, 1, 0, 0);
+
+  vkCmdEndRendering(frame.CommandBuffer);
 }
 } // namespace Inferno

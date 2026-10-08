@@ -34,6 +34,8 @@ public:
   void OnEvent(Event &event);
   void Update(DeltaTime deltaTime, const std::vector<Entity *> &entities,
               const RenderCamera &camera);
+  void AppendDebugLines(const std::vector<Entity *> &entities,
+                        std::vector<DebugLineVertex> &debugLines) const;
 
   uint32_t GetSelectedEntity() { return m_SelectedEntityID; }
 

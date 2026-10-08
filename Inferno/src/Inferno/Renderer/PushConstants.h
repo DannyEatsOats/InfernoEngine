@@ -26,7 +26,7 @@ struct GridPushConstants {
   glm::mat4 ProjInv;
 };
 
-struct GizmoPushConstants {
+struct DebugLinePushConstants {
   glm::mat4 View;
   glm::mat4 Proj;
 };

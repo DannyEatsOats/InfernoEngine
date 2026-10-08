@@ -25,24 +25,21 @@
 
 #include "Inferno/ECS/Component.h"
 #include "Inferno/Resource/ResourceManager.h"
-#include "Inferno/Tools/EditorSystem.h"
 #include "PushConstants.h"
 #include "Renderer.h"
 
 #include <glm/glm.hpp>
 
 namespace Inferno {
-void Renderer::StartUp(ResourceManager *resourceManager,
-                       EditorSystem *editorSystem, GUISystem *guiSystem) {
+void Renderer::StartUp(ResourceManager *resourceManager, GUISystem *guiSystem) {
   m_ResourceManager = resourceManager;
-  m_EditorSystem = editorSystem;
   m_GUISystem = guiSystem;
 
   CreateForwardPipeline();
   CreateGridPipeline();
   CreateOutlineDescriptorResources();
   CreateOutlinePipeline();
-  CreateGizmoPipeline();
+  CreateDebugLinePipeline();
   AllocateCommandBuffer();
   CreateSyncObjects();
   // TODO: SET CAMERA
@@ -89,18 +86,17 @@ void Renderer::ShutDown() {
     }
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-      m_GizmoVertexBuffers[i].reset();
+      m_DebugLineVertexBuffers[i].reset();
     }
 
-    m_GizmoPipeline.Destroy(m_Context->Device);
+    m_DebugLinePipeline.Destroy(m_Context->Device);
     m_OutlinePipeline.Destroy(m_Context->Device);
     m_GridPipeline.Destroy(m_Context->Device);
     m_ForwardPipeline.Destroy(m_Context->Device);
   }
 }
 
-void Renderer::Render(const std::vector<Entity *> &entities,
-                      const RenderView &view) {
+void Renderer::Render(const RenderWorld &renderWorld, const RenderView &view) {
   if (m_Resized) {
     Resize();
   }
@@ -112,6 +108,11 @@ void Renderer::Render(const std::vector<Entity *> &entities,
   if (vkWaitForFences(m_Context->Device, 1, &m_Frames[m_FrameIndex].DrawFence,
                       VK_TRUE, UINT64_MAX) != VK_SUCCESS) {
     throw std::runtime_error("Failed to Wait on Draw Fence");
+  }
+
+  if (HasRenderFeature(view.Features, RenderFeature::DEBUG_LINES) &&
+      !view.DebugLines.empty()) {
+    UpdateDebugLineBuffer(view.DebugLines);
   }
 
   {
@@ -134,13 +135,14 @@ void Renderer::Render(const std::vector<Entity *> &entities,
     FrameData &frame = BeginFrame();
 
     if (HasRenderFeature(view.Features, RenderFeature::SCENE))
-      RecordForwardPass(frame, entities, view);
+      RecordForwardPass(frame, renderWorld, view);
 
-    if (HasRenderFeature(view.Features, RenderFeature::GIZMOS))
-      RecordGizmoPass(frame, entities);
+    if (HasRenderFeature(view.Features, RenderFeature::DEBUG_LINES) &&
+        !view.DebugLines.empty())
+      RecordDebugLinePass(frame, view);
 
     if (HasRenderFeature(view.Features, RenderFeature::SELECTION_OUTLINE))
-      RecordOutlinePass(frame);
+      RecordOutlinePass(frame, view);
 
     if (HasRenderFeature(view.Features, RenderFeature::IMGUI)) {
       m_GUISystem->RenderGUI(frame.CommandBuffer,
@@ -486,10 +488,10 @@ void Renderer::CreateOutlineDescriptorResources() {
   UpdateOutlineDescriptorSets();
 }
 
-void Renderer::CreateGizmoPipeline() {
+void Renderer::CreateDebugLinePipeline() {
   auto *shader = m_ResourceManager->Load<Shader>("gizmo");
 
-  auto vertex = GizmoVertex::GetLayout();
+  auto vertex = DebugLineVertex::GetLayout();
 
   VkPipelineColorBlendAttachmentState blendAttachment{
       .blendEnable = VK_FALSE,
@@ -500,7 +502,7 @@ void Renderer::CreateGizmoPipeline() {
   VkPushConstantRange pushConstantRange{
       .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
       .offset = 0,
-      .size = sizeof(GizmoPushConstants),
+      .size = sizeof(DebugLinePushConstants),
   };
 
   PipelineDescription description{
@@ -517,7 +519,7 @@ void Renderer::CreateGizmoPipeline() {
       .Topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
   };
 
-  m_GizmoPipeline.Init(m_Context->Device, description);
+  m_DebugLinePipeline.Init(m_Context->Device, description);
 }
 
 void Renderer::AllocateCommandBuffer() {
@@ -630,7 +632,7 @@ void Renderer::EndFrame(FrameData &frame) {
 }
 
 void Renderer::RecordForwardPass(FrameData &frame,
-                                 const std::vector<Entity *> &entities,
+                                 const RenderWorld &renderWorld,
                                  const RenderView &view) {
 
   TransitionImageLayout(frame.CommandBuffer,
@@ -728,21 +730,14 @@ void Renderer::RecordForwardPass(FrameData &frame,
   };
   vkCmdSetScissor(frame.CommandBuffer, 0, 1, &scissor);
 
-  for (auto *entity : entities) {
-    MeshComponent *meshComponent = entity->GetComponent<MeshComponent>();
-    if (!meshComponent)
+  for (const RenderObject &object : renderWorld.Objects) {
+    if (!object.MeshResource || !object.TextureResource)
       continue;
-    auto texture = meshComponent->GetTexture();
-    if (!texture)
-      continue;
-
-    glm::mat4 model =
-        entity->GetComponent<TransformComponent>()->GetTransformmatrix();
 
     MeshPushConstants push{
-        .Mvp = m_ActiveCamera.Proj * m_ActiveCamera.View * model,
-        .Model = model,
-        .EntityID = entity->GetID(),
+        .Mvp = m_ActiveCamera.Proj * m_ActiveCamera.View * object.Transform,
+        .Model = object.Transform,
+        .EntityID = object.EntityID,
     };
 
     vkCmdPushConstants(frame.CommandBuffer, m_ForwardPipeline.Layout,
@@ -751,26 +746,26 @@ void Renderer::RecordForwardPass(FrameData &frame,
                        0, sizeof(MeshPushConstants), &push);
 
     VkBuffer vertexBuffers[] = {
-        meshComponent->GetMesh()->GetVertexBuffer()->Get()};
+        object.MeshResource->GetVertexBuffer()->Get()};
     VkDeviceSize offsets[] = {0};
     vkCmdBindVertexBuffers(frame.CommandBuffer, 0, 1, vertexBuffers, offsets);
     vkCmdBindIndexBuffer(
-        frame.CommandBuffer, meshComponent->GetMesh()->GetIndexBuffer()->Get(),
-        0, meshComponent->GetMesh()->GetIndexBuffer()->GetIndexType());
+        frame.CommandBuffer, object.MeshResource->GetIndexBuffer()->Get(), 0,
+        object.MeshResource->GetIndexBuffer()->GetIndexType());
 
-    VkDescriptorSet textureSet = texture->GetDescriptorSet();
+    VkDescriptorSet textureSet = object.TextureResource->GetDescriptorSet();
     // TODO: Fix This On multithreading
     if (textureSet == VK_NULL_HANDLE) {
-      texture->CreateDescriptorSet(m_TextureDescriptorPool,
-                                   m_TextureDescriptorSetLayout);
-      textureSet = texture->GetDescriptorSet();
+      object.TextureResource->CreateDescriptorSet(m_TextureDescriptorPool,
+                                                  m_TextureDescriptorSetLayout);
+      textureSet = object.TextureResource->GetDescriptorSet();
     }
     vkCmdBindDescriptorSets(
         frame.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
         m_ForwardPipeline.Layout, 0, 1, &textureSet, 0, nullptr);
 
-    vkCmdDrawIndexed(frame.CommandBuffer,
-                     meshComponent->GetMesh()->GetIndexCount(), 1, 0, 0, 0);
+    vkCmdDrawIndexed(frame.CommandBuffer, object.MeshResource->GetIndexCount(),
+                     1, 0, 0, 0);
   }
 
   // Drawing Grid
@@ -798,7 +793,7 @@ void Renderer::RecordForwardPass(FrameData &frame,
   vkCmdEndRendering(frame.CommandBuffer);
 };
 
-void Renderer::RecordOutlinePass(FrameData &frame) {
+void Renderer::RecordOutlinePass(FrameData &frame, const RenderView &view) {
   TransitionImageLayout(
       frame.CommandBuffer, frame.EntityPickingImage.GetImage(),
       VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -828,7 +823,7 @@ void Renderer::RecordOutlinePass(FrameData &frame) {
   };
 
   vkCmdBeginRendering(frame.CommandBuffer, &renderingInfo);
-  uint32_t selectedEntity = m_EditorSystem->GetSelectedEntity();
+  const uint32_t selectedEntity = view.SelectedEntity;
 
   if (selectedEntity != Entity::NULL_ENTITY) {
     vkCmdBindPipeline(frame.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -984,124 +979,22 @@ std::optional<uint32_t> Renderer::PickEntity(int32_t mouseX,
   return std::make_optional(entityID);
 }
 
-void Renderer::EDITOR_Update(const std::vector<Entity *> &entities) {
-  const uint32_t selectedEntity = m_EditorSystem->GetSelectedEntity();
+void Renderer::UpdateDebugLineBuffer(
+    std::span<const DebugLineVertex> debugLines) {
+  const VkDeviceSize requiredSize =
+      static_cast<VkDeviceSize>(debugLines.size_bytes());
+  auto &vertexBuffer = m_DebugLineVertexBuffers[m_FrameIndex];
 
-  if (selectedEntity == Entity::NULL_ENTITY)
-    return;
+  if (!vertexBuffer || vertexBuffer->GetSize() < requiredSize) {
+    vertexBuffer =
+        MakeScope<VertexBuffer<DebugLineVertex>>(m_Context, requiredSize);
+  }
 
-  auto entityIt = std::find_if(entities.begin(), entities.end(),
-                               [selectedEntity](Entity *entity) {
-                                 return entity->GetID() == selectedEntity;
-                               });
-
-  if (entityIt == entities.end())
-    return;
-
-  auto camera = (*entityIt)->GetComponent<CameraComponent>();
-
-  if (!camera)
-    return;
-
-  UpdateFrustumGizmo(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+  vertexBuffer->Upload(debugLines.data(), requiredSize);
 }
 
-// NOTE: TEMPORARY CODE, MOVE THIS TO AN EDITOR/DEBUG RENDERER!!!!!!!!!!!!!!!
-void Renderer::UpdateFrustumGizmo(const glm::mat4 &view,
-                                  const glm::mat4 &proj) {
-  vkWaitForFences(m_Context->Device, 1, &m_Frames[m_FrameIndex].DrawFence,
-                  VK_TRUE, UINT64_MAX);
-
-  std::vector<GizmoVertex> vertices;
-
-  glm::mat4 inverseVP = glm::inverse(proj * view);
-
-  constexpr float visualizationDistance = 2.0f;
-
-  glm::vec4 projectedDistance =
-      proj * glm::vec4(0.0f, 0.0f, -visualizationDistance, 1.0f);
-
-  float farNdcDepth = projectedDistance.z / projectedDistance.w;
-
-  const std::array<glm::vec4, 8> ndcCorners = {
-      // Near plane
-      glm::vec4{-1.0f, -1.0f, 0.0f, 1.0f},
-      glm::vec4{1.0f, -1.0f, 0.0f, 1.0f},
-      glm::vec4{1.0f, 1.0f, 0.0f, 1.0f},
-      glm::vec4{-1.0f, 1.0f, 0.0f, 1.0f},
-
-      // Visualization far plane
-      glm::vec4{-1.0f, -1.0f, farNdcDepth, 1.0f},
-      glm::vec4{1.0f, -1.0f, farNdcDepth, 1.0f},
-      glm::vec4{1.0f, 1.0f, farNdcDepth, 1.0f},
-      glm::vec4{-1.0f, 1.0f, farNdcDepth, 1.0f},
-  };
-
-  std::array<glm::vec3, 8> corners;
-
-  for (size_t i = 0; i < 8; ++i) {
-    glm::vec4 world = inverseVP * ndcCorners[i];
-    corners[i] = glm::vec3(world) / world.w;
-  }
-
-  constexpr uint32_t edges[][2] = {
-      // Near plane
-      {0, 1},
-      {1, 2},
-      {2, 3},
-      {3, 0},
-
-      // Far plane
-      {4, 5},
-      {5, 6},
-      {6, 7},
-      {7, 4},
-
-      // Near -> far
-      {0, 4},
-      {1, 5},
-      {2, 6},
-      {3, 7},
-  };
-
-  glm::vec4 color = {1.0f, 1.0f, 0.0f, 1.0f};
-
-  for (auto [a, b] : edges) {
-    vertices.push_back({.Position = corners[a], .Color = color});
-    vertices.push_back({.Position = corners[b], .Color = color});
-  }
-
-  uint32_t count = static_cast<uint32_t>(vertices.size());
-
-  for (auto &vertexBuffer : m_GizmoVertexBuffers) {
-    if (!vertexBuffer) {
-      vertexBuffer = MakeScope<VertexBuffer<GizmoVertex>>(
-          m_Context, sizeof(GizmoVertex) * count);
-    }
-  }
-
-  m_GizmoVertexBuffers[m_FrameIndex]->Upload(vertices.data());
-}
-
-void Renderer::RecordGizmoPass(FrameData &frame,
-                               const std::vector<Entity *> &entities) {
-  const uint32_t selectedEntity = m_EditorSystem->GetSelectedEntity();
-
-  if (selectedEntity == Entity::NULL_ENTITY)
-    return;
-
-  auto entityIt = std::find_if(entities.begin(), entities.end(),
-                               [selectedEntity](Entity *entity) {
-                                 return entity->GetID() == selectedEntity;
-                               });
-
-  if (entityIt == entities.end())
-    return;
-
-  auto camera = (*entityIt)->GetComponent<CameraComponent>();
-
-  if (!camera)
-    return;
+void Renderer::RecordDebugLinePass(FrameData &frame,
+                                   const RenderView &view) {
 
   VkRenderingAttachmentInfo colorAttachment{
       .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
@@ -1126,7 +1019,7 @@ void Renderer::RecordGizmoPass(FrameData &frame,
   vkCmdBeginRendering(frame.CommandBuffer, &renderingInfo);
 
   vkCmdBindPipeline(frame.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                    m_GizmoPipeline.Handle);
+                    m_DebugLinePipeline.Handle);
 
   VkViewport viewport{
       .x = 0.0f,
@@ -1144,20 +1037,21 @@ void Renderer::RecordGizmoPass(FrameData &frame,
   };
   vkCmdSetScissor(frame.CommandBuffer, 0, 1, &scissor);
 
-  GizmoPushConstants push{
+  DebugLinePushConstants push{
       .View = m_ActiveCamera.View,
       .Proj = m_ActiveCamera.Proj,
   };
 
-  vkCmdPushConstants(frame.CommandBuffer, m_GizmoPipeline.Layout,
-                     VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GizmoPushConstants),
-                     &push);
+  vkCmdPushConstants(frame.CommandBuffer, m_DebugLinePipeline.Layout,
+                     VK_SHADER_STAGE_VERTEX_BIT, 0,
+                     sizeof(DebugLinePushConstants), &push);
 
-  VkBuffer vertexBuffers[] = {m_GizmoVertexBuffers[m_FrameIndex]->Get()};
+  VkBuffer vertexBuffers[] = {m_DebugLineVertexBuffers[m_FrameIndex]->Get()};
   VkDeviceSize offsets[] = {0};
   vkCmdBindVertexBuffers(frame.CommandBuffer, 0, 1, vertexBuffers, offsets);
 
-  vkCmdDraw(frame.CommandBuffer, 24, 1, 0, 0);
+  vkCmdDraw(frame.CommandBuffer,
+            static_cast<uint32_t>(view.DebugLines.size()), 1, 0, 0);
 
   vkCmdEndRendering(frame.CommandBuffer);
 }

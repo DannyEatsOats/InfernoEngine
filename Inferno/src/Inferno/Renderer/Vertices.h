@@ -26,14 +26,15 @@ struct MeshVertex {
   }
 };
 
-struct GizmoVertex {
+struct DebugLineVertex {
   glm::vec3 Position;
   glm::vec4 Color;
 
-  static BufferLayout<GizmoVertex> GetLayout() {
+  static BufferLayout<DebugLineVertex> GetLayout() {
     return {
-        {"a_Position", ShaderDataType::Float3, offsetof(GizmoVertex, Position)},
-        {"a_Color", ShaderDataType::Float4, offsetof(GizmoVertex, Color)},
+        {"a_Position", ShaderDataType::Float3,
+         offsetof(DebugLineVertex, Position)},
+        {"a_Color", ShaderDataType::Float4, offsetof(DebugLineVertex, Color)},
     };
   };
 };

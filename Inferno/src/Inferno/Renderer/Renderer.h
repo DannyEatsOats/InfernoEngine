@@ -4,16 +4,18 @@
 #include "Inferno/Renderer/Buffer.h"
 #include "Inferno/Renderer/DeviceContext.h"
 #include "Inferno/Renderer/Pipeline.h"
+#include "Inferno/Renderer/RenderWorld.h"
+#include "Inferno/Renderer/Vertices.h"
 #include "Inferno/Resource/ResourceManager.h"
 #include "Inferno/Tools/GUISystem.h"
 #include <array>
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <vector>
 #include <vulkan/vulkan_core.h>
 
 namespace Inferno {
-class EditorSystem;
 // ==========================
 
 struct RenderCamera {
@@ -25,7 +27,7 @@ enum class RenderFeature : uint32_t {
   NONE = 0,
   SCENE = 1 << 0,
   GRID = 1 << 1,
-  GIZMOS = 1 << 2,
+  DEBUG_LINES = 1 << 2,
   SELECTION_OUTLINE = 1 << 3,
   IMGUI = 1 << 4,
 };
@@ -44,6 +46,8 @@ constexpr bool HasRenderFeature(RenderFeature features,
 struct RenderView {
   RenderCamera Camera;
   RenderFeature Features = RenderFeature::SCENE;
+  uint32_t SelectedEntity = Entity::NULL_ENTITY;
+  std::span<const DebugLineVertex> DebugLines{};
 };
 
 struct FrameData {
@@ -64,25 +68,20 @@ public:
   Renderer &operator=(const Renderer &) = delete;
   Renderer &operator=(Renderer &&) = delete;
 
-  void StartUp(ResourceManager *resourceManager, EditorSystem *editorSystem,
-               GUISystem *guiSystem);
+  void StartUp(ResourceManager *resourceManager, GUISystem *guiSystem);
   void ShutDown();
 
-  void Render(const std::vector<Entity *> &entities, const RenderView &view);
+  void Render(const RenderWorld &renderWorld, const RenderView &view);
 
   void SignalResize() { m_Resized = true; }
 
   std::optional<uint32_t> PickEntity(int32_t mouseX, int32_t mouseY) const;
 
-  // TODO: Refactor this
-  void EDITOR_Update(const std::vector<Entity*>& entities);
-  void GAME_Update();
-
 private:
   void CreateForwardPipeline();
   void CreateGridPipeline();
   void CreateOutlinePipeline();
-  void CreateGizmoPipeline();
+  void CreateDebugLinePipeline();
 
   void CreateOutlineDescriptorResources();
 
@@ -100,20 +99,18 @@ private:
   FrameData &BeginFrame();
   void EndFrame(FrameData &frame);
 
-  void RecordForwardPass(FrameData &frame,
-                         const std::vector<Entity *> &entities,
+  void RecordForwardPass(FrameData &frame, const RenderWorld &renderWorld,
                          const RenderView &view);
-  void RecordOutlinePass(FrameData &frame);
+  void RecordOutlinePass(FrameData &frame, const RenderView &view);
 
   void UpdateOutlineDescriptorSets();
 
   void Resize();
 
-  // NOTE: TEMPORARY CODE, MOVE THIS TO AN EDITOR/DEBUG RENDERER!!!!!!!!!!!!!!!
-  void UpdateFrustumGizmo(const glm::mat4 &view, const glm::mat4 &proj);
-  void RecordGizmoPass(FrameData &frame, const std::vector<Entity *> &entities);
-  std::array<Scope<VertexBuffer<GizmoVertex>>, 2> m_GizmoVertexBuffers;
-  // NOTE: TEMPORARY CODE END
+  void UpdateDebugLineBuffer(std::span<const DebugLineVertex> debugLines);
+  void RecordDebugLinePass(FrameData &frame, const RenderView &view);
+  std::array<Scope<VertexBuffer<DebugLineVertex>>, 2>
+      m_DebugLineVertexBuffers;
 
 private:
   static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
@@ -121,14 +118,13 @@ private:
   // References
   DeviceContext *m_Context = nullptr;
   ResourceManager *m_ResourceManager = nullptr;
-  EditorSystem *m_EditorSystem = nullptr;
   GUISystem *m_GUISystem = nullptr;
 
   // Pipelines
   Pipeline m_ForwardPipeline{};
   Pipeline m_GridPipeline{};
   Pipeline m_OutlinePipeline{};
-  Pipeline m_GizmoPipeline{};
+  Pipeline m_DebugLinePipeline{};
 
   // Frame Data
   std::array<FrameData, MAX_FRAMES_IN_FLIGHT> m_Frames;

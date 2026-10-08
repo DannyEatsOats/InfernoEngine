@@ -244,9 +244,14 @@ public:
   VertexBuffer &operator=(VertexBuffer &&) = default;
 
   VkBuffer Get() const { return m_Buffer.Get(); }
+  VkDeviceSize GetSize() const { return m_Buffer.GetSize(); }
 
   void Upload(const void *data) {
     BufferUploader::Upload(m_Context, m_Buffer, data, m_Buffer.GetSize());
+  }
+
+  void Upload(const void *data, VkDeviceSize size) {
+    BufferUploader::Upload(m_Context, m_Buffer, data, size);
   }
 
   void SetLayout(const BufferLayout<VertexType> &layout) { m_Layout = layout; }

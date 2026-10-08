@@ -76,8 +76,7 @@ void Engine::StartUp() {
   m_GUISystem = MakeScope<GUISystem>();
   m_GUISystem->StartUp(m_RenderingContext.get(), m_Window.get());
   m_EditorSystem = MakeScope<EditorSystem>();
-  m_Renderer->StartUp(m_ResourceManager.get(), m_EditorSystem.get(),
-                      m_GUISystem.get());
+  m_Renderer->StartUp(m_ResourceManager.get(), m_GUISystem.get());
   m_EditorSystem->StartUp(m_Renderer.get());
   m_EditorCamera = MakeScope<DannyCamera>();
   m_EditorCamera->Init((float)m_Window->GetWidth() /
@@ -130,7 +129,8 @@ void Engine::Run() {
       }
 
       if (m_ActiveScene) {
-        m_Renderer->Render(m_ActiveScene->GetEntities(), m_RenderView);
+        BuildRenderWorld();
+        m_Renderer->Render(m_RenderWorld, m_RenderView);
       }
 
       m_Window->OnUpdate();
@@ -188,12 +188,15 @@ void Engine::EDITOR_Update(DeltaTime deltaTime) {
   m_RenderView = {
       .Camera = editorCamera,
       .Features = RenderFeature::SCENE | RenderFeature::GRID |
-                  RenderFeature::GIZMOS |
+                  RenderFeature::DEBUG_LINES |
                   RenderFeature::SELECTION_OUTLINE | RenderFeature::IMGUI,
   };
   m_EditorSystem->Update(deltaTime, m_ActiveScene->GetEntities(), editorCamera);
-  //TODO: Refactor this 
-  m_Renderer->EDITOR_Update(m_ActiveScene->GetEntities());
+  m_RenderView.SelectedEntity = m_EditorSystem->GetSelectedEntity();
+  m_DebugLineVertices.clear();
+  m_EditorSystem->AppendDebugLines(m_ActiveScene->GetEntities(),
+                                   m_DebugLineVertices);
+  m_RenderView.DebugLines = m_DebugLineVertices;
 }
 
 void Engine::GAME_Update(DeltaTime deltaTime) {
@@ -215,6 +218,34 @@ void Engine::GAME_Update(DeltaTime deltaTime) {
     } else {
       INFERNO_LOG_ERROR("Active Camera Has No Camera Component");
     }
+  }
+}
+
+void Engine::BuildRenderWorld() {
+  m_RenderWorld.Objects.clear();
+
+  const auto &entities = m_ActiveScene->GetEntities();
+  m_RenderWorld.Objects.reserve(entities.size());
+
+  for (Entity *entity : entities) {
+    auto *transform = entity->GetComponent<TransformComponent>();
+    auto *meshComponent = entity->GetComponent<MeshComponent>();
+
+    if (!transform || !meshComponent)
+      continue;
+
+    const Mesh *mesh = meshComponent->GetMesh();
+    Texture *texture = meshComponent->GetTexture();
+
+    if (!mesh || !texture)
+      continue;
+
+    m_RenderWorld.Objects.push_back({
+        .Transform = transform->GetTransformmatrix(),
+        .MeshResource = mesh,
+        .TextureResource = texture,
+        .EntityID = entity->GetID(),
+    });
   }
 }
 

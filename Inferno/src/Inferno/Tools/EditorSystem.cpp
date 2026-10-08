@@ -109,6 +109,66 @@ void EditorSystem::Update(DeltaTime deltaTime,
   DrawComponentsPantel(*entity);
 }
 
+void EditorSystem::AppendDebugLines(
+    const std::vector<Entity *> &entities,
+    std::vector<DebugLineVertex> &debugLines) const {
+  if (m_SelectedEntityID == Entity::NULL_ENTITY)
+    return;
+
+  auto entityIt =
+      std::find_if(entities.begin(), entities.end(), [this](Entity *entity) {
+        return entity->GetID() == m_SelectedEntityID;
+      });
+
+  if (entityIt == entities.end())
+    return;
+
+  auto *camera = (*entityIt)->GetComponent<CameraComponent>();
+  if (!camera)
+    return;
+
+  const glm::mat4 view = camera->GetViewMatrix();
+  const glm::mat4 projection = camera->GetProjectionMatrix();
+  const glm::mat4 inverseViewProjection = glm::inverse(projection * view);
+
+  constexpr float visualizationDistance = 2.0f;
+  const glm::vec4 projectedDistance =
+      projection *
+      glm::vec4(0.0f, 0.0f, -visualizationDistance, 1.0f);
+  const float farNdcDepth = projectedDistance.z / projectedDistance.w;
+
+  const std::array<glm::vec4, 8> ndcCorners = {
+      glm::vec4{-1.0f, -1.0f, 0.0f, 1.0f},
+      glm::vec4{1.0f, -1.0f, 0.0f, 1.0f},
+      glm::vec4{1.0f, 1.0f, 0.0f, 1.0f},
+      glm::vec4{-1.0f, 1.0f, 0.0f, 1.0f},
+      glm::vec4{-1.0f, -1.0f, farNdcDepth, 1.0f},
+      glm::vec4{1.0f, -1.0f, farNdcDepth, 1.0f},
+      glm::vec4{1.0f, 1.0f, farNdcDepth, 1.0f},
+      glm::vec4{-1.0f, 1.0f, farNdcDepth, 1.0f},
+  };
+
+  std::array<glm::vec3, 8> corners;
+  for (size_t i = 0; i < corners.size(); ++i) {
+    const glm::vec4 world = inverseViewProjection * ndcCorners[i];
+    corners[i] = glm::vec3(world) / world.w;
+  }
+
+  constexpr uint32_t edges[][2] = {
+      {0, 1}, {1, 2}, {2, 3}, {3, 0},
+      {4, 5}, {5, 6}, {6, 7}, {7, 4},
+      {0, 4}, {1, 5}, {2, 6}, {3, 7},
+  };
+
+  constexpr glm::vec4 color{1.0f, 1.0f, 0.0f, 1.0f};
+  debugLines.reserve(debugLines.size() + std::size(edges) * 2);
+
+  for (const auto &[a, b] : edges) {
+    debugLines.push_back({.Position = corners[a], .Color = color});
+    debugLines.push_back({.Position = corners[b], .Color = color});
+  }
+}
+
 void EditorSystem::DrawSceneHierarchy(const std::vector<Entity *> &entities) {
   ImGui::Begin("Scene Hierarchy");
 

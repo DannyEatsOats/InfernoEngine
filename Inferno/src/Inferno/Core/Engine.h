@@ -43,6 +43,7 @@ private:
 
   void EDITOR_Update(DeltaTime deltaTime);
   void GAME_Update(DeltaTime deltaTime);
+  void BuildRenderWorld();
 
   void SwitchScene();
 
@@ -68,6 +69,8 @@ private:
   float m_LastFrameTime = 0.0f;
 
   RuntimeMode m_RuntimeMode = RuntimeMode::EDITOR;
+  RenderWorld m_RenderWorld;
   RenderView m_RenderView{};
+  std::vector<DebugLineVertex> m_DebugLineVertices;
 };
 } // namespace Inferno

@@ -21,6 +21,31 @@ struct RenderCamera {
   glm::mat4 Proj;
 };
 
+enum class RenderFeature : uint32_t {
+  NONE = 0,
+  SCENE = 1 << 0,
+  GRID = 1 << 1,
+  GIZMOS = 1 << 2,
+  SELECTION_OUTLINE = 1 << 3,
+  IMGUI = 1 << 4,
+};
+
+constexpr RenderFeature operator|(RenderFeature lhs, RenderFeature rhs) {
+  return static_cast<RenderFeature>(static_cast<uint32_t>(lhs) |
+                                    static_cast<uint32_t>(rhs));
+}
+
+constexpr bool HasRenderFeature(RenderFeature features,
+                                RenderFeature feature) {
+  return (static_cast<uint32_t>(features) &
+          static_cast<uint32_t>(feature)) != 0;
+}
+
+struct RenderView {
+  RenderCamera Camera;
+  RenderFeature Features = RenderFeature::SCENE;
+};
+
 struct FrameData {
   VkCommandBuffer CommandBuffer = VK_NULL_HANDLE;
   Image DepthImage;
@@ -28,8 +53,6 @@ struct FrameData {
   VkSemaphore PresentCompleteSemaphore = VK_NULL_HANDLE;
   VkFence DrawFence = VK_NULL_HANDLE;
 };
-
-enum class RuntimeMode;
 
 class Renderer {
 public:
@@ -45,11 +68,9 @@ public:
                GUISystem *guiSystem);
   void ShutDown();
 
-  void Render(const std::vector<Entity *> &entities, RuntimeMode runtimeMode);
+  void Render(const std::vector<Entity *> &entities, const RenderView &view);
 
   void SignalResize() { m_Resized = true; }
-
-  void SetActiveCamera(RenderCamera camera) { m_ActiveCamera = camera; }
 
   std::optional<uint32_t> PickEntity(int32_t mouseX, int32_t mouseY) const;
 
@@ -79,12 +100,9 @@ private:
   FrameData &BeginFrame();
   void EndFrame(FrameData &frame);
 
-  // Selecting the Passes and Updates based on Engine Runtime Mode
-  void EDITOR_Frame(FrameData &frame, const std::vector<Entity *> &entities);
-  void GAME_Frame(FrameData &frame, const std::vector<Entity *> &entities);
-
   void RecordForwardPass(FrameData &frame,
-                         const std::vector<Entity *> &entities);
+                         const std::vector<Entity *> &entities,
+                         const RenderView &view);
   void RecordOutlinePass(FrameData &frame);
 
   void UpdateOutlineDescriptorSets();

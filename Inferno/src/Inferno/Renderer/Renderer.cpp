@@ -88,6 +88,10 @@ void Renderer::ShutDown() {
       m_Frames[i].EntityPickingImage = Image();
     }
 
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+      m_GizmoVertexBuffers[i].reset();
+    }
+
     m_GizmoPipeline.Destroy(m_Context->Device);
     m_OutlinePipeline.Destroy(m_Context->Device);
     m_GridPipeline.Destroy(m_Context->Device);
@@ -96,10 +100,12 @@ void Renderer::ShutDown() {
 }
 
 void Renderer::Render(const std::vector<Entity *> &entities,
-                      RuntimeMode runtimeMode) {
+                      const RenderView &view) {
   if (m_Resized) {
     Resize();
   }
+
+  m_ActiveCamera = view.Camera;
 
   bool success = true;
 
@@ -127,19 +133,20 @@ void Renderer::Render(const std::vector<Entity *> &entities,
   {
     FrameData &frame = BeginFrame();
 
-    switch (runtimeMode) {
-    case Inferno::RuntimeMode::EDITOR:
-      EDITOR_Frame(frame, entities);
-      break;
+    if (HasRenderFeature(view.Features, RenderFeature::SCENE))
+      RecordForwardPass(frame, entities, view);
 
-    case Inferno::RuntimeMode::GAME:
-      GAME_Frame(frame, entities);
-      break;
+    if (HasRenderFeature(view.Features, RenderFeature::GIZMOS))
+      RecordGizmoPass(frame, entities);
+
+    if (HasRenderFeature(view.Features, RenderFeature::SELECTION_OUTLINE))
+      RecordOutlinePass(frame);
+
+    if (HasRenderFeature(view.Features, RenderFeature::IMGUI)) {
+      m_GUISystem->RenderGUI(frame.CommandBuffer,
+                             m_Context->Swapchain.ImageViews[m_ImageIndex],
+                             m_Context->Swapchain.Extent);
     }
-
-    m_GUISystem->RenderGUI(frame.CommandBuffer,
-                           m_Context->Swapchain.ImageViews[m_ImageIndex],
-                           m_Context->Swapchain.Extent);
 
     EndFrame(frame);
   }
@@ -486,6 +493,8 @@ void Renderer::CreateGizmoPipeline() {
 
   VkPipelineColorBlendAttachmentState blendAttachment{
       .blendEnable = VK_FALSE,
+      .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                        VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
   };
 
   VkPushConstantRange pushConstantRange{
@@ -620,20 +629,9 @@ void Renderer::EndFrame(FrameData &frame) {
   vkEndCommandBuffer(frame.CommandBuffer);
 }
 
-void Renderer::EDITOR_Frame(FrameData &frame,
-                            const std::vector<Entity *> &entities) {
-  RecordForwardPass(frame, entities);
-  RecordGizmoPass(frame, entities);
-  RecordOutlinePass(frame);
-}
-
-void Renderer::GAME_Frame(FrameData &frame,
-                          const std::vector<Entity *> &entities) {
-  RecordForwardPass(frame, entities);
-}
-
 void Renderer::RecordForwardPass(FrameData &frame,
-                                 const std::vector<Entity *> &entities) {
+                                 const std::vector<Entity *> &entities,
+                                 const RenderView &view) {
 
   TransitionImageLayout(frame.CommandBuffer,
                         m_Context->Swapchain.Images[m_ImageIndex],
@@ -776,7 +774,7 @@ void Renderer::RecordForwardPass(FrameData &frame,
   }
 
   // Drawing Grid
-  {
+  if (HasRenderFeature(view.Features, RenderFeature::GRID)) {
     vkCmdBindPipeline(frame.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                       m_GridPipeline.Handle);
 
@@ -987,15 +985,23 @@ std::optional<uint32_t> Renderer::PickEntity(int32_t mouseX,
 }
 
 void Renderer::EDITOR_Update(const std::vector<Entity *> &entities) {
-  auto entityIt =
-      std::find_if(entities.begin(), entities.end(), [](Entity *entity) {
-        return entity->GetComponent<CameraComponent>() != nullptr;
-      });
+  const uint32_t selectedEntity = m_EditorSystem->GetSelectedEntity();
+
+  if (selectedEntity == Entity::NULL_ENTITY)
+    return;
+
+  auto entityIt = std::find_if(entities.begin(), entities.end(),
+                               [selectedEntity](Entity *entity) {
+                                 return entity->GetID() == selectedEntity;
+                               });
 
   if (entityIt == entities.end())
     return;
 
   auto camera = (*entityIt)->GetComponent<CameraComponent>();
+
+  if (!camera)
+    return;
 
   UpdateFrustumGizmo(camera->GetViewMatrix(), camera->GetProjectionMatrix());
 }
@@ -1010,19 +1016,26 @@ void Renderer::UpdateFrustumGizmo(const glm::mat4 &view,
 
   glm::mat4 inverseVP = glm::inverse(proj * view);
 
-  std::array<glm::vec4, 8> ndcCorners = {// Near plane
-                                         {
-                                             {-1.0f, -1.0f, 0.0f, 1.0f},
-                                             {1.0f, -1.0f, 0.0f, 1.0f},
-                                             {1.0f, 1.0f, 0.0f, 1.0f},
-                                             {-1.0f, 1.0f, 0.0f, 1.0f},
+  constexpr float visualizationDistance = 2.0f;
 
-                                             // Far plane
-                                             {-1, -1, 0.1f, 1},
-                                             {1, -1, 0.1f, 1},
-                                             {1, 1, 0.1f, 1},
-                                             {-1, 1, 0.1f, 1},
-                                         }};
+  glm::vec4 projectedDistance =
+      proj * glm::vec4(0.0f, 0.0f, -visualizationDistance, 1.0f);
+
+  float farNdcDepth = projectedDistance.z / projectedDistance.w;
+
+  const std::array<glm::vec4, 8> ndcCorners = {
+      // Near plane
+      glm::vec4{-1.0f, -1.0f, 0.0f, 1.0f},
+      glm::vec4{1.0f, -1.0f, 0.0f, 1.0f},
+      glm::vec4{1.0f, 1.0f, 0.0f, 1.0f},
+      glm::vec4{-1.0f, 1.0f, 0.0f, 1.0f},
+
+      // Visualization far plane
+      glm::vec4{-1.0f, -1.0f, farNdcDepth, 1.0f},
+      glm::vec4{1.0f, -1.0f, farNdcDepth, 1.0f},
+      glm::vec4{1.0f, 1.0f, farNdcDepth, 1.0f},
+      glm::vec4{-1.0f, 1.0f, farNdcDepth, 1.0f},
+  };
 
   std::array<glm::vec3, 8> corners;
 
@@ -1058,11 +1071,6 @@ void Renderer::UpdateFrustumGizmo(const glm::mat4 &view,
     vertices.push_back({.Position = corners[b], .Color = color});
   }
 
-  for (size_t i = 0; i < corners.size(); ++i) {
-    INFERNO_LOG_INFO("Corner {}: {}, {}, {}", i, corners[i].x, corners[i].y,
-                     corners[i].z);
-  }
-
   uint32_t count = static_cast<uint32_t>(vertices.size());
 
   for (auto &vertexBuffer : m_GizmoVertexBuffers) {
@@ -1077,15 +1085,23 @@ void Renderer::UpdateFrustumGizmo(const glm::mat4 &view,
 
 void Renderer::RecordGizmoPass(FrameData &frame,
                                const std::vector<Entity *> &entities) {
-  auto entityIt =
-      std::find_if(entities.begin(), entities.end(), [&](Entity *entity) {
-        return entity->GetComponent<CameraComponent>() != nullptr;
-      });
+  const uint32_t selectedEntity = m_EditorSystem->GetSelectedEntity();
+
+  if (selectedEntity == Entity::NULL_ENTITY)
+    return;
+
+  auto entityIt = std::find_if(entities.begin(), entities.end(),
+                               [selectedEntity](Entity *entity) {
+                                 return entity->GetID() == selectedEntity;
+                               });
 
   if (entityIt == entities.end())
     return;
 
   auto camera = (*entityIt)->GetComponent<CameraComponent>();
+
+  if (!camera)
+    return;
 
   VkRenderingAttachmentInfo colorAttachment{
       .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,

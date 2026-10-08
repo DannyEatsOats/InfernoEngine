@@ -68,5 +68,6 @@ private:
   float m_LastFrameTime = 0.0f;
 
   RuntimeMode m_RuntimeMode = RuntimeMode::EDITOR;
+  RenderView m_RenderView{};
 };
 } // namespace Inferno

@@ -82,8 +82,8 @@ void Engine::StartUp() {
   m_EditorCamera = MakeScope<DannyCamera>();
   m_EditorCamera->Init((float)m_Window->GetWidth() /
                        (float)m_Window->GetHeight());
-  m_Renderer->SetActiveCamera(
-      {m_EditorCamera->GetViewMat(), m_EditorCamera->GetProjectionMat()});
+  m_RenderView.Camera = {m_EditorCamera->GetViewMat(),
+                         m_EditorCamera->GetProjectionMat()};
   Input::SetWindowHandle(m_Window->GetNativeWindow());
 }
 
@@ -130,7 +130,7 @@ void Engine::Run() {
       }
 
       if (m_ActiveScene) {
-        m_Renderer->Render(m_ActiveScene->GetEntities(), m_RuntimeMode);
+        m_Renderer->Render(m_ActiveScene->GetEntities(), m_RenderView);
       }
 
       m_Window->OnUpdate();
@@ -185,7 +185,12 @@ void Engine::EDITOR_Update(DeltaTime deltaTime) {
   const RenderCamera editorCamera = {m_EditorCamera->GetViewMat(),
                                      m_EditorCamera->GetProjectionMat()};
 
-  m_Renderer->SetActiveCamera(editorCamera);
+  m_RenderView = {
+      .Camera = editorCamera,
+      .Features = RenderFeature::SCENE | RenderFeature::GRID |
+                  RenderFeature::GIZMOS |
+                  RenderFeature::SELECTION_OUTLINE | RenderFeature::IMGUI,
+  };
   m_EditorSystem->Update(deltaTime, m_ActiveScene->GetEntities(), editorCamera);
   //TODO: Refactor this 
   m_Renderer->EDITOR_Update(m_ActiveScene->GetEntities());
@@ -202,8 +207,11 @@ void Engine::GAME_Update(DeltaTime deltaTime) {
   // Safe null checks for game camera during gameplay
   if (auto activeCamera = m_ActiveScene->GetActiveCamera()) {
     if (auto cameraComponent = activeCamera->GetComponent<CameraComponent>()) {
-      m_Renderer->SetActiveCamera({cameraComponent->GetViewMatrix(),
-                                   cameraComponent->GetProjectionMatrix()});
+      m_RenderView = {
+          .Camera = {cameraComponent->GetViewMatrix(),
+                     cameraComponent->GetProjectionMatrix()},
+          .Features = RenderFeature::SCENE | RenderFeature::IMGUI,
+      };
     } else {
       INFERNO_LOG_ERROR("Active Camera Has No Camera Component");
     }

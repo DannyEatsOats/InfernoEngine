@@ -38,9 +38,12 @@ public:
                         std::vector<DebugLineVertex> &debugLines) const;
 
   uint32_t GetSelectedEntity() { return m_SelectedEntityID; }
+  GBufferDebugView GetGBufferDebugView() const { return m_GBufferDebugView; }
+  float GetExposure() const { return m_Exposure; }
 
   // INFO: Temp
   void DrawSceneHierarchy(const std::vector<Entity *> &entities);
+  void DrawRenderDebugPanel();
   void DrawComponentsPantel(Entity *entity);
 
   void DrawTransformGizmos(Entity *entity, const RenderCamera &camera);
@@ -48,6 +51,8 @@ public:
 private:
   const Renderer *m_Renderer = nullptr;
   uint32_t m_SelectedEntityID = Entity::NULL_ENTITY;
+  GBufferDebugView m_GBufferDebugView = GBufferDebugView::LIT;
+  float m_Exposure = 1.0f;
 
   std::unordered_map<uint32_t, TransformEditorState> m_TransformEditorStates;
 

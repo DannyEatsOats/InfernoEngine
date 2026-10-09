@@ -20,7 +20,10 @@ VulkanUtils::FindQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface) {
 
   int i = 0;
   for (const auto &queueFamily : queueFamilies) {
-    if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+    constexpr VkQueueFlags requiredGraphicsQueueFlags =
+        VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT;
+    if ((queueFamily.queueFlags & requiredGraphicsQueueFlags) ==
+        requiredGraphicsQueueFlags) {
       indices.graphicsFamily = i;
     }
 

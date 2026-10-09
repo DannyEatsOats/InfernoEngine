@@ -148,6 +148,9 @@ public:
     return m_Camera.GetProjectionMatrix();
   }
 
+  float GetNearPlane() const { return m_Camera.GetNear(); }
+  float GetFarPlane() const { return m_Camera.GetFar(); }
+
   const glm::vec3 &GetPosition() const { return m_Position; }
 
   void SetViewPortSize(float width, float height) {

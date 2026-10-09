@@ -226,6 +226,31 @@ public:
 };
 
 // =================================================
+// Storage Buffer
+// =================================================
+class StorageBuffer {
+public:
+  StorageBuffer(const DeviceContext *context, VkDeviceSize size);
+  ~StorageBuffer();
+
+  StorageBuffer(const StorageBuffer &) = delete;
+  StorageBuffer &operator=(const StorageBuffer &) = delete;
+
+  StorageBuffer(StorageBuffer &&other);
+  StorageBuffer &operator=(StorageBuffer &&other);
+
+  VkBuffer Get() const { return m_Buffer.Get(); }
+  VkDeviceSize GetSize() const { return m_Buffer.GetSize(); }
+
+  void Update(const void *data, VkDeviceSize size);
+
+private:
+  const DeviceContext *m_Context = nullptr;
+  Buffer m_Buffer;
+  void *m_Mapped = nullptr;
+};
+
+// =================================================
 // Vertex Buffer
 // =================================================
 template <typename VertexType> class VertexBuffer {

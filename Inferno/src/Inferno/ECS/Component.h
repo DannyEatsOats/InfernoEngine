@@ -116,6 +116,70 @@ private:
   Camera m_Camera;
 };
 
+// -------- DIRECTIONAL LIGHT COMPONENT --------
+class DirectionalLightComponent : public Component {
+public:
+  const glm::vec3 &GetColor() const { return m_Color; }
+  float GetIntensity() const { return m_Intensity; }
+
+  void SetColor(const glm::vec3 &color) { m_Color = color; }
+  void SetIntensity(float intensity) { m_Intensity = intensity; }
+
+  Scope<Component> Clone() override;
+
+private:
+  glm::vec3 m_Color{1.0f};
+  float m_Intensity = 1.0f;
+};
+
+// -------- POINT LIGHT COMPONENT --------
+class PointLightComponent : public Component {
+public:
+  const glm::vec3 &GetColor() const { return m_Color; }
+  float GetIntensity() const { return m_Intensity; }
+  float GetRange() const { return m_Range; }
+
+  void SetColor(const glm::vec3 &color) { m_Color = color; }
+  void SetIntensity(float intensity) { m_Intensity = intensity; }
+  void SetRange(float range) { m_Range = range; }
+
+  Scope<Component> Clone() override;
+
+private:
+  glm::vec3 m_Color{1.0f};
+  float m_Intensity = 1.0f;
+  float m_Range = 10.0f;
+};
+
+// -------- SPOT LIGHT COMPONENT --------
+class SpotLightComponent : public Component {
+public:
+  const glm::vec3 &GetColor() const { return m_Color; }
+  float GetIntensity() const { return m_Intensity; }
+  float GetRange() const { return m_Range; }
+  float GetInnerConeAngleDegrees() const { return m_InnerConeAngleDegrees; }
+  float GetOuterConeAngleDegrees() const { return m_OuterConeAngleDegrees; }
+
+  void SetColor(const glm::vec3 &color) { m_Color = color; }
+  void SetIntensity(float intensity) { m_Intensity = intensity; }
+  void SetRange(float range) { m_Range = range; }
+  void SetInnerConeAngleDegrees(float angle) {
+    m_InnerConeAngleDegrees = angle;
+  }
+  void SetOuterConeAngleDegrees(float angle) {
+    m_OuterConeAngleDegrees = angle;
+  }
+
+  Scope<Component> Clone() override;
+
+private:
+  glm::vec3 m_Color{1.0f};
+  float m_Intensity = 1.0f;
+  float m_Range = 10.0f;
+  float m_InnerConeAngleDegrees = 20.0f;
+  float m_OuterConeAngleDegrees = 30.0f;
+};
+
 // -------- MESH COMPONENT --------
 class Mesh;
 class Material;

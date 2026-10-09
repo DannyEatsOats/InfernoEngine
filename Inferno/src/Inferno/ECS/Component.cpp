@@ -111,6 +111,41 @@ Scope<Component> CameraComponent::Clone() {
   return cloned;
 }
 
+// -------- DIRECTIONAL LIGHT COMPONENT --------
+Scope<Component> DirectionalLightComponent::Clone() {
+  Scope<DirectionalLightComponent> cloned =
+      MakeScope<DirectionalLightComponent>();
+
+  cloned->m_Color = m_Color;
+  cloned->m_Intensity = m_Intensity;
+
+  return cloned;
+}
+
+// -------- POINT LIGHT COMPONENT --------
+Scope<Component> PointLightComponent::Clone() {
+  Scope<PointLightComponent> cloned = MakeScope<PointLightComponent>();
+
+  cloned->m_Color = m_Color;
+  cloned->m_Intensity = m_Intensity;
+  cloned->m_Range = m_Range;
+
+  return cloned;
+}
+
+// -------- SPOT LIGHT COMPONENT --------
+Scope<Component> SpotLightComponent::Clone() {
+  Scope<SpotLightComponent> cloned = MakeScope<SpotLightComponent>();
+
+  cloned->m_Color = m_Color;
+  cloned->m_Intensity = m_Intensity;
+  cloned->m_Range = m_Range;
+  cloned->m_InnerConeAngleDegrees = m_InnerConeAngleDegrees;
+  cloned->m_OuterConeAngleDegrees = m_OuterConeAngleDegrees;
+
+  return cloned;
+}
+
 // -------- MESH COMPONENT --------
 void MeshComponent::Render() {
   if (!m_Mesh || !/*m_Material*/ m_Texture) {

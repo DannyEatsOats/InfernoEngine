@@ -100,6 +100,9 @@ public:
     {
       Entity *ship = CreateEntity("ship");
       auto *transform = ship->AddComponent<TransformComponent>();
+      ship->AddComponent<DirectionalLightComponent>();
+      ship->AddComponent<PointLightComponent>();
+      ship->AddComponent<SpotLightComponent>();
 
       /*
       auto rotation = transform->GetRotation();
@@ -145,8 +148,8 @@ public:
 
       transform->SetPosition(glm::vec3(-6.0f, 0.0f, 0.0f));
 
-      auto mesh = m_ResourceManager->Load<Mesh>(
-          "kenney/Models/OBJ format/palm-bend");
+      auto mesh =
+          m_ResourceManager->Load<Mesh>("kenney/Models/OBJ format/palm-bend");
       auto texture =
           m_ResourceManager->Load<Texture>("kenney/Textures/colormap");
       palm1->AddComponent<MeshComponent>(mesh, texture);

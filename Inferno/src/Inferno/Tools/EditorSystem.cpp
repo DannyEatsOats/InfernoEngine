@@ -87,6 +87,7 @@ void EditorSystem::Update(DeltaTime deltaTime,
                           const RenderCamera &camera) {
   ImGui::ShowDemoWindow();
 
+  DrawRenderDebugPanel();
   DrawSceneHierarchy(entities);
 
   if (m_SelectedEntityID == Entity::NULL_ENTITY)
@@ -169,6 +170,25 @@ void EditorSystem::AppendDebugLines(
   }
 }
 
+void EditorSystem::DrawRenderDebugPanel() {
+  constexpr const char *viewNames[] = {
+      "Lit",       "Albedo", "Normals", "Metallic",
+      "Roughness", "Depth",  "Entity ID",
+  };
+
+  ImGui::Begin("Render Debug");
+
+  int selectedView = static_cast<int>(m_GBufferDebugView);
+  if (ImGui::Combo("GBuffer View", &selectedView, viewNames,
+                   static_cast<int>(std::size(viewNames)))) {
+    m_GBufferDebugView = static_cast<GBufferDebugView>(selectedView);
+  }
+
+  ImGui::DragFloat("Exposure", &m_Exposure, 0.05f, 0.01f, 20.0f, "%.2f");
+
+  ImGui::End();
+}
+
 void EditorSystem::DrawSceneHierarchy(const std::vector<Entity *> &entities) {
   ImGui::Begin("Scene Hierarchy");
 
@@ -207,6 +227,18 @@ void EditorSystem::DrawComponentsPantel(Entity *entity) {
 
   if (auto *camera = entity->GetComponent<CameraComponent>()) {
     UI::DrawCameraComponent(camera);
+  }
+
+  if (auto *light = entity->GetComponent<DirectionalLightComponent>()) {
+    UI::DrawDirectionalLightComponent(light);
+  }
+
+  if (auto *light = entity->GetComponent<PointLightComponent>()) {
+    UI::DrawPointLightComponent(light);
+  }
+
+  if (auto *light = entity->GetComponent<SpotLightComponent>()) {
+    UI::DrawSpotLightComponent(light);
   }
 
   ImGui::End();

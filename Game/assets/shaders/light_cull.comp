@@ -1,0 +1,145 @@
+#version 450
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+struct PointLight {
+    vec4 positionRange;
+    vec4 colorIntensity;
+};
+
+struct SpotLight {
+    vec4 positionRange;
+    vec4 directionInnerConeCos;
+    vec4 colorIntensity;
+    vec4 outerConeCos;
+};
+
+layout(std430, set = 0, binding = 4) readonly buffer PointLightBuffer {
+    PointLight pointLights[];
+};
+
+layout(std430, set = 0, binding = 5) readonly buffer SpotLightBuffer {
+    SpotLight spotLights[];
+};
+
+layout(std430, set = 0, binding = 6) writeonly buffer TilePointLightCountBuffer {
+    uint tilePointLightCounts[];
+};
+
+layout(std430, set = 0, binding = 7) writeonly buffer TilePointLightIndexBuffer {
+    uint tilePointLightIndices[];
+};
+
+layout(std430, set = 0, binding = 8) writeonly buffer TileSpotLightCountBuffer {
+    uint tileSpotLightCounts[];
+};
+
+layout(std430, set = 0, binding = 9) writeonly buffer TileSpotLightIndexBuffer {
+    uint tileSpotLightIndices[];
+};
+
+layout(push_constant) uniform Constants {
+    mat4 viewProjection;
+    vec4 projectionScreen;
+    uvec4 lightGrid;
+    uvec4 spotLightGrid;
+} push;
+
+shared uint visibleLightCount;
+shared uint visibleLightIndices[128];
+shared uint visibleSpotLightCount;
+shared uint visibleSpotLightIndices[64];
+
+bool IntersectsTile(vec4 positionRange, uvec2 tile) {
+    vec4 clipCenter =
+        push.viewProjection * vec4(positionRange.xyz, 1.0);
+    float radius = max(positionRange.w, 0.0);
+
+    if (clipCenter.w + radius <= 0.0)
+        return false;
+
+    vec2 screenSize = push.projectionScreen.zw;
+    vec2 minPixel = vec2(0.0);
+    vec2 maxPixel = screenSize;
+
+    if (clipCenter.w > radius) {
+        vec2 ndcCenter = clipCenter.xy / clipCenter.w;
+        vec2 ndcRadius =
+            push.projectionScreen.xy * radius / clipCenter.w;
+        minPixel = (ndcCenter - ndcRadius) * 0.5 * screenSize +
+                   0.5 * screenSize;
+        maxPixel = (ndcCenter + ndcRadius) * 0.5 * screenSize +
+                   0.5 * screenSize;
+    }
+
+    vec2 tileMinPixel = vec2(tile * 16u);
+    vec2 tileMaxPixel = min(tileMinPixel + vec2(16.0), screenSize);
+
+    return maxPixel.x >= tileMinPixel.x &&
+           minPixel.x < tileMaxPixel.x &&
+           maxPixel.y >= tileMinPixel.y &&
+           minPixel.y < tileMaxPixel.y;
+}
+
+void main() {
+    if (gl_LocalInvocationIndex == 0) {
+        visibleLightCount = 0;
+        visibleSpotLightCount = 0;
+    }
+    barrier();
+
+    uvec2 tile = gl_WorkGroupID.xy;
+    uint pointLightCount = push.lightGrid.x;
+    uint maxLightsPerTile = push.lightGrid.w;
+
+    for (uint lightIndex = gl_LocalInvocationIndex;
+         lightIndex < pointLightCount;
+         lightIndex += gl_WorkGroupSize.x) {
+        if (!IntersectsTile(pointLights[lightIndex].positionRange, tile))
+            continue;
+
+        uint destination = atomicAdd(visibleLightCount, 1);
+        if (destination < maxLightsPerTile)
+            visibleLightIndices[destination] = lightIndex;
+    }
+
+    uint spotLightCount = push.spotLightGrid.x;
+    uint maxSpotLightsPerTile = push.spotLightGrid.y;
+    for (uint lightIndex = gl_LocalInvocationIndex;
+         lightIndex < spotLightCount;
+         lightIndex += gl_WorkGroupSize.x) {
+        if (!IntersectsTile(spotLights[lightIndex].positionRange, tile))
+            continue;
+
+        uint destination = atomicAdd(visibleSpotLightCount, 1);
+        if (destination < maxSpotLightsPerTile)
+            visibleSpotLightIndices[destination] = lightIndex;
+    }
+    barrier();
+
+    uint tileIndex = tile.y * push.lightGrid.y + tile.x;
+    uint storedLightCount = min(visibleLightCount, maxLightsPerTile);
+    uint storedSpotLightCount =
+        min(visibleSpotLightCount, maxSpotLightsPerTile);
+
+    if (gl_LocalInvocationIndex == 0) {
+        tilePointLightCounts[tileIndex] = storedLightCount;
+        tileSpotLightCounts[tileIndex] = storedSpotLightCount;
+    }
+
+    uint tileOffset = tileIndex * maxLightsPerTile;
+    for (uint index = gl_LocalInvocationIndex;
+         index < storedLightCount;
+         index += gl_WorkGroupSize.x) {
+        tilePointLightIndices[tileOffset + index] = visibleLightIndices[index];
+    }
+
+
+    uint spotTileOffset = tileIndex * maxSpotLightsPerTile;
+    for (uint index = gl_LocalInvocationIndex;
+         index < storedSpotLightCount;
+         index += gl_WorkGroupSize.x) {
+        tileSpotLightIndices[spotTileOffset + index] =
+            visibleSpotLightIndices[index];
+    }
+}

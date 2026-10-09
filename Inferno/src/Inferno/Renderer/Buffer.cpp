@@ -124,6 +124,56 @@ void BufferUploader::Upload(const DeviceContext *context, Buffer &dst,
 }
 
 // =================================================
+// Storage Buffer
+// =================================================
+StorageBuffer::StorageBuffer(const DeviceContext *context, VkDeviceSize size)
+    : m_Context(context),
+      m_Buffer(context, size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                   VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) {
+  if (vkMapMemory(context->Device, m_Buffer.GetMemory(), 0, size, 0,
+                  &m_Mapped) != VK_SUCCESS) {
+    throw std::runtime_error("Failed to Map Memory for Storage Buffer");
+  }
+}
+
+StorageBuffer::~StorageBuffer() {
+  if (m_Mapped)
+    vkUnmapMemory(m_Context->Device, m_Buffer.GetMemory());
+}
+
+StorageBuffer::StorageBuffer(StorageBuffer &&other)
+    : m_Context(other.m_Context), m_Buffer(std::move(other.m_Buffer)),
+      m_Mapped(other.m_Mapped) {
+  other.m_Context = nullptr;
+  other.m_Mapped = nullptr;
+}
+
+StorageBuffer &StorageBuffer::operator=(StorageBuffer &&other) {
+  if (this == &other)
+    return *this;
+
+  if (m_Mapped)
+    vkUnmapMemory(m_Context->Device, m_Buffer.GetMemory());
+
+  m_Context = other.m_Context;
+  m_Buffer = std::move(other.m_Buffer);
+  m_Mapped = other.m_Mapped;
+
+  other.m_Context = nullptr;
+  other.m_Mapped = nullptr;
+  return *this;
+}
+
+void StorageBuffer::Update(const void *data, VkDeviceSize size) {
+  if (size > m_Buffer.GetSize())
+    throw std::runtime_error("Storage Buffer update exceeds capacity");
+
+  if (size > 0)
+    memcpy(m_Mapped, data, static_cast<size_t>(size));
+}
+
+// =================================================
 // Index Buffer
 // =================================================
 IndexBuffer::IndexBuffer(const DeviceContext *context, VkDeviceSize size,

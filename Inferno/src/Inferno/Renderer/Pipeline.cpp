@@ -158,4 +158,52 @@ void Pipeline::Destroy(VkDevice device) {
   Layout = VK_NULL_HANDLE;
 }
 
+void ComputePipeline::Init(
+    VkDevice device, VkShaderModule computeShader,
+    const std::vector<VkDescriptorSetLayout> &descriptorSetLayouts,
+    const std::vector<VkPushConstantRange> &pushConstantRanges) {
+  VkPipelineLayoutCreateInfo layoutInfo{
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+      .setLayoutCount = static_cast<uint32_t>(descriptorSetLayouts.size()),
+      .pSetLayouts = descriptorSetLayouts.data(),
+      .pushConstantRangeCount =
+          static_cast<uint32_t>(pushConstantRanges.size()),
+      .pPushConstantRanges = pushConstantRanges.data(),
+  };
+
+  if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &Layout) !=
+      VK_SUCCESS) {
+    throw std::runtime_error("Failed To Create Compute Pipeline Layout");
+  }
+
+  VkPipelineShaderStageCreateInfo shaderStage{
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+      .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+      .module = computeShader,
+      .pName = "main",
+  };
+  VkComputePipelineCreateInfo pipelineInfo{
+      .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+      .stage = shaderStage,
+      .layout = Layout,
+  };
+
+  if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo,
+                               nullptr, &Handle) != VK_SUCCESS) {
+    vkDestroyPipelineLayout(device, Layout, nullptr);
+    Layout = VK_NULL_HANDLE;
+    throw std::runtime_error("Failed To Create Compute Pipeline");
+  }
+}
+
+void ComputePipeline::Destroy(VkDevice device) {
+  if (Handle != VK_NULL_HANDLE)
+    vkDestroyPipeline(device, Handle, nullptr);
+  if (Layout != VK_NULL_HANDLE)
+    vkDestroyPipelineLayout(device, Layout, nullptr);
+
+  Handle = VK_NULL_HANDLE;
+  Layout = VK_NULL_HANDLE;
+}
+
 }; // namespace Inferno

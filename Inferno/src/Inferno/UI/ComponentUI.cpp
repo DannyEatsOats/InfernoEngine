@@ -104,6 +104,97 @@ void UI::DrawCameraComponent(CameraComponent *camera) {
   ImGui::PopID();
 }
 
+void UI::DrawDirectionalLightComponent(DirectionalLightComponent *light) {
+  if (!light)
+    return;
+
+  ImGui::PushID(light);
+
+  if (ImGui::CollapsingHeader("Directional Light",
+                              ImGuiTreeNodeFlags_DefaultOpen)) {
+    glm::vec3 color = light->GetColor();
+    float intensity = light->GetIntensity();
+
+    if (ImGui::ColorEdit3("Color", glm::value_ptr(color))) {
+      light->SetColor(color);
+    }
+
+    if (ImGui::DragFloat("Intensity", &intensity, 0.05f, 0.0f, 100000.0f)) {
+      light->SetIntensity(intensity);
+    }
+  }
+
+  ImGui::PopID();
+}
+
+void UI::DrawPointLightComponent(PointLightComponent *light) {
+  if (!light)
+    return;
+
+  ImGui::PushID(light);
+
+  if (ImGui::CollapsingHeader("Point Light",
+                              ImGuiTreeNodeFlags_DefaultOpen)) {
+    glm::vec3 color = light->GetColor();
+    float intensity = light->GetIntensity();
+    float range = light->GetRange();
+
+    if (ImGui::ColorEdit3("Color", glm::value_ptr(color))) {
+      light->SetColor(color);
+    }
+
+    if (ImGui::DragFloat("Intensity", &intensity, 0.05f, 0.0f, 100000.0f)) {
+      light->SetIntensity(intensity);
+    }
+
+    if (ImGui::DragFloat("Range", &range, 0.1f, 0.0f, 100000.0f)) {
+      light->SetRange(range);
+    }
+  }
+
+  ImGui::PopID();
+}
+
+void UI::DrawSpotLightComponent(SpotLightComponent *light) {
+  if (!light)
+    return;
+
+  ImGui::PushID(light);
+
+  if (ImGui::CollapsingHeader("Spot Light",
+                              ImGuiTreeNodeFlags_DefaultOpen)) {
+    glm::vec3 color = light->GetColor();
+    float intensity = light->GetIntensity();
+    float range = light->GetRange();
+    float innerAngle = light->GetInnerConeAngleDegrees();
+    float outerAngle = light->GetOuterConeAngleDegrees();
+
+    if (ImGui::ColorEdit3("Color", glm::value_ptr(color))) {
+      light->SetColor(color);
+    }
+
+    if (ImGui::DragFloat("Intensity", &intensity, 0.05f, 0.0f, 100000.0f)) {
+      light->SetIntensity(intensity);
+    }
+
+    if (ImGui::DragFloat("Range", &range, 0.1f, 0.0f, 100000.0f)) {
+      light->SetRange(range);
+    }
+
+    if (ImGui::SliderFloat("Inner Angle", &innerAngle, 0.0f, outerAngle,
+                           "%.1f deg")) {
+      light->SetInnerConeAngleDegrees(innerAngle);
+    }
+
+    if (ImGui::SliderFloat("Outer Angle", &outerAngle, innerAngle, 89.0f,
+                           "%.1f deg")) {
+      light->SetOuterConeAngleDegrees(outerAngle);
+    }
+  }
+
+  ImGui::PopID();
+}
+
 void UI::DrawMeshComponent(MeshComponent *mesh) {}
 
 // Helpers

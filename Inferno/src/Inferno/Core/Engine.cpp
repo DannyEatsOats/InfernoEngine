@@ -11,6 +11,8 @@
 #include "Inferno/Utils/DeltaTime.h"
 #include "Log.h"
 
+#include <glm/geometric.hpp>
+#include <glm/trigonometric.hpp>
 #include <tracy/Tracy.hpp>
 
 namespace Inferno {
@@ -182,8 +184,12 @@ void Engine::OnEvent(Event &event) {
 void Engine::EDITOR_Update(DeltaTime deltaTime) {
   m_EditorCamera->OnUpdate(deltaTime);
 
-  const RenderCamera editorCamera = {m_EditorCamera->GetViewMat(),
-                                     m_EditorCamera->GetProjectionMat()};
+  const RenderCamera editorCamera = {
+      .View = m_EditorCamera->GetViewMat(),
+      .Proj = m_EditorCamera->GetProjectionMat(),
+      .NearPlane = m_EditorCamera->GetNearPlane(),
+      .FarPlane = m_EditorCamera->GetFarPlane(),
+  };
 
   m_RenderView = {
       .Camera = editorCamera,
@@ -193,6 +199,8 @@ void Engine::EDITOR_Update(DeltaTime deltaTime) {
   };
   m_EditorSystem->Update(deltaTime, m_ActiveScene->GetEntities(), editorCamera);
   m_RenderView.SelectedEntity = m_EditorSystem->GetSelectedEntity();
+  m_RenderView.GBufferView = m_EditorSystem->GetGBufferDebugView();
+  m_RenderView.Exposure = m_EditorSystem->GetExposure();
   m_DebugLineVertices.clear();
   m_EditorSystem->AppendDebugLines(m_ActiveScene->GetEntities(),
                                    m_DebugLineVertices);
@@ -210,9 +218,11 @@ void Engine::GAME_Update(DeltaTime deltaTime) {
   // Safe null checks for game camera during gameplay
   if (auto activeCamera = m_ActiveScene->GetActiveCamera()) {
     if (auto cameraComponent = activeCamera->GetComponent<CameraComponent>()) {
+      const Camera &camera = cameraComponent->GetCamera();
       m_RenderView = {
           .Camera = {cameraComponent->GetViewMatrix(),
-                     cameraComponent->GetProjectionMatrix()},
+                     cameraComponent->GetProjectionMatrix(), camera.GetNear(),
+                     camera.GetFar()},
           .Features = RenderFeature::SCENE | RenderFeature::IMGUI,
       };
     } else {
@@ -222,16 +232,71 @@ void Engine::GAME_Update(DeltaTime deltaTime) {
 }
 
 void Engine::BuildRenderWorld() {
+  ZoneScopedN("Build Render World");
+
   m_RenderWorld.Objects.clear();
+  m_RenderWorld.DirectionalLights.clear();
+  m_RenderWorld.PointLights.clear();
+  m_RenderWorld.SpotLights.clear();
 
   const auto &entities = m_ActiveScene->GetEntities();
   m_RenderWorld.Objects.reserve(entities.size());
+  m_RenderWorld.DirectionalLights.reserve(entities.size());
+  m_RenderWorld.PointLights.reserve(entities.size());
+  m_RenderWorld.SpotLights.reserve(entities.size());
 
   for (Entity *entity : entities) {
     auto *transform = entity->GetComponent<TransformComponent>();
-    auto *meshComponent = entity->GetComponent<MeshComponent>();
+    if (!transform)
+      continue;
 
-    if (!transform || !meshComponent)
+    auto *directionalLight =
+        entity->GetComponent<DirectionalLightComponent>();
+    auto *pointLight = entity->GetComponent<PointLightComponent>();
+    auto *spotLight = entity->GetComponent<SpotLightComponent>();
+
+    glm::vec3 direction{0.0f};
+    if (directionalLight || spotLight) {
+      direction = glm::normalize(transform->GetRotation() *
+                                 glm::vec3(0.0f, 0.0f, -1.0f));
+    }
+
+    if (directionalLight) {
+      m_RenderWorld.DirectionalLights.push_back({
+          .Direction = glm::vec4(direction, 0.0f),
+          .ColorIntensity =
+              glm::vec4(directionalLight->GetColor(),
+                        directionalLight->GetIntensity()),
+      });
+    }
+
+    if (pointLight) {
+      m_RenderWorld.PointLights.push_back({
+          .PositionRange =
+              glm::vec4(transform->GetPosition(), pointLight->GetRange()),
+          .ColorIntensity =
+              glm::vec4(pointLight->GetColor(), pointLight->GetIntensity()),
+      });
+    }
+
+    if (spotLight) {
+      const float innerConeCos =
+          glm::cos(glm::radians(spotLight->GetInnerConeAngleDegrees()));
+      const float outerConeCos =
+          glm::cos(glm::radians(spotLight->GetOuterConeAngleDegrees()));
+
+      m_RenderWorld.SpotLights.push_back({
+          .PositionRange =
+              glm::vec4(transform->GetPosition(), spotLight->GetRange()),
+          .DirectionInnerConeCos = glm::vec4(direction, innerConeCos),
+          .ColorIntensity =
+              glm::vec4(spotLight->GetColor(), spotLight->GetIntensity()),
+          .OuterConeCos = glm::vec4(outerConeCos, 0.0f, 0.0f, 0.0f),
+      });
+    }
+
+    auto *meshComponent = entity->GetComponent<MeshComponent>();
+    if (!meshComponent)
       continue;
 
     const Mesh *mesh = meshComponent->GetMesh();

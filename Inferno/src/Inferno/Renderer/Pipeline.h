@@ -35,4 +35,14 @@ public:
   void Destroy(VkDevice device);
 };
 
+struct ComputePipeline {
+  VkPipeline Handle = VK_NULL_HANDLE;
+  VkPipelineLayout Layout = VK_NULL_HANDLE;
+
+  void Init(VkDevice device, VkShaderModule computeShader,
+            const std::vector<VkDescriptorSetLayout> &descriptorSetLayouts,
+            const std::vector<VkPushConstantRange> &pushConstantRanges);
+  void Destroy(VkDevice device);
+};
+
 } // namespace Inferno

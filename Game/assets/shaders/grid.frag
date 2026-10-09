@@ -4,8 +4,8 @@ layout(location = 1) in vec3 inFarPoint;
 layout(location = 0) out vec4 FragColor;
 
 layout(push_constant) uniform GridConstants {
-    mat4 view;
-    mat4 proj;
+    mat4 viewProjection;
+    mat4 inverseViewProjection;
 } push;
 
 vec4 ComputeGrid(vec3 worldPos, float scale) {
@@ -17,7 +17,7 @@ vec4 ComputeGrid(vec3 worldPos, float scale) {
 }
 
 float ComputeDepth(vec3 pos) {
-    vec4 clip = push.proj * push.view * vec4(pos, 1.0);
+    vec4 clip = push.viewProjection * vec4(pos, 1.0);
     return clip.z / clip.w;
 }
 

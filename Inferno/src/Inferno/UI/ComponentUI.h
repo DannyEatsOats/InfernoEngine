@@ -8,6 +8,9 @@ namespace UI {
 void DrawTransformComponent(TransformComponent *transform,
                             TransformEditorState &transformEditorState);
 void DrawCameraComponent(CameraComponent *camera);
+void DrawDirectionalLightComponent(DirectionalLightComponent *light);
+void DrawPointLightComponent(PointLightComponent *light);
+void DrawSpotLightComponent(SpotLightComponent *light);
 void DrawMeshComponent(MeshComponent *mesh);
 
 // Helpers

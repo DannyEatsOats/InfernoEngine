@@ -1,59 +1,157 @@
 #version 450
 
-layout(location = 0) in vec2 inUV;
-layout(location = 0) out vec4 outFinalColor;
+layout(location = 0) in vec2 inTexCoord;
+layout(location = 0) out vec4 outColor;
 
-layout(binding = 0) uniform sampler2D gBufferPosition;
-layout(binding = 1) uniform sampler2D gBufferNormal;
-layout(binding = 2) uniform sampler2D gBufferAlbedo;
-layout(binding = 3) uniform sampler2D gBufferDepth;
+layout(set = 0, binding = 0) uniform sampler2D albedoMetallicTexture;
+layout(set = 0, binding = 1) uniform sampler2D normalRoughnessTexture;
+layout(set = 0, binding = 2) uniform sampler2D depthTexture;
 
-layout(push_constant) uniform PushConstants {
-    int ViewMode;
-} lightingMode;
+struct PointLight {
+    vec4 positionRange;
+    vec4 colorIntensity;
+};
+
+struct SpotLight {
+    vec4 positionRange;
+    vec4 directionInnerConeCos;
+    vec4 colorIntensity;
+    vec4 outerConeCos;
+};
+
+layout(std430, set = 0, binding = 4) readonly buffer PointLightBuffer {
+    PointLight pointLights[];
+};
+
+layout(std430, set = 0, binding = 5) readonly buffer SpotLightBuffer {
+    SpotLight spotLights[];
+};
+
+layout(std430, set = 0, binding = 6) readonly buffer TilePointLightCountBuffer {
+    uint tilePointLightCounts[];
+};
+
+layout(std430, set = 0, binding = 7) readonly buffer TilePointLightIndexBuffer {
+    uint tilePointLightIndices[];
+};
+
+layout(std430, set = 0, binding = 8) readonly buffer TileSpotLightCountBuffer {
+    uint tileSpotLightCounts[];
+};
+
+layout(std430, set = 0, binding = 9) readonly buffer TileSpotLightIndexBuffer {
+    uint tileSpotLightIndices[];
+};
+
+layout(push_constant) uniform Constants {
+    mat4 inverseViewProjection;
+    vec4 lightDirection;
+    vec4 lightColorIntensity;
+    vec4 settings;
+    uvec4 lightCounts;
+} push;
+
+vec3 ReconstructWorldPosition(float depth) {
+    vec2 ndc = inTexCoord * 2.0 - 1.0;
+    vec4 worldPosition =
+        push.inverseViewProjection * vec4(ndc, depth, 1.0);
+    return worldPosition.xyz / worldPosition.w;
+}
+
+float CalculateRangeAttenuation(float distanceSquared, float range) {
+    if (range <= 0.0)
+        return 0.0;
+
+    float normalizedDistanceSquared = distanceSquared / (range * range);
+    float rangeFade = clamp(
+        1.0 - normalizedDistanceSquared * normalizedDistanceSquared,
+        0.0, 1.0);
+    return (rangeFade * rangeFade) / max(distanceSquared, 0.01);
+}
 
 void main() {
-    float depth = texture(gBufferDepth, inUV).r;
-    if (depth >= 0.999) {
-        discard;
+    float depth = texture(depthTexture, inTexCoord).r;
+    const vec3 sceneClearColor = vec3(0.14);
+
+    if (depth >= 1.0 - 0.000001) {
+        outColor = vec4(sceneClearColor, 1.0);
+        return;
     }
 
-    vec3 worldPos = texture(gBufferPosition, inUV).rgb;
-    vec3 normal = texture(gBufferNormal, inUV).rgb;
-    vec3 albedo = texture(gBufferAlbedo, inUV).rgb;
+    vec4 albedoMetallic = texture(albedoMetallicTexture, inTexCoord);
+    vec4 normalRoughness = texture(normalRoughnessTexture, inTexCoord);
+    vec3 worldPosition = ReconstructWorldPosition(depth);
 
-    switch (lightingMode.ViewMode) {
-        case 0: // Fully Lit Battya
-        vec3 lightDir = normalize(vec3(0.5, 1.0, 0.5));
-        vec3 lightColor = vec3(0.78, 0.65, 0.5);
-        float lightIntensity = 3.5;
-        float ambientIntensity = 0.15;
-
-        vec3 ambient = albedo * ambientIntensity;
-
-        vec3 N = normalize(normal);
-        vec3 L = normalize(lightDir);
-        float diffuseFactor = max(dot(N, L), 0.0);
-        vec3 diffuse = albedo * diffuseFactor * lightColor * lightIntensity;
-
-        outFinalColor = vec4(ambient + diffuse, 1.0);
-        break;
-
-        case 1: // Albedo Modulio
-        outFinalColor = vec4(albedo, 1.0);
-        break;
-
-        case 2: // Normal Map Visualization
-        outFinalColor = vec4(normal * 0.5 + 0.5, 1.0);
-        break;
-
-        case 3: // Position Mode
-        outFinalColor = vec4(abs(worldPos) * 0.8, 1.0);
-        break;
-
-        case 4: // Depth View Mode
-        float linearDepth = (2.0 * 0.1) / (100.0 + 0.1 - depth * (100.0 - 0.1));
-        outFinalColor = vec4(vec3(linearDepth), 1.0);
-        break;
+    if (any(isnan(worldPosition)) || any(isinf(worldPosition))) {
+        outColor = vec4(sceneClearColor, 1.0);
+        return;
     }
+
+    vec3 albedo = albedoMetallic.rgb;
+    vec3 normal = normalize(normalRoughness.xyz);
+    float ambientIntensity = push.settings.x;
+    bool hasDirectionalLight = push.settings.y > 0.5;
+
+    vec3 lighting = albedo * ambientIntensity;
+
+    if (hasDirectionalLight) {
+        vec3 surfaceToLight = normalize(-push.lightDirection.xyz);
+        float diffuseFactor = max(dot(normal, surfaceToLight), 0.0);
+        vec3 radiance =
+            push.lightColorIntensity.rgb * push.lightColorIntensity.a;
+        lighting += albedo * radiance * diffuseFactor;
+    }
+
+    const uint maxPointLightsPerTile = 128;
+    uvec2 tile = min(uvec2(gl_FragCoord.xy) / 16u,
+                     push.lightCounts.zw - uvec2(1u));
+    uint tileIndex = tile.y * push.lightCounts.z + tile.x;
+    uint tilePointLightCount = tilePointLightCounts[tileIndex];
+    uint tilePointLightOffset = tileIndex * maxPointLightsPerTile;
+
+    for (uint i = 0; i < tilePointLightCount; ++i) {
+        uint lightIndex = tilePointLightIndices[tilePointLightOffset + i];
+        PointLight light = pointLights[lightIndex];
+        vec3 toLight = light.positionRange.xyz - worldPosition;
+        float distanceSquared = dot(toLight, toLight);
+        vec3 surfaceToLight =
+            toLight * inversesqrt(max(distanceSquared, 0.0001));
+        float diffuseFactor = max(dot(normal, surfaceToLight), 0.0);
+        float attenuation = CalculateRangeAttenuation(
+            distanceSquared, light.positionRange.w);
+        vec3 radiance = light.colorIntensity.rgb *
+                        light.colorIntensity.a * attenuation;
+        lighting += albedo * radiance * diffuseFactor;
+    }
+
+    const uint maxSpotLightsPerTile = 64;
+    uint tileSpotLightCount = tileSpotLightCounts[tileIndex];
+    uint tileSpotLightOffset = tileIndex * maxSpotLightsPerTile;
+
+    for (uint i = 0; i < tileSpotLightCount; ++i) {
+        uint lightIndex = tileSpotLightIndices[tileSpotLightOffset + i];
+        SpotLight light = spotLights[lightIndex];
+        vec3 toLight = light.positionRange.xyz - worldPosition;
+        float distanceSquared = dot(toLight, toLight);
+        vec3 surfaceToLight =
+            toLight * inversesqrt(max(distanceSquared, 0.0001));
+
+        vec3 lightToSurface = -surfaceToLight;
+        float coneCos = dot(normalize(light.directionInnerConeCos.xyz),
+                            lightToSurface);
+        float coneAttenuation = smoothstep(
+            light.outerConeCos.x,
+            light.directionInnerConeCos.w,
+            coneCos);
+
+        float diffuseFactor = max(dot(normal, surfaceToLight), 0.0);
+        float rangeAttenuation = CalculateRangeAttenuation(
+            distanceSquared, light.positionRange.w);
+        vec3 radiance = light.colorIntensity.rgb *
+                        light.colorIntensity.a *
+                        rangeAttenuation * coneAttenuation;
+        lighting += albedo * radiance * diffuseFactor;
+    }
+
+    outColor = vec4(lighting, 1.0);
 }

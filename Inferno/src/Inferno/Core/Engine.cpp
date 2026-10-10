@@ -250,23 +250,20 @@ void Engine::BuildRenderWorld() {
     if (!transform)
       continue;
 
-    auto *directionalLight =
-        entity->GetComponent<DirectionalLightComponent>();
+    auto *directionalLight = entity->GetComponent<DirectionalLightComponent>();
     auto *pointLight = entity->GetComponent<PointLightComponent>();
     auto *spotLight = entity->GetComponent<SpotLightComponent>();
 
     glm::vec3 direction{0.0f};
-    if (directionalLight || spotLight) {
-      direction = glm::normalize(transform->GetRotation() *
-                                 glm::vec3(0.0f, 0.0f, -1.0f));
-    }
 
     if (directionalLight) {
+      direction = glm::normalize(transform->GetRotation() *
+                                 glm::vec3(0.0f, 0.0f, -1.0f));
+
       m_RenderWorld.DirectionalLights.push_back({
           .Direction = glm::vec4(direction, 0.0f),
-          .ColorIntensity =
-              glm::vec4(directionalLight->GetColor(),
-                        directionalLight->GetIntensity()),
+          .ColorIntensity = glm::vec4(directionalLight->GetColor(),
+                                      directionalLight->GetIntensity()),
       });
     }
 
@@ -280,6 +277,8 @@ void Engine::BuildRenderWorld() {
     }
 
     if (spotLight) {
+        direction = glm::normalize(transform->GetRotation() * glm::vec3(0.0f, -1.0f, 0.0f));
+
       const float innerConeCos =
           glm::cos(glm::radians(spotLight->GetInnerConeAngleDegrees()));
       const float outerConeCos =

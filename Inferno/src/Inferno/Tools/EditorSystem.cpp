@@ -73,6 +73,12 @@ void EditorSystem::OnEvent(Event &event) {
       case ENGINE_KEY_3:
         m_GizmoOperation = GIZMO_OPERATION::SCALE;
         return true;
+      case ENGINE_KEY_TAB:
+        if (m_GizmoSpace == GIZMO_SPACE::LOCAL)
+          m_GizmoSpace = GIZMO_SPACE::WORLD;
+        else
+          m_GizmoSpace = GIZMO_SPACE::LOCAL;
+        return true;
       default:
         return false;
       }
@@ -134,8 +140,7 @@ void EditorSystem::AppendDebugLines(
 
   constexpr float visualizationDistance = 2.0f;
   const glm::vec4 projectedDistance =
-      projection *
-      glm::vec4(0.0f, 0.0f, -visualizationDistance, 1.0f);
+      projection * glm::vec4(0.0f, 0.0f, -visualizationDistance, 1.0f);
   const float farNdcDepth = projectedDistance.z / projectedDistance.w;
 
   const std::array<glm::vec4, 8> ndcCorners = {
@@ -156,9 +161,8 @@ void EditorSystem::AppendDebugLines(
   }
 
   constexpr uint32_t edges[][2] = {
-      {0, 1}, {1, 2}, {2, 3}, {3, 0},
-      {4, 5}, {5, 6}, {6, 7}, {7, 4},
-      {0, 4}, {1, 5}, {2, 6}, {3, 7},
+      {0, 1}, {1, 2}, {2, 3}, {3, 0}, {4, 5}, {5, 6},
+      {6, 7}, {7, 4}, {0, 4}, {1, 5}, {2, 6}, {3, 7},
   };
 
   constexpr glm::vec4 color{1.0f, 1.0f, 0.0f, 1.0f};
@@ -172,8 +176,7 @@ void EditorSystem::AppendDebugLines(
 
 void EditorSystem::DrawRenderDebugPanel() {
   constexpr const char *viewNames[] = {
-      "Lit",       "Albedo", "Normals", "Metallic",
-      "Roughness", "Depth",  "Entity ID",
+      "Lit", "Albedo", "Normals", "Metallic", "Roughness", "Depth", "Entity ID",
   };
 
   ImGui::Begin("Render Debug");

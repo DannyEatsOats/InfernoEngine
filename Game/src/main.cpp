@@ -100,8 +100,6 @@ public:
     {
       Entity *ship = CreateEntity("ship");
       auto *transform = ship->AddComponent<TransformComponent>();
-      ship->AddComponent<DirectionalLightComponent>();
-      ship->AddComponent<PointLightComponent>();
       ship->AddComponent<SpotLightComponent>();
 
       /*
@@ -153,6 +151,11 @@ public:
       auto texture =
           m_ResourceManager->Load<Texture>("kenney/Textures/colormap");
       palm1->AddComponent<MeshComponent>(mesh, texture);
+    }
+
+    {
+      Entity *light = CreateEntity("SpotLight");
+      auto *spotlightComponent = light->AddComponent<SpotLightComponent>();
     }
   }
 

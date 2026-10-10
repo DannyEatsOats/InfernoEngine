@@ -1,3 +1,4 @@
+#include "Inferno/Renderer/Shader.h"
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include "Inferno/Core/Engine.h"
 #include "Inferno/Core/Log.h"
@@ -33,40 +34,6 @@
 #include <glm/glm.hpp>
 
 namespace Inferno {
-namespace {
-VkShaderModule LoadShaderModule(const DeviceContext *context,
-                                const std::filesystem::path &relativePath) {
-  const std::filesystem::path executableDirectory =
-      std::filesystem::canonical("/proc/self/exe").parent_path();
-  const std::filesystem::path shaderPath = executableDirectory / relativePath;
-
-  std::ifstream file(shaderPath, std::ios::ate | std::ios::binary);
-  if (!file.is_open())
-    throw std::runtime_error("Failed to Open File: " + shaderPath.string());
-
-  const size_t fileSize = static_cast<size_t>(file.tellg());
-  if (fileSize == 0 || fileSize % sizeof(uint32_t) != 0)
-    throw std::runtime_error("Invalid SPIR-V File: " + shaderPath.string());
-
-  std::vector<uint32_t> code(fileSize / sizeof(uint32_t));
-  file.seekg(0);
-  file.read(reinterpret_cast<char *>(code.data()),
-            static_cast<std::streamsize>(fileSize));
-
-  VkShaderModuleCreateInfo createInfo{
-      .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-      .codeSize = fileSize,
-      .pCode = code.data(),
-  };
-  VkShaderModule module = VK_NULL_HANDLE;
-  if (vkCreateShaderModule(context->Device, &createInfo, nullptr, &module) !=
-      VK_SUCCESS) {
-    throw std::runtime_error("Failed to Create Compute Shader Module");
-  }
-  return module;
-}
-} // namespace
-
 void Renderer::StartUp(ResourceManager *resourceManager, GUISystem *guiSystem) {
   m_ResourceManager = resourceManager;
   m_GUISystem = guiSystem;
@@ -121,14 +88,14 @@ void Renderer::ShutDown() {
     vkDestroySampler(m_Context->Device, m_GBufferSampler, nullptr);
     vkDestroyDescriptorSetLayout(m_Context->Device,
                                  m_GBufferDescriptorSetLayout, nullptr);
-    vkDestroyDescriptorPool(m_Context->Device,
-                            m_GBufferDescriptorPool, nullptr);
+    vkDestroyDescriptorPool(m_Context->Device, m_GBufferDescriptorPool,
+                            nullptr);
 
     vkDestroySampler(m_Context->Device, m_ToneMappingSampler, nullptr);
     vkDestroyDescriptorSetLayout(m_Context->Device,
                                  m_ToneMappingDescriptorSetLayout, nullptr);
-    vkDestroyDescriptorPool(m_Context->Device,
-                            m_ToneMappingDescriptorPool, nullptr);
+    vkDestroyDescriptorPool(m_Context->Device, m_ToneMappingDescriptorPool,
+                            nullptr);
 
     vkDestroySampler(m_Context->Device, m_OutlineSampler, nullptr);
 
@@ -283,8 +250,7 @@ void Renderer::CreateGBufferImages() {
       .Height = m_Context->Swapchain.Extent.height,
       .MipLevels = 1,
       .Format = GBuffer::AlbedoMetallicFormat,
-      .Usage =
-          VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+      .Usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
       .Aspect = VK_IMAGE_ASPECT_COLOR_BIT,
   };
 
@@ -293,8 +259,7 @@ void Renderer::CreateGBufferImages() {
       .Height = m_Context->Swapchain.Extent.height,
       .MipLevels = 1,
       .Format = GBuffer::NormalRoughnessFormat,
-      .Usage =
-          VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+      .Usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
       .Aspect = VK_IMAGE_ASPECT_COLOR_BIT,
   };
 
@@ -333,8 +298,7 @@ void Renderer::CreateHDRSceneColorImages() {
       .Height = m_Context->Swapchain.Extent.height,
       .MipLevels = 1,
       .Format = HDRSceneColor::Format,
-      .Usage =
-          VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+      .Usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
       .Aspect = VK_IMAGE_ASPECT_COLOR_BIT,
   };
 
@@ -527,16 +491,18 @@ void Renderer::CreateGBufferPipeline() {
       .DepthTest = VK_TRUE,
       .DepthWrite = VK_TRUE,
       .DepthFormat = GBuffer::DepthFormat,
-      .ColorFormats = {
-          GBuffer::AlbedoMetallicFormat,
-          GBuffer::NormalRoughnessFormat,
-          GBuffer::EntityIDFormat,
-      },
-      .BlendAttachments = {
-          materialBlendAttachment,
-          materialBlendAttachment,
-          entityIDBlendAttachment,
-      },
+      .ColorFormats =
+          {
+              GBuffer::AlbedoMetallicFormat,
+              GBuffer::NormalRoughnessFormat,
+              GBuffer::EntityIDFormat,
+          },
+      .BlendAttachments =
+          {
+              materialBlendAttachment,
+              materialBlendAttachment,
+              entityIDBlendAttachment,
+          },
       .DescriptorSetLayouts = {m_TextureDescriptorSetLayout},
       .PushConstantRanges = {pushConstantRange},
   };
@@ -578,7 +544,7 @@ void Renderer::CreateGBufferDescriptorResources() {
       .binding = 5,
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
       .descriptorCount = 1,
-      .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+      .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
   };
   bindings[6] = {
       .binding = 6,
@@ -637,8 +603,7 @@ void Renderer::CreateGBufferDescriptorResources() {
 
   if (vkCreateDescriptorPool(m_Context->Device, &poolInfo, nullptr,
                              &m_GBufferDescriptorPool) != VK_SUCCESS) {
-    throw std::runtime_error(
-        "Failed To Create GBuffer Debug Descriptor Pool");
+    throw std::runtime_error("Failed To Create GBuffer Debug Descriptor Pool");
   }
 
   std::array<VkDescriptorSetLayout, MAX_FRAMES_IN_FLIGHT> layouts;
@@ -652,8 +617,7 @@ void Renderer::CreateGBufferDescriptorResources() {
   };
 
   if (vkAllocateDescriptorSets(m_Context->Device, &allocInfo,
-                               m_GBufferDescriptorSets.data()) !=
-      VK_SUCCESS) {
+                               m_GBufferDescriptorSets.data()) != VK_SUCCESS) {
     throw std::runtime_error(
         "Failed To Allocate GBuffer Debug Descriptor Sets");
   }
@@ -722,8 +686,7 @@ void Renderer::CreateDeferredLightingPipeline() {
 }
 
 void Renderer::CreateTiledLightCullingPipeline() {
-  VkShaderModule computeShader =
-      LoadShaderModule(m_Context, "assets/shaders/light_cull.comp.spv");
+  auto *shader = m_ResourceManager->Load<ComputeShader>("light_cull");
 
   VkPushConstantRange pushConstantRange{
       .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
@@ -731,16 +694,9 @@ void Renderer::CreateTiledLightCullingPipeline() {
       .size = sizeof(TiledLightCullingPushConstants),
   };
 
-  try {
-    m_TiledLightCullingPipeline.Init(
-        m_Context->Device, computeShader, {m_GBufferDescriptorSetLayout},
-        {pushConstantRange});
-  } catch (...) {
-    vkDestroyShaderModule(m_Context->Device, computeShader, nullptr);
-    throw;
-  }
-
-  vkDestroyShaderModule(m_Context->Device, computeShader, nullptr);
+  m_TiledLightCullingPipeline.Init(
+      m_Context->Device, shader->GetComputeModule(),
+      {m_GBufferDescriptorSetLayout}, {pushConstantRange});
 }
 
 void Renderer::CreateToneMappingDescriptorResources() {
@@ -1134,37 +1090,33 @@ void Renderer::RecordGBufferPass(FrameData &frame,
 
   GBuffer &gbuffer = frame.GeometryBuffer;
 
-  TransitionImageLayout(
-      frame.CommandBuffer, gbuffer.AlbedoMetallic.GetImage(),
-      VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, {},
-      VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-      VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
+  TransitionImageLayout(frame.CommandBuffer, gbuffer.AlbedoMetallic.GetImage(),
+                        VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, {},
+                        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                        VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+                        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
 
-  TransitionImageLayout(
-      frame.CommandBuffer, gbuffer.NormalRoughness.GetImage(),
-      VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, {},
-      VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-      VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
+  TransitionImageLayout(frame.CommandBuffer, gbuffer.NormalRoughness.GetImage(),
+                        VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, {},
+                        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                        VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+                        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
 
-  TransitionImageLayout(
-      frame.CommandBuffer, gbuffer.EntityID.GetImage(),
-      VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, {},
-      VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-      VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
+  TransitionImageLayout(frame.CommandBuffer, gbuffer.EntityID.GetImage(),
+                        VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, {},
+                        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                        VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+                        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
 
-  TransitionImageLayout(
-      frame.CommandBuffer, gbuffer.Depth.GetImage(),
-      VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-      VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, {},
-      VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-      VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-      VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT);
+  TransitionImageLayout(frame.CommandBuffer, gbuffer.Depth.GetImage(),
+                        VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, {},
+                        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                        VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+                        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT);
 
   VkClearValue clearAlbedoMetallic{
       .color = {{0.0f, 0.0f, 0.0f, 0.0f}},
@@ -1262,9 +1214,9 @@ void Renderer::RecordGBufferPass(FrameData &frame,
     constexpr VkDeviceSize vertexOffset = 0;
     vkCmdBindVertexBuffers(frame.CommandBuffer, 0, 1, &vertexBuffer,
                            &vertexOffset);
-    vkCmdBindIndexBuffer(
-        frame.CommandBuffer, object.MeshResource->GetIndexBuffer()->Get(), 0,
-        object.MeshResource->GetIndexBuffer()->GetIndexType());
+    vkCmdBindIndexBuffer(frame.CommandBuffer,
+                         object.MeshResource->GetIndexBuffer()->Get(), 0,
+                         object.MeshResource->GetIndexBuffer()->GetIndexType());
 
     VkDescriptorSet textureSet = object.TextureResource->GetDescriptorSet();
     if (textureSet == VK_NULL_HANDLE) {
@@ -1273,10 +1225,9 @@ void Renderer::RecordGBufferPass(FrameData &frame,
       textureSet = object.TextureResource->GetDescriptorSet();
     }
 
-    vkCmdBindDescriptorSets(frame.CommandBuffer,
-                            VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            m_GBufferPipeline.Layout, 0, 1, &textureSet, 0,
-                            nullptr);
+    vkCmdBindDescriptorSets(
+        frame.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+        m_GBufferPipeline.Layout, 0, 1, &textureSet, 0, nullptr);
 
     vkCmdDrawIndexed(frame.CommandBuffer, object.MeshResource->GetIndexCount(),
                      1, 0, 0, 0);
@@ -1308,16 +1259,15 @@ void Renderer::RecordDeferredLightingPass(FrameData &frame,
       VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
       VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
 
-  TransitionImageLayout(
-      frame.CommandBuffer, gbuffer.Depth.GetImage(),
-      VK_IMAGE_ASPECT_DEPTH_BIT,
-      VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-      VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
-      VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-      VK_ACCESS_2_SHADER_READ_BIT,
-      VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
-          VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-      VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
+  TransitionImageLayout(frame.CommandBuffer, gbuffer.Depth.GetImage(),
+                        VK_IMAGE_ASPECT_DEPTH_BIT,
+                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+                        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                        VK_ACCESS_2_SHADER_READ_BIT,
+                        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
+                            VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+                        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
 
   TransitionImageLayout(
       frame.CommandBuffer, gbuffer.EntityID.GetImage(),
@@ -1327,13 +1277,12 @@ void Renderer::RecordDeferredLightingPass(FrameData &frame,
       VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
       VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
 
-  TransitionImageLayout(
-      frame.CommandBuffer, frame.SceneColor.Color.GetImage(),
-      VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, {},
-      VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-      VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
+  TransitionImageLayout(frame.CommandBuffer, frame.SceneColor.Color.GetImage(),
+                        VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, {},
+                        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                        VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+                        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
 
   VkClearValue clearColor{
       .color = {{0.14f, 0.14f, 0.14f, 1.0f}},
@@ -1375,8 +1324,7 @@ void Renderer::RecordDeferredLightingPass(FrameData &frame,
   };
   vkCmdSetScissor(frame.CommandBuffer, 0, 1, &scissor);
 
-  vkCmdBindDescriptorSets(frame.CommandBuffer,
-                          VK_PIPELINE_BIND_POINT_GRAPHICS,
+  vkCmdBindDescriptorSets(frame.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                           m_DeferredLightingPipeline.Layout, 0, 1,
                           &m_GBufferDescriptorSets[m_FrameIndex], 0, nullptr);
 
@@ -1390,9 +1338,8 @@ void Renderer::RecordDeferredLightingPass(FrameData &frame,
           static_cast<uint32_t>(
               std::min(renderWorld.PointLights.size(),
                        static_cast<size_t>(MAX_POINT_LIGHTS))),
-          static_cast<uint32_t>(
-              std::min(renderWorld.SpotLights.size(),
-                       static_cast<size_t>(MAX_SPOT_LIGHTS))),
+          static_cast<uint32_t>(std::min(renderWorld.SpotLights.size(),
+                                         static_cast<size_t>(MAX_SPOT_LIGHTS))),
           m_LightTileCountX, m_LightTileCountY),
   };
 
@@ -1418,27 +1365,22 @@ void Renderer::RecordTiledLightCullingPass(FrameData &frame,
 
   vkCmdBindPipeline(frame.CommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                     m_TiledLightCullingPipeline.Handle);
-  vkCmdBindDescriptorSets(
-      frame.CommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-      m_TiledLightCullingPipeline.Layout, 0, 1,
-      &m_GBufferDescriptorSets[m_FrameIndex], 0, nullptr);
+  vkCmdBindDescriptorSets(frame.CommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                          m_TiledLightCullingPipeline.Layout, 0, 1,
+                          &m_GBufferDescriptorSets[m_FrameIndex], 0, nullptr);
 
-  const uint32_t pointLightCount = static_cast<uint32_t>(
-      std::min(renderWorld.PointLights.size(),
-               static_cast<size_t>(MAX_POINT_LIGHTS)));
-  const uint32_t spotLightCount = static_cast<uint32_t>(
-      std::min(renderWorld.SpotLights.size(),
-               static_cast<size_t>(MAX_SPOT_LIGHTS)));
+  const uint32_t pointLightCount = static_cast<uint32_t>(std::min(
+      renderWorld.PointLights.size(), static_cast<size_t>(MAX_POINT_LIGHTS)));
+  const uint32_t spotLightCount = static_cast<uint32_t>(std::min(
+      renderWorld.SpotLights.size(), static_cast<size_t>(MAX_SPOT_LIGHTS)));
   TiledLightCullingPushConstants pushConstants{
       .ViewProjection = view.Camera.Proj * view.Camera.View,
-      .ProjectionScreen =
-          glm::vec4(glm::abs(view.Camera.Proj[0][0]),
-                    glm::abs(view.Camera.Proj[1][1]),
-                    static_cast<float>(m_Context->Swapchain.Extent.width),
-                    static_cast<float>(m_Context->Swapchain.Extent.height)),
+      .ProjectionScreen = glm::vec4(
+          glm::abs(view.Camera.Proj[0][0]), glm::abs(view.Camera.Proj[1][1]),
+          static_cast<float>(m_Context->Swapchain.Extent.width),
+          static_cast<float>(m_Context->Swapchain.Extent.height)),
       .LightGrid = glm::uvec4(pointLightCount, m_LightTileCountX,
-                              m_LightTileCountY,
-                              MAX_POINT_LIGHTS_PER_TILE),
+                              m_LightTileCountY, MAX_POINT_LIGHTS_PER_TILE),
       .SpotLightGrid =
           glm::uvec4(spotLightCount, MAX_SPOT_LIGHTS_PER_TILE, 0u, 0u),
   };
@@ -1500,15 +1442,13 @@ void Renderer::RecordTiledLightCullingPass(FrameData &frame,
   };
   VkDependencyInfo dependencyInfo{
       .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-      .bufferMemoryBarrierCount =
-          static_cast<uint32_t>(bufferBarriers.size()),
+      .bufferMemoryBarrierCount = static_cast<uint32_t>(bufferBarriers.size()),
       .pBufferMemoryBarriers = bufferBarriers.data(),
   };
   vkCmdPipelineBarrier2(frame.CommandBuffer, &dependencyInfo);
 }
 
-void Renderer::RecordToneMappingPass(FrameData &frame,
-                                     const RenderView &view) {
+void Renderer::RecordToneMappingPass(FrameData &frame, const RenderView &view) {
   ZoneScopedN("Record Tone Mapping Pass");
 
   TransitionImageLayout(
@@ -1519,13 +1459,13 @@ void Renderer::RecordToneMappingPass(FrameData &frame,
       VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
       VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
 
-  TransitionImageLayout(
-      frame.CommandBuffer, m_Context->Swapchain.Images[m_ImageIndex],
-      VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, {},
-      VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
+  TransitionImageLayout(frame.CommandBuffer,
+                        m_Context->Swapchain.Images[m_ImageIndex],
+                        VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, {},
+                        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
 
   VkClearValue clearColor{
       .color = {{0.0f, 0.0f, 0.0f, 1.0f}},
@@ -1567,10 +1507,10 @@ void Renderer::RecordToneMappingPass(FrameData &frame,
   };
   vkCmdSetScissor(frame.CommandBuffer, 0, 1, &scissor);
 
-  vkCmdBindDescriptorSets(
-      frame.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-      m_ToneMappingPipeline.Layout, 0, 1,
-      &m_ToneMappingDescriptorSets[m_FrameIndex], 0, nullptr);
+  vkCmdBindDescriptorSets(frame.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                          m_ToneMappingPipeline.Layout, 0, 1,
+                          &m_ToneMappingDescriptorSets[m_FrameIndex], 0,
+                          nullptr);
 
   ToneMappingPushConstants pushConstants{
       .Exposure = std::max(view.Exposure, 0.0f),
@@ -1613,24 +1553,23 @@ void Renderer::RecordGBufferDebugPass(FrameData &frame,
       VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
       VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
 
-  TransitionImageLayout(
-      frame.CommandBuffer, gbuffer.Depth.GetImage(),
-      VK_IMAGE_ASPECT_DEPTH_BIT,
-      VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-      VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
-      VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-      VK_ACCESS_2_SHADER_READ_BIT,
-      VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
-          VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-      VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
+  TransitionImageLayout(frame.CommandBuffer, gbuffer.Depth.GetImage(),
+                        VK_IMAGE_ASPECT_DEPTH_BIT,
+                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+                        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                        VK_ACCESS_2_SHADER_READ_BIT,
+                        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
+                            VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+                        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
 
-  TransitionImageLayout(
-      frame.CommandBuffer, m_Context->Swapchain.Images[m_ImageIndex],
-      VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, {},
-      VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
+  TransitionImageLayout(frame.CommandBuffer,
+                        m_Context->Swapchain.Images[m_ImageIndex],
+                        VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, {},
+                        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
 
   VkClearValue clearColor{
       .color = {{0.0f, 0.0f, 0.0f, 1.0f}},
@@ -1672,10 +1611,9 @@ void Renderer::RecordGBufferDebugPass(FrameData &frame,
   };
   vkCmdSetScissor(frame.CommandBuffer, 0, 1, &scissor);
 
-  vkCmdBindDescriptorSets(
-      frame.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-      m_GBufferDebugPipeline.Layout, 0, 1,
-      &m_GBufferDescriptorSets[m_FrameIndex], 0, nullptr);
+  vkCmdBindDescriptorSets(frame.CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                          m_GBufferDebugPipeline.Layout, 0, 1,
+                          &m_GBufferDescriptorSets[m_FrameIndex], 0, nullptr);
 
   GBufferDebugPushConstants pushConstants{
       .InverseProjection = glm::inverse(view.Camera.Proj),
@@ -1694,16 +1632,16 @@ void Renderer::RecordGBufferDebugPass(FrameData &frame,
 void Renderer::RecordGridPass(FrameData &frame, const RenderView &view) {
   ZoneScopedN("Record Grid Pass");
 
-  TransitionImageLayout(
-      frame.CommandBuffer, frame.GeometryBuffer.Depth.GetImage(),
-      VK_IMAGE_ASPECT_DEPTH_BIT,
-      VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
-      VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-      VK_ACCESS_2_SHADER_READ_BIT,
-      VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
-      VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-      VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
-          VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT);
+  TransitionImageLayout(frame.CommandBuffer,
+                        frame.GeometryBuffer.Depth.GetImage(),
+                        VK_IMAGE_ASPECT_DEPTH_BIT,
+                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                        VK_ACCESS_2_SHADER_READ_BIT,
+                        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+                        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
+                            VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT);
 
   VkRenderingAttachmentInfo colorAttachment{
       .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
@@ -1756,8 +1694,7 @@ void Renderer::RecordGridPass(FrameData &frame, const RenderView &view) {
       .InverseViewProjection = glm::inverse(viewProjection),
   };
   vkCmdPushConstants(frame.CommandBuffer, m_GridPipeline.Layout,
-                     VK_SHADER_STAGE_VERTEX_BIT |
-                         VK_SHADER_STAGE_FRAGMENT_BIT,
+                     VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                      0, sizeof(pushConstants), &pushConstants);
 
   vkCmdDraw(frame.CommandBuffer, 6, 1, 0, 0);
@@ -1878,13 +1815,12 @@ void Renderer::RecordForwardPass(FrameData &frame,
                            VK_SHADER_STAGE_FRAGMENT_BIT,
                        0, sizeof(MeshPushConstants), &push);
 
-    VkBuffer vertexBuffers[] = {
-        object.MeshResource->GetVertexBuffer()->Get()};
+    VkBuffer vertexBuffers[] = {object.MeshResource->GetVertexBuffer()->Get()};
     VkDeviceSize offsets[] = {0};
     vkCmdBindVertexBuffers(frame.CommandBuffer, 0, 1, vertexBuffers, offsets);
-    vkCmdBindIndexBuffer(
-        frame.CommandBuffer, object.MeshResource->GetIndexBuffer()->Get(), 0,
-        object.MeshResource->GetIndexBuffer()->GetIndexType());
+    vkCmdBindIndexBuffer(frame.CommandBuffer,
+                         object.MeshResource->GetIndexBuffer()->Get(), 0,
+                         object.MeshResource->GetIndexBuffer()->GetIndexType());
 
     VkDescriptorSet textureSet = object.TextureResource->GetDescriptorSet();
     // TODO: Fix This On multithreading
@@ -2115,17 +2051,15 @@ void Renderer::UpdateGBufferDescriptorSets() {
 void Renderer::UpdateLightBuffers(const RenderWorld &renderWorld) {
   FrameData &frame = m_Frames[m_FrameIndex];
 
-  const size_t pointLightCount =
-      std::min(renderWorld.PointLights.size(),
-               static_cast<size_t>(MAX_POINT_LIGHTS));
-  const size_t spotLightCount =
-      std::min(renderWorld.SpotLights.size(),
-               static_cast<size_t>(MAX_SPOT_LIGHTS));
+  const size_t pointLightCount = std::min(
+      renderWorld.PointLights.size(), static_cast<size_t>(MAX_POINT_LIGHTS));
+  const size_t spotLightCount = std::min(renderWorld.SpotLights.size(),
+                                         static_cast<size_t>(MAX_SPOT_LIGHTS));
 
-  frame.PointLightBuffer->Update(
-      renderWorld.PointLights.data(), pointLightCount * sizeof(PointLightData));
-  frame.SpotLightBuffer->Update(
-      renderWorld.SpotLights.data(), spotLightCount * sizeof(SpotLightData));
+  frame.PointLightBuffer->Update(renderWorld.PointLights.data(),
+                                 pointLightCount * sizeof(PointLightData));
+  frame.SpotLightBuffer->Update(renderWorld.SpotLights.data(),
+                                spotLightCount * sizeof(SpotLightData));
 }
 
 void Renderer::UpdateToneMappingDescriptorSets() {
@@ -2239,8 +2173,7 @@ void Renderer::UpdateDebugLineBuffer(
   vertexBuffer->Upload(debugLines.data(), requiredSize);
 }
 
-void Renderer::RecordDebugLinePass(FrameData &frame,
-                                   const RenderView &view) {
+void Renderer::RecordDebugLinePass(FrameData &frame, const RenderView &view) {
   ZoneScopedN("Record Debug Line Pass");
 
   VkRenderingAttachmentInfo colorAttachment{
@@ -2297,8 +2230,8 @@ void Renderer::RecordDebugLinePass(FrameData &frame,
   VkDeviceSize offsets[] = {0};
   vkCmdBindVertexBuffers(frame.CommandBuffer, 0, 1, vertexBuffers, offsets);
 
-  vkCmdDraw(frame.CommandBuffer,
-            static_cast<uint32_t>(view.DebugLines.size()), 1, 0, 0);
+  vkCmdDraw(frame.CommandBuffer, static_cast<uint32_t>(view.DebugLines.size()),
+            1, 0, 0);
 
   vkCmdEndRendering(frame.CommandBuffer);
 }

@@ -38,7 +38,8 @@ public:
 
     constexpr bool isRenderingResource = std::is_same_v<T, Mesh> ||
                                          std::is_same_v<T, Texture> ||
-                                         std::is_same_v<T, Shader>;
+                                         std::is_same_v<T, Shader> ||
+                                         std::is_same_v<T, ComputeShader>;
 
     Ref<T> resource = nullptr;
 

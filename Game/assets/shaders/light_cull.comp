@@ -2,6 +2,8 @@
 
 layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
+const uint cullingWorkgroupSize = 64;
+
 struct PointLight {
     vec4 positionRange;
     vec4 colorIntensity;
@@ -94,7 +96,7 @@ void main() {
 
     for (uint lightIndex = gl_LocalInvocationIndex;
          lightIndex < pointLightCount;
-         lightIndex += gl_WorkGroupSize.x) {
+         lightIndex += cullingWorkgroupSize) {
         if (!IntersectsTile(pointLights[lightIndex].positionRange, tile))
             continue;
 
@@ -107,7 +109,7 @@ void main() {
     uint maxSpotLightsPerTile = push.spotLightGrid.y;
     for (uint lightIndex = gl_LocalInvocationIndex;
          lightIndex < spotLightCount;
-         lightIndex += gl_WorkGroupSize.x) {
+         lightIndex += cullingWorkgroupSize) {
         if (!IntersectsTile(spotLights[lightIndex].positionRange, tile))
             continue;
 
@@ -130,7 +132,7 @@ void main() {
     uint tileOffset = tileIndex * maxLightsPerTile;
     for (uint index = gl_LocalInvocationIndex;
          index < storedLightCount;
-         index += gl_WorkGroupSize.x) {
+         index += cullingWorkgroupSize) {
         tilePointLightIndices[tileOffset + index] = visibleLightIndices[index];
     }
 
@@ -138,7 +140,7 @@ void main() {
     uint spotTileOffset = tileIndex * maxSpotLightsPerTile;
     for (uint index = gl_LocalInvocationIndex;
          index < storedSpotLightCount;
-         index += gl_WorkGroupSize.x) {
+         index += cullingWorkgroupSize) {
         tileSpotLightIndices[spotTileOffset + index] =
             visibleSpotLightIndices[index];
     }

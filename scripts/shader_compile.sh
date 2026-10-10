@@ -5,7 +5,7 @@ glslc Game/assets/shaders/gbuffer_debug.frag -o Game/assets/shaders/gbuffer_debu
 
 glslc Game/assets/shaders/lighting.vert -o Game/assets/shaders/lighting.vert.spv
 glslc Game/assets/shaders/lighting.frag -o Game/assets/shaders/lighting.frag.spv
-glslc Game/assets/shaders/light_cull.comp -o Game/assets/shaders/light_cull.comp.spv
+glslc --target-env=vulkan1.3 Game/assets/shaders/light_cull.comp -o Game/assets/shaders/light_cull.comp.spv
 
 glslc Game/assets/shaders/tonemap.vert -o Game/assets/shaders/tonemap.vert.spv
 glslc Game/assets/shaders/tonemap.frag -o Game/assets/shaders/tonemap.frag.spv
